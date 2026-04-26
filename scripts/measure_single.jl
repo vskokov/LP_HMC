@@ -16,7 +16,7 @@ end
 function main()
     @init_state
 
-    thermalize(ϕ, m², L^2)
+    thermalize(ϕ, m², L^3)
 
     maxt = 50L^2
     skip = div(L^2,8)
