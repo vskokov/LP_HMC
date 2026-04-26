@@ -36,7 +36,7 @@ function main()
     @printf("initial thermalization acceptance=%.3f\n", acc)
 
     for m²0 in -3.5:-0.01:-4.0
-        acc = thermalize(ϕ, m²0, L^2)
+        acc = thermalize(ϕ, m²0, L^3)
         @printf("m²=%.3f  acceptance=%.3f\n", m²0, acc)
         run_m²(ϕ, m²0)
     end
