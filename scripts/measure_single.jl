@@ -18,8 +18,8 @@ function main()
 
     thermalize(ϕ, m², L^3)
 
-    maxt = 50L^2
-    skip = div(L^2,8)
+    maxt = 200L^2
+    skip = max(1, L÷2)
     mass_id = round(m², digits=3)
     Z_id = round(Z, digits=3)
 

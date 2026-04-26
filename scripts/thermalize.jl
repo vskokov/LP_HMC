@@ -9,11 +9,14 @@ include("../src/modelA.jl")
 function main()
     @init_state
 
-    for t in 1:L
-        acc = thermalize(ϕ, m², L^3)
-        @printf("t=%d  acceptance=%.3f\n", t, acc)
-        flush(stdout)
-        jldsave(joinpath(@__DIR__, "..", "data", "thermalized_L_$(L)_id_$(seed).jld2"), true; ϕ=Array(ϕ), m²=m², t=t)
+    mass_id = round(m², digits=3)
+    Z_id    = round(Z,  digits=3)
+
+    for i in 1:L
+      acc = thermalize(ϕ, m², L^2)
+      @printf("acceptance=%.3f\n", acc)
+      flush(stdout)
+      jldsave(joinpath(@__DIR__, "..", "data", "thermalized_L_$(L)_Z_$(Z_id)_mass_$(mass_id)_id_$(seed).jld2"), true; ϕ=Array(ϕ), m²=m²)
     end
 end
 
