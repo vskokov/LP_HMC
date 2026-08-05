@@ -40,6 +40,24 @@ function parse_commandline()
             help = "leapfrog step size ε for HMC (tune for ~70-80% acceptance)"
             arg_type = Float64
             default = 0.1
+        "--checkpoint"
+            help = "explicit output checkpoint path (thermalize.jl)"
+            arg_type = String
+        "--samples"
+            help = "number of retained configurations (collect_reweight_stats.jl)"
+            arg_type = Int
+            default = 1000
+        "--skip"
+            help = "HMC trajectories between retained configurations"
+            arg_type = Int
+            default = 1
+        "--warmup"
+            help = "additional HMC trajectories before collection"
+            arg_type = Int
+            default = 0
+        "--output"
+            help = "explicit statistics output path (collect_reweight_stats.jl)"
+            arg_type = String
         "size"
             help = "side length of lattice"
             arg_type = Int

@@ -248,6 +248,47 @@ Saves 2500 field configurations (separated by `L²` HMC trajectories each) to
 `scripts/bootstrap.jl` provides `average`, `variance`, and `bootstrap` functions
 for computing means and uncertainties from measurement files.
 
+### 6. Two-parameter Binder-cumulant reweighting
+
+Create a Slurm array for one lattice size from repeated points and/or a two-column
+`Z,m2` CSV.  HMC tuning is intentionally required:
+
+```bash
+python3 scripts/submit_reweight_array.py \
+    --L 24 --point=0.1,-2.30 --point=0.2,-2.25 \
+    --points-csv scan_points.csv --replicas 4 \
+    --eps 0.02 --n-lf 15 --samples 2000 --skip 12 \
+    --partition gpu --gpu-resource gpu:h100:1 \
+    --time 08:00:00 --mem 24G --cpus 4 \
+    --module cuda/12.3 --run-name binder_L24 --dry-run
+```
+
+The dry run writes `runs/<run-name>/manifest.csv` and `array_job.sh`, then prints
+every command without calling `sbatch`. Remove `--dry-run` to submit. Add `--resume`
+to validate and reuse matching checkpoints and completed statistics files. Every
+retained configuration records `M`, `M2`, `M4`, `Q=sum(phi^2)`, `G=sum(grad(phi)^2)`,
+and interval acceptance in a metadata-prefixed CSV.
+
+Analyze one or more manifests and overlay all available lattice sizes:
+
+```bash
+python3 reweight_binder.py \
+    --manifest runs/binder_L12/manifest.csv \
+    --manifest runs/binder_L24/manifest.csv \
+    --start 0.1 -2.30 --end 0.3 -2.20 --num 201 \
+    --output plots/binder_line --bootstrap 500 --block-size auto
+```
+
+This writes `plots/binder_line.csv` and `plots/binder_line.png`. Targets use only
+the nearest source coordinate (replicas at that coordinate are combined); the CSV
+retains low-overlap points and labels them with `warning_status=low_ess`.
+
+Run the CUDA observable/action-identity check on a GPU node before production:
+
+```bash
+julia --project=. scripts/test_reweight_stats_gpu.jl 6 --fp64
+```
+
 ---
 
 ## Valid Lattice Sizes

@@ -49,7 +49,33 @@ let
     report("Force FD check", max_rel_err < 1e-4, @sprintf("max_rel_err=%.2e", max_rel_err))
 end
 
-# Test 2 — Energy conservation
+# Test 2 — Sufficient statistics and the exact reweighting action difference
+let
+    ϕ = randn(L, L, L)
+    stats = sufficient_statistics(ϕ)
+    M_brute = sum(ϕ) / L^3
+    Q_brute = sum(abs2, ϕ)
+    G_brute = 0.0
+    for x3 in 1:L, x2 in 1:L, x1 in 1:L
+        G_brute += (ϕ[NNp(x1), x2, x3] - ϕ[x1, x2, x3])^2
+        G_brute += (ϕ[x1, NNp(x2), x3] - ϕ[x1, x2, x3])^2
+        G_brute += (ϕ[x1, x2, NNp(x3)] - ϕ[x1, x2, x3])^2
+    end
+    stats_error = maximum(abs.((stats.M - M_brute, stats.Q - Q_brute, stats.G - G_brute)))
+
+    source_m2, source_Z = -2.31, 0.83
+    target_m2, target_Z = -2.07, -0.14
+    direct = calc_total_energy(ϕ, target_m2, target_Z) -
+             calc_total_energy(ϕ, source_m2, source_Z)
+    sufficient = 0.5 * (target_m2 - source_m2) * stats.Q +
+                 0.5 * (target_Z - source_Z) * stats.G
+    action_error = abs(direct - sufficient)
+    passed = stats_error < 1e-11 && action_error < 1e-10 * max(1.0, abs(direct))
+    report("Reweight sufficient statistics", passed,
+           @sprintf("stats_err=%.2e  action_err=%.2e", stats_error, action_error))
+end
+
+# Test 3 — Energy conservation
 # Leapfrog with small ε should conserve the Hamiltonian to O(ε²).
 let
     ϕ = randn(L, L, L)
@@ -67,7 +93,7 @@ let
     report("Energy conservation", rel_err < 2e-3, @sprintf("|ΔH|/|H|=%.2e", rel_err))
 end
 
-# Test 3 — Reversibility
+# Test 4 — Reversibility
 # Forward trajectory followed by momentum negation and backward trajectory
 # must return to the starting configuration.
 let
@@ -87,9 +113,10 @@ let
     report("Reversibility", max_diff < 1e-5, @sprintf("max|Δϕ|=%.2e", max_diff))
 end
 
-# Test 4 — Acceptance rate sanity
+# Test 5 — Acceptance rate sanity
 # 200 HMC trajectories near the phase transition should give a reasonable acceptance rate.
 let
+    Random.seed!(3)
     ϕ = randn(L, L, L)
     m²_test = FloatType(-2.28587)
     n_traj = 200

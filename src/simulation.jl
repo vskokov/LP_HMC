@@ -55,6 +55,28 @@ function calc_total_energy(ϕ, m², Z)
     return H
 end
 
+"""
+    sufficient_statistics(ϕ) -> (M, Q, G)
+
+Return the uniform magnetization `M = sum(ϕ)/L^3`, the quadratic statistic
+`Q = sum(ϕ^2)`, and the positive-direction nearest-neighbour gradient statistic
+`G = sum(x,μ>0) (ϕ[x+μ]-ϕ[x])^2`.  Accumulation is performed in Float64 on CPU.
+"""
+function sufficient_statistics(ϕ)
+    sumϕ = 0.0
+    Q = 0.0
+    G = 0.0
+    for x3 in 1:L, x2 in 1:L, x1 in 1:L
+        ϕ0 = Float64(ϕ[x1, x2, x3])
+        sumϕ += ϕ0
+        Q += ϕ0^2
+        G += (Float64(ϕ[NNp(x1), x2, x3]) - ϕ0)^2
+        G += (Float64(ϕ[x1, NNp(x2), x3]) - ϕ0)^2
+        G += (Float64(ϕ[x1, x2, NNp(x3)]) - ϕ0)^2
+    end
+    return (M=sumϕ / L^3, Q=Q, G=G)
+end
+
 else
 
 function _lap_kernel!(lapϕ, ϕ)
@@ -133,6 +155,37 @@ function calc_total_energy(ϕ, m², Z)
     en_blocks = cld(Ntot, en_threads)
     @cuda threads=en_threads blocks=en_blocks _energy_kernel!(H_arr, ϕ, m², Z)
     return sum(H_arr)
+end
+
+function _statistics_kernel!(sum_arr, q_arr, g_arr, ϕ)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if idx <= L^3
+        flat = idx - 1
+        x1 = flat % L + 1
+        x2 = (flat ÷ L) % L + 1
+        x3 = flat ÷ L^2 + 1
+        ϕ0 = ϕ[x1, x2, x3]
+        sum_arr[idx] = ϕ0
+        q_arr[idx] = ϕ0^2
+        g_arr[idx] = (ϕ[NNp(x1), x2, x3] - ϕ0)^2 +
+                     (ϕ[x1, NNp(x2), x3] - ϕ0)^2 +
+                     (ϕ[x1, x2, NNp(x3)] - ϕ0)^2
+    end
+    return nothing
+end
+
+"""GPU implementation of `sufficient_statistics`, with one fused site kernel."""
+function sufficient_statistics(ϕ)
+    Ntot = L^3
+    sum_arr = CuArray{FloatType}(undef, Ntot)
+    q_arr = CuArray{FloatType}(undef, Ntot)
+    g_arr = CuArray{FloatType}(undef, Ntot)
+    stat_threads = 256
+    stat_blocks = cld(Ntot, stat_threads)
+    @cuda threads=stat_threads blocks=stat_blocks _statistics_kernel!(sum_arr, q_arr, g_arr, ϕ)
+    return (M=Float64(sum(sum_arr)) / Ntot,
+            Q=Float64(sum(q_arr)),
+            G=Float64(sum(g_arr)))
 end
 
 end

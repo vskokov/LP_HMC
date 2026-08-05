@@ -1,0 +1,7 @@
+data/
+runs/
+logs/
+plots/
+tmp/
+*.pyc
+__pycache__/
