@@ -18,12 +18,14 @@ Fixed: λ=4, T=1. Tunable via CLI: Z, m², L, ε, n_lf.
 src/modelA.jl       Entry point: imports, ASCII art, includes initialize.jl + simulation.jl
 src/initialize.jl   ArgParse → global constants (L, λ, T, Z, m², ε, n_lf, FloatType, ...)
 src/simulation.jl   HMC engine (compute_force!, leapfrog!, hmc_step!, thermalize)
+src/replica_exchange.jl  Centered m² ladders, alternating swaps, mixing diagnostics
 scripts/thermalize.jl   Run thermalization, save .jld2, print acceptance rate
 scripts/measure.jl      Mass scan, measure observables
 scripts/measure_single.jl  Single-mass measurement + energy output
 scripts/snap.jl         Save 2500 field snapshots
 scripts/bootstrap.jl    Pure statistics — no simulation calls
 scripts/test_hmc.jl     Correctness tests (runs standalone, no ArgParse)
+scripts/test_replica_exchange.jl  CPU correctness tests for mass tempering
 ```
 
 ## Architecture: CPU/GPU dispatch
@@ -54,6 +56,11 @@ lazily at runtime, not macros.
 | `leapfrog!` | `(ϕ, π, m², Z, ε, n_lf)` | Mutates ϕ and π in-place. |
 | `hmc_step!` | `(ϕ, m², Z, ε, n_lf)` | Returns `(accepted::Bool, ΔH::Float64)`. |
 | `thermalize` | `(ϕ, m², N)` | Runs N HMC steps. Returns acceptance rate ∈ [0,1]. |
+
+`src/replica_exchange.jl` adds an independent mass-tempering layer without changing
+these APIs. It advances one HMC trajectory at every fixed mass coordinate, alternates
+adjacent swap pairs, and accepts swaps from the exact `Q=sum(ϕ^2)` crossed-action
+difference. The central coordinate is always the requested source mass.
 
 ## Global constants (set by initialize.jl, in scope everywhere)
 
@@ -97,7 +104,10 @@ julia --project=. scripts/test_hmc.jl
 3. Reversibility — `max|φ_final - φ_initial| < 1e-5` after forward+reverse trajectory
 4. Acceptance rate sanity — 0.5 < rate < 0.99 over 200 trajectories
 
-All four must print `PASS` before any simulation run is trusted.
+All checks must print `PASS` before any simulation run is trusted.
+
+Run `julia --project=. scripts/test_replica_exchange.jl` for the mass-ladder, exact
+swap-action, reference-swap, rejection, and alternating-schedule checks.
 
 ## Tuning ε and n_lf
 

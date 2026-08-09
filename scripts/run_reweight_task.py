@@ -27,6 +27,7 @@ def read_task(manifest: Path, task_id: int) -> dict[str, str]:
 def valid_stats(path: Path, row: dict[str, str]) -> bool:
     try:
         run = read_stats(path)
+        expected_tempering = int(row.get("tempering_replicas", "1"))
         return (
             run.L == int(row["L"])
             and run.Z == float(row["Z"])
@@ -35,6 +36,10 @@ def valid_stats(path: Path, row: dict[str, str]) -> bool:
             and run.epsilon == float(row["eps"])
             and run.n_lf == int(row["n_lf"])
             and run.size == int(row["samples"])
+            and run.sampler == ("replica_exchange" if expected_tempering > 1 else "hmc")
+            and run.tempering_replicas == expected_tempering
+            and run.mass_span == float(row.get("mass_span", "0"))
+            and run.swap_every == int(row.get("swap_every", "1"))
         )
     except (OSError, ValueError):
         return False
@@ -69,11 +74,14 @@ def main() -> int:
     row = read_task(args.manifest.resolve(), args.task_id)
     checkpoint = Path(row["checkpoint_path"])
     stats = Path(row["stats_path"])
+    diagnostics = Path(row.get("diagnostics_path", str(stats.with_suffix(".exchange.csv"))))
     marker = Path(row["completion_marker"])
     prefix = [] if args.launcher == "none" else [args.launcher]
     project = str(REPO_ROOT)
 
-    if args.resume and stats.is_file() and valid_stats(stats, row):
+    expected_tempering = int(row.get("tempering_replicas", "1"))
+    diagnostics_complete = expected_tempering == 1 or diagnostics.is_file()
+    if args.resume and stats.is_file() and diagnostics_complete and valid_stats(stats, row):
         print(f"task {args.task_id}: valid statistics already exist at {stats}")
         if not args.dry_run:
             mark_complete(marker, row)
@@ -83,10 +91,15 @@ def main() -> int:
         marker.unlink(missing_ok=True)
 
     checkpoint_valid = False
+    tempering_replicas = int(row.get("tempering_replicas", "1"))
+    mass_span = row.get("mass_span", "0")
+    swap_every = row.get("swap_every", "1")
     validate = prefix + [
         args.julia, f"--project={project}", str(REPO_ROOT / "scripts/validate_checkpoint.jl"),
         str(checkpoint), row["L"], row["Z"], row["m2"], row["eps"], row["n_lf"], row["seed"],
     ]
+    if tempering_replicas > 1:
+        validate.extend([str(tempering_replicas), mass_span, swap_every])
     if args.resume and checkpoint.is_file() and not args.dry_run:
         print("+", shlex.join(validate), flush=True)
         checkpoint_valid = subprocess.run(validate, check=False).returncode == 0
@@ -95,28 +108,46 @@ def main() -> int:
         print("+", shlex.join(validate))
 
     if not checkpoint_valid:
+        thermalizer = "thermalize_replicas.jl" if tempering_replicas > 1 else "thermalize.jl"
         thermalize = prefix + [
-            args.julia, f"--project={project}", str(REPO_ROOT / "scripts/thermalize.jl"),
+            args.julia, f"--project={project}", str(REPO_ROOT / "scripts" / thermalizer),
             "--fp64", f"--Z={row['Z']}", f"--mass={row['m2']}", f"--rng={row['seed']}",
             f"--eps={row['eps']}", f"--n_lf={row['n_lf']}",
             f"--checkpoint={checkpoint}", row["L"],
         ]
+        if tempering_replicas > 1:
+            thermalize[-1:-1] = [
+                f"--tempering-replicas={tempering_replicas}",
+                f"--mass-span={mass_span}", f"--swap-every={swap_every}",
+            ]
         invoke(thermalize, args.dry_run)
     else:
         print(f"task {args.task_id}: reusing valid checkpoint {checkpoint}")
 
+    collector = (
+        "collect_reweight_stats_replicas.jl"
+        if tempering_replicas > 1 else "collect_reweight_stats.jl"
+    )
     collect = prefix + [
-        args.julia, f"--project={project}", str(REPO_ROOT / "scripts/collect_reweight_stats.jl"),
+        args.julia, f"--project={project}", str(REPO_ROOT / "scripts" / collector),
         "--fp64", f"--Z={row['Z']}", f"--mass={row['m2']}", f"--rng={row['seed']}",
         f"--eps={row['eps']}", f"--n_lf={row['n_lf']}", f"--init={checkpoint}",
         f"--samples={row['samples']}", f"--skip={row['skip']}", f"--warmup={row['warmup']}",
         f"--output={stats}", row["L"],
     ]
+    if tempering_replicas > 1:
+        collect[-1:-1] = [
+            f"--tempering-replicas={tempering_replicas}",
+            f"--mass-span={mass_span}", f"--swap-every={swap_every}",
+            f"--diagnostics={diagnostics}",
+        ]
     invoke(collect, args.dry_run)
 
     if not args.dry_run:
         if not valid_stats(stats, row):
             raise RuntimeError(f"collector did not produce valid statistics: {stats}")
+        if tempering_replicas > 1 and not diagnostics.is_file():
+            raise RuntimeError(f"collector did not produce diagnostics: {diagnostics}")
         mark_complete(marker, row)
         print(f"task {args.task_id}: complete")
     return 0

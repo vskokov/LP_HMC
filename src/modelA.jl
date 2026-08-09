@@ -20,3 +20,4 @@ using CodecZlib
 
 include("initialize.jl")
 include("simulation.jl")
+include("replica_exchange.jl")

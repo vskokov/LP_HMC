@@ -58,6 +58,21 @@ function parse_commandline()
         "--output"
             help = "explicit statistics output path (collect_reweight_stats.jl)"
             arg_type = String
+        "--diagnostics"
+            help = "replica-exchange diagnostics CSV output path"
+            arg_type = String
+        "--tempering-replicas"
+            help = "number of mass-tempering slots (1 disables replica exchange; otherwise odd and >= 3)"
+            arg_type = Int
+            default = 1
+        "--mass-span"
+            help = "total centered m² span covered by the tempering ladder"
+            arg_type = Float64
+            default = 0.0
+        "--swap-every"
+            help = "replica-exchange attempt cadence in complete HMC sweeps"
+            arg_type = Int
+            default = 1
         "size"
             help = "side length of lattice"
             arg_type = Int
@@ -97,6 +112,9 @@ const ξ = Normal(FloatType(0.0), FloatType(1.0))
 
 const n_lf = parsed_args["n_lf"]
 const ε    = FloatType(parsed_args["eps"])
+const tempering_replicas = parsed_args["tempering-replicas"]
+const mass_span = FloatType(parsed_args["mass-span"])
+const swap_every = parsed_args["swap-every"]
 
 const seed = parsed_args["rng"]
 if seed != 0

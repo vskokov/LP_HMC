@@ -81,6 +81,23 @@ class ReweightTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing metadata"):
                 read_stats(path)
 
+    def test_replica_exchange_statistics_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tempered.csv"
+            path.write_text(
+                "# schema_version=2\n# sampler=replica_exchange\n# L=8\n# Z=1\n"
+                "# m2=-2.25\n# epsilon=0.02\n# n_lf=15\n# seed=7\n# lambda=4\n"
+                "# temperature=1\n# float_type=Float64\n# device=cuda\n# samples=1\n"
+                "# skip=12\n# warmup=0\n# tempering_replicas=5\n# mass_span=0.4\n"
+                "# swap_every=1\n# masses=-2.45;-2.35;-2.25;-2.15;-2.05\n"
+                "trajectory,M,M2,M4,Q,G,acceptance_rate\n12,1,1,1,2,3,0.75\n"
+            )
+            run = read_stats(path)
+            self.assertEqual(run.sampler, "replica_exchange")
+            self.assertEqual(run.tempering_replicas, 5)
+            self.assertEqual(run.mass_span, 0.4)
+            self.assertEqual(run.swap_every, 1)
+
     def test_slurm_dry_run_manifest_mapping_and_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="reweight test ") as directory:
             run_root = Path(directory) / "runs with spaces"
@@ -104,6 +121,36 @@ class ReweightTests(unittest.TestCase):
             self.assertIn("set -euo pipefail", (run_root / "unit" / "array_job.sh").read_text())
             self.assertIn("dry-run: sbatch was not invoked", result.stdout)
             self.assertIn("runs with spaces/unit/manifest.csv'", result.stdout)
+
+    def test_replica_exchange_manifest_and_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
+                "--samples", "3", "--tempering-replicas", "5", "--mass-span", "0.4",
+                "--swap-every", "1", "--run-root", str(run_root), "--run-name", "tempered",
+                "--dry-run",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            with (run_root / "tempered" / "manifest.csv").open(newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertEqual(row["tempering_replicas"], "5")
+            self.assertEqual(row["mass_span"], "0.4")
+            self.assertIn("diagnostics/task_000000.csv", row["diagnostics_path"])
+            self.assertIn("thermalize_replicas.jl", result.stdout)
+            self.assertIn("collect_reweight_stats_replicas.jl", result.stdout)
+            self.assertIn("--tempering-replicas=5", result.stdout)
+
+    def test_even_tempering_count_is_rejected(self):
+        command = [
+            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
+            "--tempering-replicas", "4", "--mass-span", "0.2", "--dry-run",
+        ]
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be 1 or an odd integer", result.stderr)
 
 
 if __name__ == "__main__":

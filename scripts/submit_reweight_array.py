@@ -74,8 +74,12 @@ def build_rows(args: argparse.Namespace, points: list[tuple[str, str]], run_dir:
                 "replica": replica, "L": args.L, "Z": Z, "m2": m2,
                 "eps": canonical_number(str(args.eps)), "n_lf": args.n_lf, "seed": seed,
                 "samples": args.samples, "skip": args.skip, "warmup": args.warmup,
+                "tempering_replicas": args.tempering_replicas,
+                "mass_span": canonical_number(str(args.mass_span)),
+                "swap_every": args.swap_every,
                 "checkpoint_path": str((run_dir / "checkpoints" / f"{base}.jld2").resolve()),
                 "stats_path": str((run_dir / "statistics" / f"{base}.csv").resolve()),
+                "diagnostics_path": str((run_dir / "diagnostics" / f"{base}.csv").resolve()),
                 "completion_marker": str((run_dir / "complete" / f"{base}.complete").resolve()),
             })
             task_id += 1
@@ -139,6 +143,11 @@ def main() -> int:
     parser.add_argument("--skip", type=int, default=1)
     parser.add_argument("--warmup", type=int, default=0)
     parser.add_argument("--replicas", type=int, default=1)
+    parser.add_argument("--tempering-replicas", type=int, default=1)
+    parser.add_argument("--mass-span", type=float, default=0.0,
+                        help="total centered m2 span for the exchange ladder")
+    parser.add_argument("--swap-every", type=int, default=1,
+                        help="HMC sweeps between adjacent swap attempts")
     parser.add_argument("--partition", default="gpu")
     parser.add_argument("--account")
     parser.add_argument("--gpu-resource", default="gpu:1")
@@ -160,6 +169,17 @@ def main() -> int:
         parser.error("--eps must be finite and positive")
     if args.n_lf < 1 or args.samples < 1 or args.skip < 1 or args.warmup < 0 or args.replicas < 1:
         parser.error("n-lf, samples, skip, and replicas must be positive; warmup may be zero")
+    if args.tempering_replicas != 1 and (
+        args.tempering_replicas < 3 or args.tempering_replicas % 2 == 0
+    ):
+        parser.error("--tempering-replicas must be 1 or an odd integer at least 3")
+    if args.tempering_replicas > 1:
+        if args.mass_span <= 0 or not math.isfinite(args.mass_span):
+            parser.error("--mass-span must be finite and positive when tempering is enabled")
+    elif args.mass_span != 0:
+        parser.error("--mass-span must be zero when --tempering-replicas=1")
+    if args.swap_every < 1:
+        parser.error("--swap-every must be positive")
     args.run_name = args.run_name or f"reweight_L{args.L}"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", args.run_name):
         parser.error("--run-name may contain only letters, digits, dot, underscore, and hyphen")
@@ -177,7 +197,8 @@ def main() -> int:
 
     run_dir = (args.run_root / args.run_name).resolve()
     logs = run_dir / "logs"
-    for directory in (run_dir / "checkpoints", run_dir / "statistics", run_dir / "complete", logs):
+    for directory in (run_dir / "checkpoints", run_dir / "statistics",
+                      run_dir / "diagnostics", run_dir / "complete", logs):
         directory.mkdir(parents=True, exist_ok=True)
     manifest = run_dir / "manifest.csv"
     rows = build_rows(args, points, run_dir)

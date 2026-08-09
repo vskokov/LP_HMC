@@ -13,7 +13,7 @@ from typing import Iterable, Sequence
 import numpy as np
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSIONS = {1, 2}
 REQUIRED_METADATA = {
     "schema_version", "L", "Z", "m2", "epsilon", "n_lf", "seed",
     "lambda", "temperature", "float_type", "device", "samples", "skip", "warmup",
@@ -35,6 +35,10 @@ class RunData:
     M4: np.ndarray
     Q: np.ndarray
     G: np.ndarray
+    sampler: str = "hmc"
+    tempering_replicas: int = 1
+    mass_span: float = 0.0
+    swap_every: int = 1
 
     @property
     def size(self) -> int:
@@ -82,8 +86,18 @@ def read_stats(path: Path, order: int = 0) -> RunData:
         missing = REQUIRED_METADATA - metadata.keys()
         if missing:
             raise ValueError(f"{path}: missing metadata: {', '.join(sorted(missing))}")
-        if _parse_metadata_value(metadata["schema_version"], int, "schema_version") != SCHEMA_VERSION:
+        schema_version = _parse_metadata_value(
+            metadata["schema_version"], int, "schema_version"
+        )
+        if schema_version not in SCHEMA_VERSIONS:
             raise ValueError(f"{path}: unsupported schema_version={metadata['schema_version']}")
+        replica_metadata = {"sampler", "tempering_replicas", "mass_span", "swap_every"}
+        if schema_version == 2:
+            missing_replica = replica_metadata - metadata.keys()
+            if missing_replica:
+                raise ValueError(
+                    f"{path}: missing replica metadata: {', '.join(sorted(missing_replica))}"
+                )
 
         reader = csv.DictReader(handle)
         if reader.fieldnames != list(REQUIRED_COLUMNS):
@@ -114,6 +128,18 @@ def read_stats(path: Path, order: int = 0) -> RunData:
     if _parse_metadata_value(metadata["temperature"], float, "temperature") != 1.0:
         raise ValueError(f"{path}: reweighting requires temperature=1")
 
+    tempering_replicas = _parse_metadata_value(
+        metadata.get("tempering_replicas", "1"), int, "tempering_replicas"
+    )
+    mass_span = _parse_metadata_value(metadata.get("mass_span", "0"), float, "mass_span")
+    swap_every = _parse_metadata_value(metadata.get("swap_every", "1"), int, "swap_every")
+    if tempering_replicas != 1 and (tempering_replicas < 3 or tempering_replicas % 2 == 0):
+        raise ValueError(f"{path}: invalid tempering_replicas={tempering_replicas}")
+    if tempering_replicas > 1 and (not math.isfinite(mass_span) or mass_span <= 0):
+        raise ValueError(f"{path}: replica exchange requires a positive finite mass_span")
+    if swap_every < 1:
+        raise ValueError(f"{path}: swap_every must be positive")
+
     return RunData(
         path=path,
         L=_parse_metadata_value(metadata["L"], int, "L"),
@@ -124,6 +150,10 @@ def read_stats(path: Path, order: int = 0) -> RunData:
         n_lf=_parse_metadata_value(metadata["n_lf"], int, "n_lf"),
         order=order,
         M2=arrays["M2"], M4=arrays["M4"], Q=arrays["Q"], G=arrays["G"],
+        sampler=metadata.get("sampler", "hmc"),
+        tempering_replicas=tempering_replicas,
+        mass_span=mass_span,
+        swap_every=swap_every,
     )
 
 

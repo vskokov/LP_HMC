@@ -2,8 +2,10 @@
 
 using JLD2
 
-length(ARGS) == 7 || error("usage: validate_checkpoint.jl PATH L Z M2 EPS N_LF SEED")
-path, L_text, Z_text, m2_text, eps_text, n_lf_text, seed_text = ARGS
+length(ARGS) in (7, 10) ||
+    error("usage: validate_checkpoint.jl PATH L Z M2 EPS N_LF SEED [TEMPERING_REPLICAS MASS_SPAN SWAP_EVERY]")
+path, L_text, Z_text, m2_text, eps_text, n_lf_text, seed_text = ARGS[1:7]
+tempering = length(ARGS) == 10
 
 expected = (
     L=parse(Int, L_text), Z=parse(Float64, Z_text), m2=parse(Float64, m2_text),
@@ -14,7 +16,7 @@ try
     jldopen(path, "r") do file
         required = ("ϕ", "schema_version", "L", "Z", "m²", "epsilon", "n_lf", "seed")
         all(haskey(file, key) for key in required) || error("missing checkpoint metadata")
-        file["schema_version"] == 1 || error("unsupported checkpoint schema")
+        file["schema_version"] in (1, 2) || error("unsupported checkpoint schema")
         size(file["ϕ"]) == (expected.L, expected.L, expected.L) || error("field size mismatch")
         file["L"] == expected.L || error("L mismatch")
         Float64(file["Z"]) == expected.Z || error("Z mismatch")
@@ -22,6 +24,34 @@ try
         Float64(file["epsilon"]) == expected.epsilon || error("epsilon mismatch")
         file["n_lf"] == expected.n_lf || error("n_lf mismatch")
         file["seed"] == expected.seed || error("seed mismatch")
+        if tempering
+            expected_replicas = parse(Int, ARGS[8])
+            expected_span = parse(Float64, ARGS[9])
+            expected_swap_every = parse(Int, ARGS[10])
+            replica_required = (
+                "sampler", "replica_fields", "tempering_replicas", "mass_span",
+                "swap_every", "masses", "walker_ids", "walker_stage", "round_trips",
+                "swap_phase", "sweeps", "hmc_attempts", "hmc_accepts",
+                "swap_attempts", "swap_accepts",
+            )
+            all(haskey(file, key) for key in replica_required) ||
+                error("missing replica checkpoint metadata")
+            file["schema_version"] == 2 || error("replica checkpoint schema mismatch")
+            file["sampler"] == "replica_exchange" || error("sampler mismatch")
+            file["tempering_replicas"] == expected_replicas || error("replica count mismatch")
+            Float64(file["mass_span"]) == expected_span || error("mass span mismatch")
+            file["swap_every"] == expected_swap_every || error("swap cadence mismatch")
+            size(file["replica_fields"]) ==
+                (expected.L, expected.L, expected.L, expected_replicas) ||
+                error("replica field size mismatch")
+            masses = collect(range(expected.m2 - expected_span / 2,
+                                   expected.m2 + expected_span / 2;
+                                   length=expected_replicas))
+            masses[(expected_replicas + 1) ÷ 2] = expected.m2
+            Float64.(file["masses"]) == masses || error("mass ladder mismatch")
+        else
+            file["schema_version"] == 1 || error("single-replica checkpoint schema mismatch")
+        end
     end
 catch exception
     println(stderr, "invalid checkpoint: ", sprint(showerror, exception))

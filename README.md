@@ -283,10 +283,45 @@ This writes `plots/binder_line.csv` and `plots/binder_line.png`. Targets use onl
 the nearest source coordinate (replicas at that coordinate are combined); the CSV
 retains low-overlap points and labels them with `warning_status=low_ess`.
 
-Run the CUDA observable/action-identity check on a GPU node before production:
+Run the CUDA observable/action-identity and device-reference-swap check on a GPU node
+before production:
 
 ```bash
 julia --project=. scripts/test_reweight_stats_gpu.jl 6 --fp64
+```
+
+#### Replica-exchange HMC near a first-order transition
+
+Add a centered mass-tempering ladder to each independent source run with
+`--tempering-replicas` and `--mass-span`. The count must be odd so that the requested
+source mass is the exact central slot. `--replicas` continues to mean independent
+chains:
+
+```bash
+python3 scripts/submit_reweight_array.py \
+    --L 24 --points-csv three_source_points.csv --replicas 4 \
+    --tempering-replicas 9 --mass-span 0.12 --swap-every 1 \
+    --eps 0.02 --n-lf 15 --samples 2000 --skip 12 \
+    --partition gpu --gpu-resource gpu:h100:1 \
+    --time 08:00:00 --mem 24G --cpus 4 \
+    --module cuda/12.3 --run-name binder_tempered_L24 --dry-run
+```
+
+The ladder endpoints are `m2 - mass_span/2` and `m2 + mass_span/2`; adjacent even and odd pairs alternate
+after complete HMC sweeps. One Slurm task holds the whole ladder on one GPU and swaps
+array references, not lattice data.
+
+Only the central mass slot is written to the standard statistics CSV, so the existing
+`reweight_binder.py` command is unchanged. `runs/<run-name>/diagnostics/` contains
+per-slot HMC acceptance, per-pair swap acceptance, and completed walker round trips.
+Inspect these diagnostics to tune the ladder spacing before trusting a production
+ensemble. `--resume` validates the complete ladder checkpoint as well as its target
+parameters.
+
+The replica-exchange CPU correctness check is:
+
+```bash
+julia --project=. scripts/test_replica_exchange.jl
 ```
 
 ---

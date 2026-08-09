@@ -35,8 +35,16 @@ sufficient = 0.5 * (target_m2 - source_m2) * stats.Q +
 stats_error = maximum(abs.((stats.M - M_brute, stats.Q - Q_brute, stats.G - G_brute)))
 action_error = abs(direct - sufficient)
 tolerance = 1e-10 * max(1.0, Q_brute, G_brute, abs(direct))
-passed = stats_error <= tolerance && action_error <= tolerance
 
-@printf("%s  CUDA reweight statistics  stats_err=%.3e action_err=%.3e tolerance=%.3e\n",
-        passed ? "PASS" : "FAIL", stats_error, action_error, tolerance)
+ladder = mass_ladder(FloatType(source_m2), 3, FloatType(0.2))
+first, second, third = copy(ϕ), copy(ϕ), copy(ϕ)
+exchange = ReplicaExchangeState([first, second, third], ladder)
+swap_accepted, _ = attempt_replica_swap!(exchange, 1; q_left=1.0, q_right=4.0)
+reference_swap_ok = swap_accepted && exchange.fields[1] === second &&
+                    exchange.fields[2] === first && exchange.walker_ids == [2, 1, 3]
+
+passed = stats_error <= tolerance && action_error <= tolerance && reference_swap_ok
+
+@printf("%s  CUDA reweight/exchange  stats_err=%.3e action_err=%.3e reference_swap=%s tolerance=%.3e\n",
+        passed ? "PASS" : "FAIL", stats_error, action_error, reference_swap_ok, tolerance)
 passed || exit(1)
