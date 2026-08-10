@@ -137,10 +137,102 @@ class ReweightTests(unittest.TestCase):
                 row = next(csv.DictReader(handle))
             self.assertEqual(row["tempering_replicas"], "5")
             self.assertEqual(row["mass_span"], "0.4")
+            self.assertEqual(row["init_phase"], "hot")
+            self.assertEqual(row["phase_threshold"], "0.25")
             self.assertIn("diagnostics/task_000000.csv", row["diagnostics_path"])
             self.assertIn("thermalize_replicas.jl", result.stdout)
             self.assertIn("collect_reweight_stats_replicas.jl", result.stdout)
             self.assertIn("--tempering-replicas=5", result.stdout)
+            self.assertIn("--init-phase=hot", result.stdout)
+            self.assertIn("--phase-threshold=0.25", result.stdout)
+
+    def test_split_phase_initialization_schedule(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
+                "--samples", "3", "--replicas", "4", "--tempering-replicas", "5",
+                "--mass-span", "0.4", "--init-schedule", "split",
+                "--phase-threshold", "0.3", "--run-root", str(run_root),
+                "--run-name", "split", "--dry-run",
+            ]
+            subprocess.run(command, check=True, text=True, capture_output=True)
+            with (run_root / "split" / "manifest.csv").open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(
+                [row["init_phase"] for row in rows],
+                ["disordered", "disordered", "ordered", "ordered"],
+            )
+            self.assertTrue(all(row["phase_threshold"] == "0.3" for row in rows))
+
+    def test_split_phase_schedule_requires_even_independent_jobs(self):
+        command = [
+            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
+            "--replicas", "3", "--tempering-replicas", "5", "--mass-span", "0.4",
+            "--init-schedule", "split", "--dry-run",
+        ]
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires an even --replicas count", result.stderr)
+
+    def test_phase_schedule_requires_replica_exchange(self):
+        command = [
+            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
+            "--replicas", "4", "--init-schedule", "split", "--dry-run",
+        ]
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires replica exchange", result.stderr)
+
+    def test_tempering_summary_reports_phase_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stats = root / "statistics.csv"
+            diagnostics = root / "diagnostics.csv"
+            manifest = root / "manifest.csv"
+            output = root / "blocks.csv"
+            stats.write_text(
+                "# init_phase=ordered\n# phase_threshold=0.25\n"
+                "trajectory,M,M2,M4,Q,G,acceptance_rate\n"
+                "10,0.1,0.01,0.0001,1,1,0.8\n"
+                "20,0.3,0.09,0.0081,1,1,0.8\n"
+                "30,0.4,0.16,0.0256,1,1,0.8\n"
+                "40,0.1,0.01,0.0001,1,1,0.8\n",
+                encoding="utf-8",
+            )
+            diagnostics.write_text(
+                "trajectory,hmc_acceptance_slot_1,hmc_acceptance_slot_2,hmc_acceptance_slot_3,"
+                "swap_acceptance_1_2,swap_acceptance_2_3,round_trips_total\n"
+                "40,0.8,0.8,0.8,0.4,0.5,8\n",
+                encoding="utf-8",
+            )
+            fields = [
+                "task_id", "point_index", "replica", "L", "Z", "m2", "init_phase",
+                "phase_threshold", "stats_path", "diagnostics_path",
+            ]
+            with manifest.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerow({
+                    "task_id": 0, "point_index": 0, "replica": 0, "L": 6,
+                    "Z": 1, "m2": -2.25, "init_phase": "ordered",
+                    "phase_threshold": 0.25, "stats_path": stats,
+                    "diagnostics_path": diagnostics,
+                })
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/summarize_tempering.py"),
+                 "--manifest", str(manifest), "--block-size", "2",
+                 "--output", str(output)],
+                check=True, text=True, capture_output=True,
+            )
+            with output.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual([row["phase_transitions"] for row in rows], ["1", "1"])
+            self.assertIn("swap_bottlenecks=0", result.stdout)
 
     def test_even_tempering_count_is_rejected(self):
         command = [

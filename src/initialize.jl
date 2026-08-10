@@ -73,6 +73,14 @@ function parse_commandline()
             help = "replica-exchange attempt cadence in complete HMC sweeps"
             arg_type = Int
             default = 1
+        "--init-phase"
+            help = "initial field basin: hot, disordered, or ordered"
+            arg_type = String
+            default = "hot"
+        "--phase-threshold"
+            help = "absolute magnetization threshold used for phase diagnostics"
+            arg_type = Float64
+            default = 0.25
         "size"
             help = "side length of lattice"
             arg_type = Int
@@ -115,6 +123,13 @@ const ε    = FloatType(parsed_args["eps"])
 const tempering_replicas = parsed_args["tempering-replicas"]
 const mass_span = FloatType(parsed_args["mass-span"])
 const swap_every = parsed_args["swap-every"]
+const init_phase = parsed_args["init-phase"]
+const phase_threshold = Float64(parsed_args["phase-threshold"])
+
+init_phase in ("hot", "disordered", "ordered") ||
+    error("--init-phase must be hot, disordered, or ordered")
+isfinite(phase_threshold) && phase_threshold > 0 ||
+    error("--phase-threshold must be finite and positive")
 
 const seed = parsed_args["rng"]
 if seed != 0
@@ -126,12 +141,33 @@ function hotstart(n)
     ArrayType(rand(ξ, n, n, n))
 end
 
+"""Near-zero field used to seed the disordered basin."""
+function disorderedstart(n)
+    FloatType(0.05) .* hotstart(n)
+end
+
+"""Uniform classical minimum plus small noise, used to seed the ordered basin."""
+function orderedstart(n, mass; sign::Int=(isodd(seed) ? 1 : -1))
+    sign in (-1, 1) || throw(ArgumentError("ordered-start sign must be -1 or 1"))
+    amplitude = sqrt(max(-FloatType(mass) / λ, zero(FloatType)))
+    field = ArrayType(fill(FloatType(sign) * amplitude, n, n, n))
+    field .+= FloatType(0.05) .* hotstart(n)
+    return field
+end
+
+function initial_field(n, mass, phase::AbstractString=init_phase)
+    phase == "hot" && return hotstart(n)
+    phase == "disordered" && return disorderedstart(n)
+    phase == "ordered" && return orderedstart(n, mass)
+    throw(ArgumentError("initial phase must be hot, disordered, or ordered"))
+end
+
 init_arg = parsed_args["init"]
 
 ##
 if isnothing(init_arg)
 
-macro init_state() esc(:( ϕ = hotstart(L) )) end
+macro init_state() esc(:( ϕ = initial_field(L, m²) )) end
 
 else
 

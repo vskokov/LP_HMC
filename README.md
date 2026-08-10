@@ -299,8 +299,9 @@ chains:
 
 ```bash
 python3 scripts/submit_reweight_array.py \
-    --L 24 --points-csv three_source_points.csv --replicas 4 \
+    --L 24 --points-csv three_source_points.csv --replicas 12 \
     --tempering-replicas 9 --mass-span 0.12 --swap-every 1 \
+    --init-schedule split --phase-threshold 0.25 \
     --eps 0.02 --n-lf 15 --samples 2000 --skip 12 \
     --partition gpu --gpu-resource gpu:h100:1 \
     --time 08:00:00 --mem 24G --cpus 4 \
@@ -311,12 +312,35 @@ The ladder endpoints are `m2 - mass_span/2` and `m2 + mass_span/2`; adjacent eve
 after complete HMC sweeps. One Slurm task holds the whole ladder on one GPU and swaps
 array references, not lattice data.
 
+`--init-schedule split` requires an even independent `--replicas` count. The first
+half of the independent jobs start from a near-zero disordered field, and the second
+half start near the positive or negative classical ordered minimum (the sign is
+chosen reproducibly from the task seed). The complete ladder within one job starts
+in the same basin. The manifest and checkpoints record `init_phase`, so `--resume`
+cannot silently reuse a checkpoint from the other basin. The legacy default is
+`--init-schedule hot`.
+
 Only the central mass slot is written to the standard statistics CSV, so the existing
 `reweight_binder.py` command is unchanged. `runs/<run-name>/diagnostics/` contains
 per-slot HMC acceptance, per-pair swap acceptance, and completed walker round trips.
 Inspect these diagnostics to tune the ladder spacing before trusting a production
 ensemble. `--resume` validates the complete ladder checkpoint as well as its target
 parameters.
+
+Each diagnostic row also records the target magnetization and phase, cumulative
+ordered-phase occupancy and transition count, endpoint magnetizations, and the
+walker IDs at the low, target, and high slots. Progress output reports the minimum
+swap acceptance and phase statistics every 100 retained samples. Summarize completed
+runs in disjoint blocks with:
+
+```bash
+python3 scripts/summarize_tempering.py \
+    --manifest runs/binder_tempered_L24/manifest.csv \
+    --block-size 5000 --phase-threshold 0.25
+```
+
+This writes `phase_blocks.csv` beside the manifest and compares pooled Binder
+cumulants and phase occupancy between ordered-start and disordered-start jobs.
 
 The replica-exchange CPU correctness check is:
 

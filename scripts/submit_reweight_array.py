@@ -69,6 +69,10 @@ def build_rows(args: argparse.Namespace, points: list[tuple[str, str]], run_dir:
                 seed = seed % 2_147_483_646 + 1
             used_seeds.add(seed)
             base = f"task_{task_id:06d}"
+            if args.init_schedule == "split":
+                init_phase = "disordered" if replica < args.replicas // 2 else "ordered"
+            else:
+                init_phase = args.init_schedule
             rows.append({
                 "schema_version": 1, "task_id": task_id, "point_index": point_index,
                 "replica": replica, "L": args.L, "Z": Z, "m2": m2,
@@ -77,6 +81,8 @@ def build_rows(args: argparse.Namespace, points: list[tuple[str, str]], run_dir:
                 "tempering_replicas": args.tempering_replicas,
                 "mass_span": canonical_number(str(args.mass_span)),
                 "swap_every": args.swap_every,
+                "init_phase": init_phase,
+                "phase_threshold": canonical_number(str(args.phase_threshold)),
                 "checkpoint_path": str((run_dir / "checkpoints" / f"{base}.jld2").resolve()),
                 "stats_path": str((run_dir / "statistics" / f"{base}.csv").resolve()),
                 "diagnostics_path": str((run_dir / "diagnostics" / f"{base}.csv").resolve()),
@@ -148,6 +154,15 @@ def main() -> int:
                         help="total centered m2 span for the exchange ladder")
     parser.add_argument("--swap-every", type=int, default=1,
                         help="HMC sweeps between adjacent swap attempts")
+    parser.add_argument(
+        "--init-schedule", choices=("hot", "disordered", "ordered", "split"),
+        default="hot",
+        help="initial basin for every job, or split independent jobs evenly between phases",
+    )
+    parser.add_argument(
+        "--phase-threshold", type=float, default=0.25,
+        help="absolute target magnetization separating disordered and ordered diagnostics",
+    )
     parser.add_argument("--partition", default="gpu")
     parser.add_argument("--account")
     parser.add_argument("--gpu-resource", default="gpu:1")
@@ -178,8 +193,14 @@ def main() -> int:
             parser.error("--mass-span must be finite and positive when tempering is enabled")
     elif args.mass_span != 0:
         parser.error("--mass-span must be zero when --tempering-replicas=1")
+    if args.tempering_replicas == 1 and args.init_schedule != "hot":
+        parser.error("--init-schedule requires replica exchange (--tempering-replicas > 1)")
     if args.swap_every < 1:
         parser.error("--swap-every must be positive")
+    if args.init_schedule == "split" and args.replicas % 2 != 0:
+        parser.error("--init-schedule=split requires an even --replicas count")
+    if args.phase_threshold <= 0 or not math.isfinite(args.phase_threshold):
+        parser.error("--phase-threshold must be finite and positive")
     args.run_name = args.run_name or f"reweight_L{args.L}"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", args.run_name):
         parser.error("--run-name may contain only letters, digits, dot, underscore, and hyphen")

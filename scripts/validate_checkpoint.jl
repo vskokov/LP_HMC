@@ -2,10 +2,10 @@
 
 using JLD2
 
-length(ARGS) in (7, 10) ||
-    error("usage: validate_checkpoint.jl PATH L Z M2 EPS N_LF SEED [TEMPERING_REPLICAS MASS_SPAN SWAP_EVERY]")
+length(ARGS) in (7, 10, 11) ||
+    error("usage: validate_checkpoint.jl PATH L Z M2 EPS N_LF SEED [TEMPERING_REPLICAS MASS_SPAN SWAP_EVERY [INIT_PHASE]]")
 path, L_text, Z_text, m2_text, eps_text, n_lf_text, seed_text = ARGS[1:7]
-tempering = length(ARGS) == 10
+tempering = length(ARGS) >= 10
 
 expected = (
     L=parse(Int, L_text), Z=parse(Float64, Z_text), m2=parse(Float64, m2_text),
@@ -28,6 +28,7 @@ try
             expected_replicas = parse(Int, ARGS[8])
             expected_span = parse(Float64, ARGS[9])
             expected_swap_every = parse(Int, ARGS[10])
+            expected_init_phase = length(ARGS) == 11 ? ARGS[11] : "hot"
             replica_required = (
                 "sampler", "replica_fields", "tempering_replicas", "mass_span",
                 "swap_every", "masses", "walker_ids", "walker_stage", "round_trips",
@@ -41,6 +42,8 @@ try
             file["tempering_replicas"] == expected_replicas || error("replica count mismatch")
             Float64(file["mass_span"]) == expected_span || error("mass span mismatch")
             file["swap_every"] == expected_swap_every || error("swap cadence mismatch")
+            checkpoint_init_phase = haskey(file, "init_phase") ? String(file["init_phase"]) : "hot"
+            checkpoint_init_phase == expected_init_phase || error("initial phase mismatch")
             size(file["replica_fields"]) ==
                 (expected.L, expected.L, expected.L, expected_replicas) ||
                 error("replica field size mismatch")

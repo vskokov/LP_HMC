@@ -27,6 +27,14 @@ def read_task(manifest: Path, task_id: int) -> dict[str, str]:
 def valid_stats(path: Path, row: dict[str, str]) -> bool:
     try:
         run = read_stats(path)
+        metadata: dict[str, str] = {}
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.startswith("#"):
+                    break
+                key, separator, value = line[1:].strip().partition("=")
+                if separator:
+                    metadata[key] = value
         expected_tempering = int(row.get("tempering_replicas", "1"))
         return (
             run.L == int(row["L"])
@@ -40,6 +48,9 @@ def valid_stats(path: Path, row: dict[str, str]) -> bool:
             and run.tempering_replicas == expected_tempering
             and run.mass_span == float(row.get("mass_span", "0"))
             and run.swap_every == int(row.get("swap_every", "1"))
+            and metadata.get("init_phase", "hot") == row.get("init_phase", "hot")
+            and float(metadata.get("phase_threshold", "0.25"))
+            == float(row.get("phase_threshold", "0.25"))
         )
     except (OSError, ValueError):
         return False
@@ -94,12 +105,14 @@ def main() -> int:
     tempering_replicas = int(row.get("tempering_replicas", "1"))
     mass_span = row.get("mass_span", "0")
     swap_every = row.get("swap_every", "1")
+    init_phase = row.get("init_phase", "hot")
+    phase_threshold = row.get("phase_threshold", "0.25")
     validate = prefix + [
         args.julia, f"--project={project}", str(REPO_ROOT / "scripts/validate_checkpoint.jl"),
         str(checkpoint), row["L"], row["Z"], row["m2"], row["eps"], row["n_lf"], row["seed"],
     ]
     if tempering_replicas > 1:
-        validate.extend([str(tempering_replicas), mass_span, swap_every])
+        validate.extend([str(tempering_replicas), mass_span, swap_every, init_phase])
     if args.resume and checkpoint.is_file() and not args.dry_run:
         print("+", shlex.join(validate), flush=True)
         checkpoint_valid = subprocess.run(validate, check=False).returncode == 0
@@ -119,6 +132,7 @@ def main() -> int:
             thermalize[-1:-1] = [
                 f"--tempering-replicas={tempering_replicas}",
                 f"--mass-span={mass_span}", f"--swap-every={swap_every}",
+                f"--init-phase={init_phase}",
             ]
         invoke(thermalize, args.dry_run)
     else:
@@ -139,6 +153,7 @@ def main() -> int:
         collect[-1:-1] = [
             f"--tempering-replicas={tempering_replicas}",
             f"--mass-span={mass_span}", f"--swap-every={swap_every}",
+            f"--init-phase={init_phase}", f"--phase-threshold={phase_threshold}",
             f"--diagnostics={diagnostics}",
         ]
     invoke(collect, args.dry_run)
