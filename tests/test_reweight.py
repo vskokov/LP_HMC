@@ -187,6 +187,37 @@ class ReweightTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires replica exchange", result.stderr)
 
+    def test_tsp_dry_run_and_safe_local_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_tsp.py"),
+                "--L", "6", "--point=-1.05,-2.75", "--eps", "0.05",
+                "--n-lf", "8", "--samples", "10", "--replicas", "4",
+                "--tempering-replicas", "5", "--mass-span", "0.2",
+                "--init-schedule", "split", "--run-root", str(run_root),
+                "--run-name", "local-test", "--dry-run",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            manifest = run_root / "local-test" / "manifest.csv"
+            self.assertFalse(manifest.exists())
+            self.assertIn("--launcher none", result.stdout)
+            self.assertIn("no tasks were enqueued", result.stdout)
+
+            submit_command = [item for item in command if item != "--dry-run"]
+            submit_command.extend(["--tsp", "/bin/true"])
+            subprocess.run(submit_command, check=True, text=True, capture_output=True)
+            with manifest.open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(
+                [row["init_phase"] for row in rows],
+                ["disordered", "disordered", "ordered", "ordered"],
+            )
+            repeated = subprocess.run(submit_command, text=True, capture_output=True)
+            self.assertNotEqual(repeated.returncode, 0)
+            self.assertIn("already exists", repeated.stderr)
+
     def test_tempering_summary_reports_phase_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

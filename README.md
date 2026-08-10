@@ -348,6 +348,26 @@ The replica-exchange CPU correctness check is:
 julia --project=. scripts/test_replica_exchange.jl
 ```
 
+#### Local task-spooler runs
+
+For a small local GPU study, create the same manifest-backed tasks and enqueue them
+with task-spooler (`tsp`). The default concurrency is one, so independent jobs do
+not compete for a single GPU:
+
+```bash
+python3 scripts/submit_reweight_tsp.py \
+    --L 6 --point=-1.05,-2.75 --replicas 4 \
+    --tempering-replicas 5 --mass-span 0.2 --swap-every 1 \
+    --init-schedule split --phase-threshold 0.25 \
+    --eps 0.05 --n-lf 8 --warmup 216 --samples 2000 --skip 12 \
+    --slots 1 --run-name local_tempered_L6 --dry-run
+```
+
+Remove `--dry-run` to set `tsp -S 1` and enqueue the tasks. Inspect the queue with
+`tsp`, follow one task with `tsp -t TASK_ID`, and use `--resume` only with an exactly
+matching existing manifest. A pre-existing run is otherwise rejected to prevent
+accidental data or manifest replacement.
+
 ---
 
 ## Valid Lattice Sizes
