@@ -2,6 +2,7 @@
 mutable struct ReplicaExchangeState{A,T<:AbstractFloat}
     fields::Vector{A}
     masses::Vector{T}
+    workspace::Any
     walker_ids::Vector{Int}
     walker_stage::Vector{Int}
     round_trips::Vector{Int}
@@ -26,6 +27,7 @@ function mass_ladder(target_m2::T, count::Int, span::T) where {T<:AbstractFloat}
 end
 
 function ReplicaExchangeState(fields::Vector{A}, masses::Vector{T};
+                              batched=false,
                               walker_ids=collect(1:length(fields)),
                               walker_stage=zeros(Int, length(fields)),
                               round_trips=zeros(Int, length(fields)),
@@ -36,8 +38,17 @@ function ReplicaExchangeState(fields::Vector{A}, masses::Vector{T};
                               swap_accepts=zeros(Int, max(0, length(fields) - 1))) where {A,T<:AbstractFloat}
     length(fields) == length(masses) || throw(ArgumentError("one field is required per mass"))
     length(fields) > 0 || throw(ArgumentError("replica ladder cannot be empty"))
+    workspace = if batched
+        cpu && throw(ArgumentError("batched replica HMC requires CUDA"))
+        all(field -> parent(field) === parent(fields[1]), fields) ||
+            throw(ArgumentError("batched replica fields must share one parent array"))
+        make_batched_workspace(parent(fields[1]), masses)
+    else
+        nothing
+    end
     state = ReplicaExchangeState{A,T}(
-        fields, masses, collect(walker_ids), collect(walker_stage), collect(round_trips),
+        fields, masses, workspace,
+        collect(walker_ids), collect(walker_stage), collect(round_trips),
         swap_phase, sweeps, collect(hmc_attempts), collect(hmc_accepts),
         collect(swap_attempts), collect(swap_accepts),
     )
@@ -45,6 +56,25 @@ function ReplicaExchangeState(fields::Vector{A}, masses::Vector{T};
         state.walker_stage[state.walker_ids[1]] = 1
     end
     return state
+end
+
+is_batched(state::ReplicaExchangeState) = !isnothing(state.workspace)
+
+function batched_quadratic_statistics(state::ReplicaExchangeState)
+    is_batched(state) || return quadratic_statistic.(state.fields)
+    values = sum(abs2, parent(state.fields[1]); dims=(1, 2, 3))
+    return Float64.(vec(Array(values)))
+end
+
+function swap_field_slots!(state::ReplicaExchangeState, left::Int, right::Int)
+    if !is_batched(state)
+        state.fields[left], state.fields[right] = state.fields[right], state.fields[left]
+        return
+    end
+    temporary = state.workspace.swap_buffer
+    copyto!(temporary, state.fields[left])
+    copyto!(state.fields[left], state.fields[right])
+    copyto!(state.fields[right], temporary)
 end
 
 target_slot(state::ReplicaExchangeState) = (length(state.fields) + 1) ÷ 2
@@ -78,7 +108,7 @@ function attempt_replica_swap!(state::ReplicaExchangeState, left::Int;
     state.swap_attempts[left] += 1
     accepted = ΔS <= 0 || log(rand(rng)) < -ΔS / Float64(T)
     if accepted
-        state.fields[left], state.fields[right] = state.fields[right], state.fields[left]
+        swap_field_slots!(state, left, right)
         state.walker_ids[left], state.walker_ids[right] =
             state.walker_ids[right], state.walker_ids[left]
         state.swap_accepts[left] += 1
@@ -90,15 +120,23 @@ end
 function replica_exchange_sweep!(state::ReplicaExchangeState, Z_value, eps, leapfrog_steps;
                                  swap_every::Int=1, rng=Random.default_rng())
     swap_every > 0 || throw(ArgumentError("swap_every must be positive"))
-    for slot in eachindex(state.fields)
-        accepted, _ = hmc_step!(state.fields[slot], state.masses[slot], Z_value,
-                                eps, leapfrog_steps)
-        state.hmc_attempts[slot] += 1
-        state.hmc_accepts[slot] += accepted
+    if is_batched(state)
+        accepted, _ = hmc_step_batched!(
+            parent(state.fields[1]), Z_value, eps, leapfrog_steps, state.workspace; rng=rng
+        )
+        state.hmc_attempts .+= 1
+        state.hmc_accepts .+= accepted
+    else
+        for slot in eachindex(state.fields)
+            accepted, _ = hmc_step!(state.fields[slot], state.masses[slot], Z_value,
+                                    eps, leapfrog_steps)
+            state.hmc_attempts[slot] += 1
+            state.hmc_accepts[slot] += accepted
+        end
     end
     state.sweeps += 1
     if length(state.fields) > 1 && state.sweeps % swap_every == 0
-        q = quadratic_statistic.(state.fields)
+        q = batched_quadratic_statistics(state)
         for left in state.swap_phase:2:(length(state.fields) - 1)
             accepted, _ = attempt_replica_swap!(state, left;
                                                 q_left=q[left], q_right=q[left + 1], rng=rng)

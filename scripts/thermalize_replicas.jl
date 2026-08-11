@@ -9,7 +9,8 @@ include("../src/modelA.jl")
 
 function save_checkpoint(path, state)
     temporary = path * ".tmp"
-    host_fields = cat((Array(field) for field in state.fields)...; dims=4)
+    host_fields = is_batched(state) ? Array(parent(state.fields[1])) :
+                  cat((Array(field) for field in state.fields)...; dims=4)
     center = target_slot(state)
     jldsave(temporary, true;
         ϕ=Array(state.fields[center]),
@@ -19,6 +20,7 @@ function save_checkpoint(path, state)
         L=L, Z=Float64(Z), m²=Float64(m²), λ=Float64(λ), T=Float64(T),
         epsilon=Float64(ε), n_lf=n_lf, seed=seed,
         fp64=(FloatType == Float64), cpu=cpu,
+        replica_execution=(is_batched(state) ? "batched" : "serial"),
         tempering_replicas=length(state.fields), mass_span=Float64(mass_span),
         swap_every=swap_every, masses=Float64.(state.masses),
         init_phase=init_phase,
@@ -36,10 +38,19 @@ function main()
     swap_every > 0 || error("--swap-every must be positive")
     isnothing(parsed_args["checkpoint"]) && error("--checkpoint is required")
     masses = mass_ladder(m², tempering_replicas, mass_span)
-    fields = [initial_field(L, mass) for mass in masses]
-    state = ReplicaExchangeState(fields, masses)
+    initial_fields = [initial_field(L, mass) for mass in masses]
+    state = if cpu
+        ReplicaExchangeState(initial_fields, masses)
+    else
+        field_batch = cat(initial_fields...; dims=4)
+        fields = [@view field_batch[:, :, :, slot] for slot in eachindex(masses)]
+        ReplicaExchangeState(fields, masses; batched=true)
+    end
     checkpoint = abspath(parsed_args["checkpoint"])
     mkpath(dirname(checkpoint))
+    @printf("replica_execution=%s replicas=%d batch_shape=%s\n",
+            is_batched(state) ? "batched" : "serial", length(state.fields),
+            is_batched(state) ? string(size(parent(state.fields[1]))) : "n/a")
 
     for _ in 1:L
         replica_exchange!(state, L^2, Z, ε, n_lf; swap_every=swap_every)

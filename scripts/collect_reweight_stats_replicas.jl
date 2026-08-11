@@ -22,9 +22,14 @@ function load_replica_state(path)
         )
     end
     nrep = size(payload.fields, 4)
-    fields = [ArrayType(payload.fields[:, :, :, slot]) for slot in 1:nrep]
     masses = FloatType.(payload.masses)
-    state = ReplicaExchangeState(fields, masses;
+    fields, batched = if cpu
+        ([ArrayType(payload.fields[:, :, :, slot]) for slot in 1:nrep], false)
+    else
+        field_batch = ArrayType(payload.fields)
+        ([@view field_batch[:, :, :, slot] for slot in 1:nrep], true)
+    end
+    state = ReplicaExchangeState(fields, masses; batched=batched,
         walker_ids=payload.walker_ids, walker_stage=payload.walker_stage,
         round_trips=payload.round_trips, swap_phase=payload.swap_phase,
         sweeps=payload.sweeps, hmc_attempts=payload.hmc_attempts,
@@ -46,6 +51,7 @@ function write_metadata(io, state, samples, skip, warmup)
     println(io, "# temperature=$(repr(Float64(T)))")
     println(io, "# float_type=$(FloatType)")
     println(io, "# device=$(cpu ? "cpu" : "cuda")")
+    println(io, "# replica_execution=$(is_batched(state) ? "batched" : "serial")")
     println(io, "# samples=$(samples)")
     println(io, "# skip=$(skip)")
     println(io, "# warmup=$(warmup)")

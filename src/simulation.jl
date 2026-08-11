@@ -79,6 +79,10 @@ end
 
 else
 
+# At L=12 with 11 replicas, 128 threads yields 149 independent blocks.  This is
+# enough to cover all SMs on an H200, whereas 256 threads would launch only 75.
+const BATCH_THREADS = 128
+
 function _lap_kernel!(lapϕ, ϕ)
     idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if idx <= L^3
@@ -186,6 +190,167 @@ function sufficient_statistics(ϕ)
     return (M=Float64(sum(sum_arr)) / Ntot,
             Q=Float64(sum(q_arr)),
             G=Float64(sum(g_arr)))
+end
+
+"""Persistent storage for advancing every mass replica in one CUDA batch."""
+mutable struct BatchedHMCWorkspace{A,V}
+    proposal::A
+    momentum::A
+    force::A
+    laplacian::A
+    site_energy::V
+    device_masses::V
+    device_accepts::CuArray{Bool,1}
+    swap_buffer::CuArray{FloatType,3}
+    old_hamiltonians::Vector{Float64}
+    new_hamiltonians::Vector{Float64}
+end
+
+function make_batched_workspace(fields::CuArray{FloatType,4}, masses)
+    size(fields)[1:3] == (L, L, L) ||
+        throw(ArgumentError("batched fields must have shape (L,L,L,replicas)"))
+    nrep = size(fields, 4)
+    length(masses) == nrep || throw(ArgumentError("one mass is required per replica"))
+    return BatchedHMCWorkspace(
+        similar(fields), similar(fields), similar(fields), similar(fields),
+        CuArray{FloatType}(undef, length(fields)), CuArray(FloatType.(masses)),
+        CuArray{Bool}(undef, nrep), CuArray{FloatType}(undef, L, L, L),
+        zeros(Float64, nrep), zeros(Float64, nrep),
+    )
+end
+
+function _batch_lap_kernel!(lapϕ, ϕ, sites_per_replica)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if idx <= length(ϕ)
+        zero_based = idx - 1
+        site = zero_based % sites_per_replica
+        replica = zero_based ÷ sites_per_replica + 1
+        x1 = site % L + 1
+        x2 = (site ÷ L) % L + 1
+        x3 = site ÷ L^2 + 1
+        lapϕ[x1,x2,x3,replica] = (
+            ϕ[NNp(x1),x2,x3,replica] + ϕ[NNm(x1),x2,x3,replica] +
+            ϕ[x1,NNp(x2),x3,replica] + ϕ[x1,NNm(x2),x3,replica] +
+            ϕ[x1,x2,NNp(x3),replica] + ϕ[x1,x2,NNm(x3),replica] -
+            6*ϕ[x1,x2,x3,replica]
+        )
+    end
+    return nothing
+end
+
+function _batch_force_kernel!(F, lapϕ, ϕ, masses, Z_value, sites_per_replica)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if idx <= length(ϕ)
+        zero_based = idx - 1
+        site = zero_based % sites_per_replica
+        replica = zero_based ÷ sites_per_replica + 1
+        x1 = site % L + 1
+        x2 = (site ÷ L) % L + 1
+        x3 = site ÷ L^2 + 1
+        l0 = lapϕ[x1,x2,x3,replica]
+        lap2 = (
+            lapϕ[NNp(x1),x2,x3,replica] + lapϕ[NNm(x1),x2,x3,replica] +
+            lapϕ[x1,NNp(x2),x3,replica] + lapϕ[x1,NNm(x2),x3,replica] +
+            lapϕ[x1,x2,NNp(x3),replica] + lapϕ[x1,x2,NNm(x3),replica] - 6*l0
+        )
+        value = ϕ[x1,x2,x3,replica]
+        F[x1,x2,x3,replica] = Z_value*l0 - lap2 - masses[replica]*value - λ*value^3
+    end
+    return nothing
+end
+
+function compute_force_batched!(F, lapϕ, ϕ, masses, Z_value)
+    threads = BATCH_THREADS
+    blocks = cld(length(ϕ), threads)
+    @cuda threads=threads blocks=blocks _batch_lap_kernel!(lapϕ, ϕ, L^3)
+    @cuda threads=threads blocks=blocks _batch_force_kernel!(
+        F, lapϕ, ϕ, masses, Z_value, L^3
+    )
+    return nothing
+end
+
+function _batch_hamiltonian_kernel!(site_energy, ϕ, π_field, masses, Z_value,
+                                    sites_per_replica)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if idx <= length(ϕ)
+        zero_based = idx - 1
+        site = zero_based % sites_per_replica
+        replica = zero_based ÷ sites_per_replica + 1
+        x1 = site % L + 1
+        x2 = (site ÷ L) % L + 1
+        x3 = site ÷ L^2 + 1
+        value = ϕ[x1,x2,x3,replica]
+        lapl = (
+            ϕ[NNp(x1),x2,x3,replica] + ϕ[NNm(x1),x2,x3,replica] +
+            ϕ[x1,NNp(x2),x3,replica] + ϕ[x1,NNm(x2),x3,replica] +
+            ϕ[x1,x2,NNp(x3),replica] + ϕ[x1,x2,NNm(x3),replica] - 6*value
+        )
+        grad2 = (ϕ[NNp(x1),x2,x3,replica] - value)^2 +
+                (ϕ[x1,NNp(x2),x3,replica] - value)^2 +
+                (ϕ[x1,x2,NNp(x3),replica] - value)^2
+        momentum = π_field[x1,x2,x3,replica]
+        site_energy[idx] = FloatType(0.5)*lapl^2 + FloatType(0.5)*Z_value*grad2 +
+                           FloatType(0.5)*masses[replica]*value^2 +
+                           FloatType(0.25)*λ*value^4 + FloatType(0.5)*momentum^2
+    end
+    return nothing
+end
+
+function batched_hamiltonians!(destination, site_energy, ϕ, π_field, masses, Z_value)
+    threads = BATCH_THREADS
+    blocks = cld(length(ϕ), threads)
+    @cuda threads=threads blocks=blocks _batch_hamiltonian_kernel!(
+        site_energy, ϕ, π_field, masses, Z_value, L^3
+    )
+    reduced = sum(reshape(site_energy, L^3, size(ϕ, 4)); dims=1)
+    destination .= vec(Array(reduced))
+    return destination
+end
+
+function leapfrog_batched!(ϕ, π_field, masses, Z_value, eps, leapfrog_steps, workspace)
+    compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value)
+    π_field .+= (eps / 2) .* workspace.force
+    for _ in 1:(leapfrog_steps - 1)
+        ϕ .+= eps .* π_field
+        compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value)
+        π_field .+= eps .* workspace.force
+    end
+    ϕ .+= eps .* π_field
+    compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value)
+    π_field .+= (eps / 2) .* workspace.force
+    return nothing
+end
+
+function _accept_batch_kernel!(fields, proposal, accepted, sites_per_replica)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if idx <= length(fields)
+        replica = (idx - 1) ÷ sites_per_replica + 1
+        accepted[replica] && (fields[idx] = proposal[idx])
+    end
+    return nothing
+end
+
+"""Advance every field in a contiguous replica batch with one sequence of kernels."""
+function hmc_step_batched!(fields, Z_value, eps, leapfrog_steps, workspace;
+                           rng=Random.default_rng())
+    randn!(workspace.momentum)
+    batched_hamiltonians!(workspace.old_hamiltonians, workspace.site_energy, fields,
+                          workspace.momentum, workspace.device_masses, Z_value)
+    copyto!(workspace.proposal, fields)
+    leapfrog_batched!(workspace.proposal, workspace.momentum, workspace.device_masses,
+                      Z_value, eps, leapfrog_steps, workspace)
+    batched_hamiltonians!(workspace.new_hamiltonians, workspace.site_energy,
+                          workspace.proposal, workspace.momentum,
+                          workspace.device_masses, Z_value)
+    delta_h = workspace.new_hamiltonians .- workspace.old_hamiltonians
+    accepted = [value < 0 || rand(rng) < exp(-value / Float64(T)) for value in delta_h]
+    copyto!(workspace.device_accepts, accepted)
+    threads = BATCH_THREADS
+    blocks = cld(length(fields), threads)
+    @cuda threads=threads blocks=blocks _accept_batch_kernel!(
+        fields, workspace.proposal, workspace.device_accepts, L^3
+    )
+    return accepted, delta_h
 end
 
 end

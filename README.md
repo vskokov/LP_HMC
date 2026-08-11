@@ -283,12 +283,24 @@ This writes `plots/binder_line.csv` and `plots/binder_line.png`. Targets use onl
 the nearest source coordinate (replicas at that coordinate are combined); the CSV
 retains low-overlap points and labels them with `warning_status=low_ess`.
 
-Run the CUDA observable/action-identity and device-reference-swap check on a GPU node
-before production:
+Run the CUDA observable/action-identity and batched-replica HMC check on a GPU node
+before production. This also compares batched and single-replica forces and
+Hamiltonians, verifies a physical slot swap, and advances one complete batch sweep:
 
 ```bash
 julia --project=. scripts/test_reweight_stats_gpu.jl 6 --fp64
 ```
+
+While a representative `L=12` task is running, inspect the actual batched workload
+from another shell with:
+
+```bash
+nvidia-smi pmon -s um -d 1
+```
+
+Use samples taken after Julia compilation and warmup when comparing SM utilization.
+The job log must show `replica_execution=batched`; after completion, use the site's
+Slurm GPU-efficiency report as the authoritative H200 measurement.
 
 #### Replica-exchange HMC near a first-order transition
 
@@ -308,9 +320,15 @@ python3 scripts/submit_reweight_array.py \
     --module cuda/12.3 --run-name binder_tempered_L24 --dry-run
 ```
 
-The ladder endpoints are `m2 - mass_span/2` and `m2 + mass_span/2`; adjacent even and odd pairs alternate
-after complete HMC sweeps. One Slurm task holds the whole ladder on one GPU and swaps
-array references, not lattice data.
+The ladder endpoints are `m2 - mass_span/2` and `m2 + mass_span/2`; adjacent even and
+odd pairs alternate after complete HMC sweeps. On CUDA, one Slurm task stores the
+whole ladder as one contiguous `(L,L,L,nreplicas)` array. Every HMC kernel advances
+all mass slots in one launch, which exposes enough independent lattice sites to use
+large GPUs efficiently. Accepted exchanges copy the two corresponding device slices;
+the masses remain attached to their fixed slots. The CPU fallback retains the serial
+per-replica implementation. The first thermalizer log line reports
+`replica_execution=batched` and the 4D batch shape, so production logs make the
+selected path explicit. No new submission option is required.
 
 `--init-schedule split` requires an even independent `--replicas` count. The first
 half of the independent jobs start from a near-zero disordered field, and the second
