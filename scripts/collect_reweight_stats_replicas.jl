@@ -23,13 +23,13 @@ function load_replica_state(path)
     end
     nrep = size(payload.fields, 4)
     masses = FloatType.(payload.masses)
-    fields, batched = if cpu
-        ([ArrayType(payload.fields[:, :, :, slot]) for slot in 1:nrep], false)
+    fields, batched, field_batch = if cpu
+        ([ArrayType(payload.fields[:, :, :, slot]) for slot in 1:nrep], false, nothing)
     else
         field_batch = ArrayType(payload.fields)
-        ([@view field_batch[:, :, :, slot] for slot in 1:nrep], true)
+        ([@view field_batch[:, :, :, slot] for slot in 1:nrep], true, field_batch)
     end
-    state = ReplicaExchangeState(fields, masses; batched=batched,
+    state = ReplicaExchangeState(fields, masses; batched=batched, field_batch=field_batch,
         walker_ids=payload.walker_ids, walker_stage=payload.walker_stage,
         round_trips=payload.round_trips, swap_phase=payload.swap_phase,
         sweeps=payload.sweeps, hmc_attempts=payload.hmc_attempts,

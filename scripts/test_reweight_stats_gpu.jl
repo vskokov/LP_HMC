@@ -46,7 +46,7 @@ function main()
 
     field_batch = cat(copy(ϕ), copy(ϕ), copy(ϕ); dims=4)
     batch_fields = [@view field_batch[:, :, :, slot] for slot in eachindex(ladder)]
-    batch = ReplicaExchangeState(batch_fields, ladder; batched=true)
+    batch = ReplicaExchangeState(batch_fields, ladder; batched=true, field_batch=field_batch)
 
     compute_force_batched!(batch.workspace.force, batch.workspace.laplacian,
                            field_batch, batch.workspace.device_masses, FloatType(source_Z))

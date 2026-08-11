@@ -9,7 +9,7 @@ include("../src/modelA.jl")
 
 function save_checkpoint(path, state)
     temporary = path * ".tmp"
-    host_fields = is_batched(state) ? Array(parent(state.fields[1])) :
+    host_fields = is_batched(state) ? Array(state.batch) :
                   cat((Array(field) for field in state.fields)...; dims=4)
     center = target_slot(state)
     jldsave(temporary, true;
@@ -44,13 +44,13 @@ function main()
     else
         field_batch = cat(initial_fields...; dims=4)
         fields = [@view field_batch[:, :, :, slot] for slot in eachindex(masses)]
-        ReplicaExchangeState(fields, masses; batched=true)
+        ReplicaExchangeState(fields, masses; batched=true, field_batch=field_batch)
     end
     checkpoint = abspath(parsed_args["checkpoint"])
     mkpath(dirname(checkpoint))
     @printf("replica_execution=%s replicas=%d batch_shape=%s\n",
             is_batched(state) ? "batched" : "serial", length(state.fields),
-            is_batched(state) ? string(size(parent(state.fields[1]))) : "n/a")
+            is_batched(state) ? string(size(state.batch)) : "n/a")
 
     for _ in 1:L
         replica_exchange!(state, L^2, Z, ε, n_lf; swap_every=swap_every)

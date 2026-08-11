@@ -2,6 +2,7 @@
 mutable struct ReplicaExchangeState{A,T<:AbstractFloat}
     fields::Vector{A}
     masses::Vector{T}
+    batch::Any
     workspace::Any
     walker_ids::Vector{Int}
     walker_stage::Vector{Int}
@@ -28,6 +29,7 @@ end
 
 function ReplicaExchangeState(fields::Vector{A}, masses::Vector{T};
                               batched=false,
+                              field_batch=nothing,
                               walker_ids=collect(1:length(fields)),
                               walker_stage=zeros(Int, length(fields)),
                               round_trips=zeros(Int, length(fields)),
@@ -38,16 +40,19 @@ function ReplicaExchangeState(fields::Vector{A}, masses::Vector{T};
                               swap_accepts=zeros(Int, max(0, length(fields) - 1))) where {A,T<:AbstractFloat}
     length(fields) == length(masses) || throw(ArgumentError("one field is required per mass"))
     length(fields) > 0 || throw(ArgumentError("replica ladder cannot be empty"))
-    workspace = if batched
+    batch = if batched
         cpu && throw(ArgumentError("batched replica HMC requires CUDA"))
-        all(field -> parent(field) === parent(fields[1]), fields) ||
-            throw(ArgumentError("batched replica fields must share one parent array"))
-        make_batched_workspace(parent(fields[1]), masses)
+        isnothing(field_batch) &&
+            throw(ArgumentError("field_batch is required for batched replica HMC"))
+        size(field_batch) == (L, L, L, length(fields)) ||
+            throw(ArgumentError("field_batch must have shape (L,L,L,replicas)"))
+        field_batch
     else
         nothing
     end
+    workspace = batched ? make_batched_workspace(batch, masses) : nothing
     state = ReplicaExchangeState{A,T}(
-        fields, masses, workspace,
+        fields, masses, batch, workspace,
         collect(walker_ids), collect(walker_stage), collect(round_trips),
         swap_phase, sweeps, collect(hmc_attempts), collect(hmc_accepts),
         collect(swap_attempts), collect(swap_accepts),
@@ -62,7 +67,7 @@ is_batched(state::ReplicaExchangeState) = !isnothing(state.workspace)
 
 function batched_quadratic_statistics(state::ReplicaExchangeState)
     is_batched(state) || return quadratic_statistic.(state.fields)
-    values = sum(abs2, parent(state.fields[1]); dims=(1, 2, 3))
+    values = sum(abs2, state.batch; dims=(1, 2, 3))
     return Float64.(vec(Array(values)))
 end
 
@@ -122,7 +127,7 @@ function replica_exchange_sweep!(state::ReplicaExchangeState, Z_value, eps, leap
     swap_every > 0 || throw(ArgumentError("swap_every must be positive"))
     if is_batched(state)
         accepted, _ = hmc_step_batched!(
-            parent(state.fields[1]), Z_value, eps, leapfrog_steps, state.workspace; rng=rng
+            state.batch, Z_value, eps, leapfrog_steps, state.workspace; rng=rng
         )
         state.hmc_attempts .+= 1
         state.hmc_accepts .+= accepted
