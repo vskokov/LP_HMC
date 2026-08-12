@@ -287,6 +287,28 @@ again. `--jobs` evaluates independent draws in parallel with deterministic seeds
 memory use grows with the worker count. Use `--bootstrap 100` or `200` for an
 exploratory scan and at least `500` for a final uncertainty estimate.
 
+On an NVIDIA GPU, move the exact same block-bootstrap MBAR calculation to the
+Julia/CUDA backend:
+
+```bash
+python3 reweight_binder.py \
+    --manifest runs/binder_L8/manifest.csv \
+    --start -0.6 -1.85764 --end -0.9 -2.3459 --num 301 \
+    --source-mode mbar --bootstrap 1000 --block-size auto \
+    --backend cuda --cuda-batch-size 32 \
+    --output plots/binder_L8_cuda
+```
+
+The validated Python reader, initial MBAR estimate, diagnostics, CSV, and plot are
+unchanged. Julia keeps the observable arrays on the GPU, expands the Python-generated
+circular-block resamples in a CUDA kernel, and solves several bootstrap MBAR models
+simultaneously. An RTX A6000 can normally use `--cuda-batch-size 32`; reduce it if
+CUDA reports an out-of-memory error. Validate a CUDA installation with:
+
+```bash
+python3 scripts/test_mbar_cuda.py
+```
+
 Run the CUDA observable/action-identity and batched-replica HMC check on a GPU node
 before production. This also compares batched and single-replica forces and
 Hamiltonians, verifies a physical slot swap, and advances one complete batch sweep:

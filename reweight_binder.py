@@ -8,7 +8,9 @@ import csv
 import math
 import multiprocessing as mp
 import os
+import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -583,6 +585,106 @@ def bootstrap_mbar_errors(
     return np.std(estimates, axis=0, ddof=1)
 
 
+def _write_binary(path: Path, values: np.ndarray, dtype) -> None:
+    np.ascontiguousarray(values, dtype=dtype).tofile(path)
+
+
+def bootstrap_mbar_errors_cuda(
+    groups: Sequence[SourceGroup], targets: Sequence[tuple[float, float]],
+    block_sizes: dict[tuple[int, float, float], int], draws: int,
+    rng: np.random.Generator, *, tolerance: float, max_iterations: int,
+    batch_size: int = 8,
+) -> np.ndarray:
+    """Run the exact stratified block bootstrap with a Julia/CUDA MBAR backend."""
+    if batch_size < 1:
+        raise ValueError("CUDA batch size must be positive")
+    ordered = tuple(sorted(groups, key=lambda group: group.first_order))
+    runs = [run for group in ordered for run in group.runs]
+    samples = sum(run.size for run in runs)
+    source_counts = np.asarray([group.size for group in ordered], dtype=np.int64)
+    target_array = np.asarray(targets, dtype=np.float64)
+
+    run_of_sample = np.empty(samples, dtype=np.int32)
+    local_position = np.empty(samples, dtype=np.int32)
+    run_data_offsets = np.empty(len(runs), dtype=np.int64)
+    run_start_offsets = np.empty(len(runs), dtype=np.int64)
+    run_sizes = np.asarray([run.size for run in runs], dtype=np.int64)
+    run_blocks = np.empty(len(runs), dtype=np.int64)
+    run_block_sizes = np.empty(len(runs), dtype=np.int64)
+    cursor = 0
+    start_cursor = 0
+    run_number = 0
+    for group in ordered:
+        block = block_sizes[(group.L, group.Z, group.m2)]
+        for run in group.runs:
+            run_data_offsets[run_number] = cursor + 1  # Julia's one-based offset
+            run_start_offsets[run_number] = start_cursor + 1
+            run_block_sizes[run_number] = block
+            run_blocks[run_number] = math.ceil(run.size / block)
+            run_of_sample[cursor:cursor + run.size] = run_number + 1
+            local_position[cursor:cursor + run.size] = np.arange(run.size, dtype=np.int32)
+            cursor += run.size
+            start_cursor += run_blocks[run_number]
+            run_number += 1
+    starts_per_draw = int(np.sum(run_blocks))
+
+    # Match the CPU backend's deterministic seed hierarchy. Only compact block
+    # starts cross the process boundary; CUDA expands them during its gather.
+    seeds = rng.integers(0, np.iinfo(np.uint64).max, size=draws, dtype=np.uint64)
+    repository = Path(__file__).resolve().parent
+    julia_script = repository / "scripts" / "mbar_bootstrap_cuda.jl"
+    with tempfile.TemporaryDirectory(prefix="lp_hmc_mbar_cuda_") as raw_directory:
+        directory = Path(raw_directory)
+        for name, values in (
+            ("M2", np.concatenate([run.M2 for run in runs])),
+            ("M4", np.concatenate([run.M4 for run in runs])),
+            ("Q", np.concatenate([run.Q for run in runs])),
+            ("G", np.concatenate([run.G for run in runs])),
+        ):
+            _write_binary(directory / f"{name}.bin", values, np.float64)
+        _write_binary(directory / "source_Z.bin", [group.Z for group in ordered], np.float64)
+        _write_binary(directory / "source_m2.bin", [group.m2 for group in ordered], np.float64)
+        _write_binary(directory / "source_counts.bin", source_counts, np.int64)
+        _write_binary(directory / "target_Z.bin", target_array[:, 0], np.float64)
+        _write_binary(directory / "target_m2.bin", target_array[:, 1], np.float64)
+        _write_binary(directory / "run_of_sample.bin", run_of_sample, np.int32)
+        _write_binary(directory / "local_position.bin", local_position, np.int32)
+        _write_binary(directory / "run_data_offsets.bin", run_data_offsets, np.int64)
+        _write_binary(directory / "run_start_offsets.bin", run_start_offsets, np.int64)
+        _write_binary(directory / "run_sizes.bin", run_sizes, np.int64)
+        _write_binary(directory / "block_sizes.bin", run_block_sizes, np.int64)
+        with (directory / "starts.bin").open("wb") as handle:
+            for seed in seeds:
+                draw_rng = np.random.default_rng(int(seed))
+                for size, block, count in zip(run_sizes, run_block_sizes, run_blocks):
+                    starts = draw_rng.integers(0, int(size), size=int(count), dtype=np.int32)
+                    starts.tofile(handle)
+
+        command = [
+            "julia", f"--project={repository}", "--startup-file=no", str(julia_script),
+            f"--directory={directory}", f"--samples={samples}",
+            f"--sources={len(ordered)}", f"--runs={len(runs)}",
+            f"--targets={len(targets)}", f"--draws={draws}",
+            f"--starts-per-draw={starts_per_draw}", f"--batch-size={batch_size}",
+            f"--tolerance={tolerance:.17g}", f"--max-iterations={max_iterations}",
+        ]
+        print("launching Julia/CUDA MBAR backend", file=sys.stderr, flush=True)
+        try:
+            subprocess.run(command, check=True)
+        except FileNotFoundError as exc:
+            raise RuntimeError("Julia executable was not found for CUDA backend") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"Julia/CUDA MBAR backend failed with exit code {exc.returncode}") from exc
+        estimates = np.fromfile(directory / "estimates.bin", dtype=np.float64)
+    expected = draws * len(targets)
+    if estimates.size != expected:
+        raise RuntimeError(
+            f"CUDA backend returned {estimates.size} estimates; expected {expected}"
+        )
+    estimates = estimates.reshape(draws, len(targets))
+    return np.zeros(len(targets)) if draws == 1 else np.std(estimates, axis=0, ddof=1)
+
+
 def format_duration(seconds: float) -> str:
     if not math.isfinite(seconds):
         return "unknown"
@@ -631,7 +733,7 @@ def analyze(
     max_source_spread: float = math.inf,
     max_top1_m4_fraction: float = 1.0,
     mbar_tolerance: float = 1e-10, mbar_max_iterations: int = 10_000,
-    jobs: int = 1,
+    jobs: int = 1, backend: str = "cpu", cuda_batch_size: int = 8,
 ) -> list[dict[str, object]]:
     if num < 2:
         raise ValueError("--num must be at least 2")
@@ -639,6 +741,10 @@ def analyze(
         raise ValueError("--bootstrap must be positive")
     if source_mode not in {"nearest", "fixed", "mbar"}:
         raise ValueError("source_mode must be nearest, fixed, or mbar")
+    if backend not in {"cpu", "cuda"}:
+        raise ValueError("backend must be cpu or cuda")
+    if backend == "cuda" and source_mode != "mbar":
+        raise ValueError("CUDA backend requires MBAR source mode")
     if source_mode == "fixed" and fixed_source is None:
         raise ValueError("fixed source mode requires a source coordinate")
     if max_source_spread < 0 or max_top1_m4_fraction < 0:
@@ -687,15 +793,24 @@ def analyze(
             print(
                 f"L={L}: initial MBAR converged in {mbar_model.iterations} iterations "
                 f"after {format_duration(time.monotonic() - solve_started)}; "
-                f"starting {bootstrap} bootstrap draws with {min(jobs, bootstrap)} workers",
+                f"starting {bootstrap} bootstrap draws with "
+                + (f"CUDA batches of {min(cuda_batch_size, bootstrap)}"
+                   if backend == "cuda" else f"{min(jobs, bootstrap)} workers"),
                 file=sys.stderr, flush=True,
             )
             targets = [(target_Z, target_m2) for _, target_Z, target_m2 in target_rows]
-            mbar_uncertainties = bootstrap_mbar_errors(
-                groups, targets, block_cache, bootstrap, rng,
-                tolerance=mbar_tolerance, max_iterations=mbar_max_iterations,
-                jobs=jobs,
-            )
+            if backend == "cuda":
+                mbar_uncertainties = bootstrap_mbar_errors_cuda(
+                    groups, targets, block_cache, bootstrap, rng,
+                    tolerance=mbar_tolerance, max_iterations=mbar_max_iterations,
+                    batch_size=cuda_batch_size,
+                )
+            else:
+                mbar_uncertainties = bootstrap_mbar_errors(
+                    groups, targets, block_cache, bootstrap, rng,
+                    tolerance=mbar_tolerance, max_iterations=mbar_max_iterations,
+                    jobs=jobs,
+                )
 
         for target_index, (t, target_Z, target_m2) in enumerate(target_rows):
             if source_mode == "mbar":
@@ -756,6 +871,7 @@ def analyze(
             rows.append({
                 "t": float(t), "Z": target_Z, "m2": target_m2, "L": L,
                 "U4": binder, "uncertainty": uncertainty,
+                "bootstrap_backend": backend,
                 "source_mode": source_mode,
                 "source_Z": source_Z, "source_m2": source_m2,
                 "source_count": len(groups),
@@ -857,6 +973,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)),
         help="parallel worker processes for exact MBAR bootstrap draws (default: up to 8)",
     )
+    parser.add_argument(
+        "--backend", choices=("cpu", "cuda"), default="cpu",
+        help="backend for MBAR bootstrap draws (default: cpu)",
+    )
+    parser.add_argument(
+        "--cuda-batch-size", type=int, default=8,
+        help="bootstrap draws processed together on the GPU (default: 8)",
+    )
     parser.add_argument("--seed", type=int, default=12345)
     args = parser.parse_args(argv)
     if args.source_mode == "fixed" and args.source is None:
@@ -865,6 +989,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("--source is only valid with --source-mode=fixed")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.cuda_batch_size < 1:
+        parser.error("--cuda-batch-size must be positive")
+    if args.backend == "cuda" and args.source_mode != "mbar":
+        parser.error("--backend=cuda currently requires --source-mode=mbar")
     return args
 
 
@@ -888,7 +1016,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                    max_top1_m4_fraction=args.max_top1_m4_fraction,
                    mbar_tolerance=args.mbar_tolerance,
                    mbar_max_iterations=args.mbar_max_iterations,
-                   jobs=args.jobs)
+                   jobs=args.jobs, backend=args.backend,
+                   cuda_batch_size=args.cuda_batch_size)
     csv_path = Path(str(args.output) + ".csv")
     plot_path = Path(str(args.output) + ".png")
     write_csv(rows, csv_path)
