@@ -14,6 +14,7 @@ from reweight_binder import (  # noqa: E402
     RunData,
     analyze,
     binder_from_weights,
+    bootstrap_mbar_errors,
     evaluate_group,
     group_sources,
     normalize_logweights,
@@ -34,6 +35,30 @@ def run_data(*, order=0, L=8, Z=1.0, m2=-2.0, seed=1,
 
 
 class ReweightTests(unittest.TestCase):
+    def test_parallel_mbar_bootstrap_matches_serial(self):
+        rng = np.random.default_rng(22)
+        runs = []
+        for order, (Z, m2) in enumerate(((0.0, -2.2), (0.2, -2.0))):
+            values = rng.normal(size=32)
+            runs.append(run_data(
+                order=order, Z=Z, m2=m2, seed=order + 1,
+                M2=0.5 + values**2,
+                Q=2.0 + values**2,
+                G=3.0 + (values - 0.2 * order)**2,
+            ))
+        groups = group_sources(runs)[8]
+        block_sizes = {(group.L, group.Z, group.m2): 4 for group in groups}
+        targets = [(0.05, -2.15), (0.15, -2.05)]
+        serial = bootstrap_mbar_errors(
+            groups, targets, block_sizes, 4, np.random.default_rng(123),
+            tolerance=1e-10, max_iterations=10_000, jobs=1,
+        )
+        parallel = bootstrap_mbar_errors(
+            groups, targets, block_sizes, 4, np.random.default_rng(123),
+            tolerance=1e-10, max_iterations=10_000, jobs=2,
+        )
+        np.testing.assert_allclose(parallel, serial, rtol=0.0, atol=0.0)
+
     def test_stable_extreme_weights_and_collapsed_ess(self):
         weights = normalize_logweights(np.array([1000.0, -1000.0]))
         np.testing.assert_allclose(weights, [1.0, 0.0])

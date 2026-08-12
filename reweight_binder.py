@@ -6,6 +6,9 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import multiprocessing as mp
+import os
+import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -527,18 +530,73 @@ def bootstrap_mbar_errors(
     groups: Sequence[SourceGroup], targets: Sequence[tuple[float, float]],
     block_sizes: dict[tuple[int, float, float], int], draws: int,
     rng: np.random.Generator, *, tolerance: float, max_iterations: int,
+    jobs: int = 1,
 ) -> np.ndarray:
     """Re-solve MBAR for every stratified block-bootstrap draw."""
+    if jobs < 1:
+        raise ValueError("bootstrap jobs must be positive")
     estimates = np.empty((draws, len(targets)), dtype=float)
-    for draw in range(draws):
-        sampled = resample_groups(groups, block_sizes, rng)
-        model = prepare_mbar(
-            sampled, tolerance=tolerance, max_iterations=max_iterations
-        )
-        estimates[draw] = mbar_binders(model, targets)
+    # A separate deterministic seed per draw makes results independent of worker
+    # scheduling.  Forked workers share the large input arrays copy-on-write.
+    seeds = rng.integers(0, np.iinfo(np.uint64).max, size=draws, dtype=np.uint64)
+    tasks = [(draw, int(seeds[draw])) for draw in range(draws)]
+    worker_state = (groups, targets, block_sizes, tolerance, max_iterations)
+    report_every = max(1, draws // 20)
+
+    if jobs == 1:
+        _initialize_mbar_bootstrap_worker(*worker_state)
+        results = map(_mbar_bootstrap_worker, tasks)
+        for completed, (draw, values) in enumerate(results, start=1):
+            estimates[draw] = values
+            if completed == draws or completed % report_every == 0:
+                print(f"MBAR bootstrap: {completed}/{draws}", file=sys.stderr, flush=True)
+    else:
+        processes = min(jobs, draws)
+        methods = mp.get_all_start_methods()
+        context = mp.get_context("fork" if "fork" in methods else methods[0])
+        with context.Pool(
+            processes=processes,
+            initializer=_initialize_mbar_bootstrap_worker,
+            initargs=worker_state,
+        ) as pool:
+            results = pool.imap_unordered(_mbar_bootstrap_worker, tasks, chunksize=1)
+            for completed, (draw, values) in enumerate(results, start=1):
+                estimates[draw] = values
+                if completed == draws or completed % report_every == 0:
+                    print(
+                        f"MBAR bootstrap: {completed}/{draws} ({processes} workers)",
+                        file=sys.stderr, flush=True,
+                    )
     if draws == 1:
         return np.zeros(len(targets), dtype=float)
     return np.std(estimates, axis=0, ddof=1)
+
+
+_MBAR_BOOTSTRAP_STATE = None
+
+
+def _initialize_mbar_bootstrap_worker(
+    groups: Sequence[SourceGroup], targets: Sequence[tuple[float, float]],
+    block_sizes: dict[tuple[int, float, float], int], tolerance: float,
+    max_iterations: int,
+) -> None:
+    global _MBAR_BOOTSTRAP_STATE
+    _MBAR_BOOTSTRAP_STATE = (
+        groups, targets, block_sizes, tolerance, max_iterations
+    )
+
+
+def _mbar_bootstrap_worker(task: tuple[int, int]) -> tuple[int, np.ndarray]:
+    if _MBAR_BOOTSTRAP_STATE is None:
+        raise RuntimeError("MBAR bootstrap worker was not initialized")
+    draw, seed = task
+    groups, targets, block_sizes, tolerance, max_iterations = _MBAR_BOOTSTRAP_STATE
+    rng = np.random.default_rng(seed)
+    sampled = resample_groups(groups, block_sizes, rng)
+    model = prepare_mbar(
+        sampled, tolerance=tolerance, max_iterations=max_iterations
+    )
+    return draw, mbar_binders(model, targets)
 
 
 def analyze(
@@ -549,6 +607,7 @@ def analyze(
     max_source_spread: float = math.inf,
     max_top1_m4_fraction: float = 1.0,
     mbar_tolerance: float = 1e-10, mbar_max_iterations: int = 10_000,
+    jobs: int = 1,
 ) -> list[dict[str, object]]:
     if num < 2:
         raise ValueError("--num must be at least 2")
@@ -597,6 +656,7 @@ def analyze(
             mbar_uncertainties = bootstrap_mbar_errors(
                 groups, targets, block_cache, bootstrap, rng,
                 tolerance=mbar_tolerance, max_iterations=mbar_max_iterations,
+                jobs=jobs,
             )
 
         for target_index, (t, target_Z, target_m2) in enumerate(target_rows):
@@ -755,12 +815,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--mbar-tolerance", type=float, default=1e-10)
     parser.add_argument("--mbar-max-iterations", type=int, default=10_000)
+    parser.add_argument(
+        "--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)),
+        help="parallel worker processes for exact MBAR bootstrap draws (default: up to 8)",
+    )
     parser.add_argument("--seed", type=int, default=12345)
     args = parser.parse_args(argv)
     if args.source_mode == "fixed" and args.source is None:
         parser.error("--source-mode=fixed requires --source Z M2")
     if args.source_mode != "fixed" and args.source is not None:
         parser.error("--source is only valid with --source-mode=fixed")
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
     return args
 
 
@@ -775,7 +841,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                    max_source_spread=args.max_source_spread,
                    max_top1_m4_fraction=args.max_top1_m4_fraction,
                    mbar_tolerance=args.mbar_tolerance,
-                   mbar_max_iterations=args.mbar_max_iterations)
+                   mbar_max_iterations=args.mbar_max_iterations,
+                   jobs=args.jobs)
     csv_path = Path(str(args.output) + ".csv")
     plot_path = Path(str(args.output) + ".png")
     write_csv(rows, csv_path)

@@ -276,12 +276,16 @@ python3 reweight_binder.py \
     --manifest runs/binder_L12/manifest.csv \
     --manifest runs/binder_L24/manifest.csv \
     --start 0.1 -2.30 --end 0.3 -2.20 --num 201 \
-    --output plots/binder_line --bootstrap 500 --block-size auto
+    --output plots/binder_line --bootstrap 500 --block-size auto --jobs 8
 ```
 
-This writes `plots/binder_line.csv` and `plots/binder_line.png`. Targets use only
-the nearest source coordinate (replicas at that coordinate are combined); the CSV
-retains low-overlap points and labels them with `warning_status=low_ess`.
+This writes `plots/binder_line.csv` and `plots/binder_line.png`. The default MBAR
+mode combines every source coordinate for a lattice size; the CSV retains
+low-overlap points and labels them with `warning_status=low_ess`.
+For MBAR, each bootstrap draw resamples the chains and solves the MBAR equations
+again. `--jobs` evaluates independent draws in parallel with deterministic seeds;
+memory use grows with the worker count. Use `--bootstrap 100` or `200` for an
+exploratory scan and at least `500` for a final uncertainty estimate.
 
 Run the CUDA observable/action-identity and batched-replica HMC check on a GPU node
 before production. This also compares batched and single-replica forces and
