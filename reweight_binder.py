@@ -9,6 +9,7 @@ import math
 import multiprocessing as mp
 import os
 import sys
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -542,14 +543,27 @@ def bootstrap_mbar_errors(
     tasks = [(draw, int(seeds[draw])) for draw in range(draws)]
     worker_state = (groups, targets, block_sizes, tolerance, max_iterations)
     report_every = max(1, draws // 20)
+    started = time.monotonic()
+
+    def report(completed: int, workers: int) -> None:
+        elapsed = time.monotonic() - started
+        rate = completed / elapsed if elapsed > 0 else 0.0
+        remaining = (draws - completed) / rate if rate > 0 else math.inf
+        worker_text = f", workers={workers}" if workers > 1 else ""
+        print(
+            f"MBAR bootstrap: {completed}/{draws} ({100 * completed / draws:.0f}%), "
+            f"elapsed={format_duration(elapsed)}, ETA={format_duration(remaining)}, "
+            f"rate={rate:.2f} draws/s{worker_text}",
+            file=sys.stderr, flush=True,
+        )
 
     if jobs == 1:
         _initialize_mbar_bootstrap_worker(*worker_state)
         results = map(_mbar_bootstrap_worker, tasks)
         for completed, (draw, values) in enumerate(results, start=1):
             estimates[draw] = values
-            if completed == draws or completed % report_every == 0:
-                print(f"MBAR bootstrap: {completed}/{draws}", file=sys.stderr, flush=True)
+            if completed == 1 or completed == draws or completed % report_every == 0:
+                report(completed, 1)
     else:
         processes = min(jobs, draws)
         methods = mp.get_all_start_methods()
@@ -562,14 +576,24 @@ def bootstrap_mbar_errors(
             results = pool.imap_unordered(_mbar_bootstrap_worker, tasks, chunksize=1)
             for completed, (draw, values) in enumerate(results, start=1):
                 estimates[draw] = values
-                if completed == draws or completed % report_every == 0:
-                    print(
-                        f"MBAR bootstrap: {completed}/{draws} ({processes} workers)",
-                        file=sys.stderr, flush=True,
-                    )
+                if completed == 1 or completed == draws or completed % report_every == 0:
+                    report(completed, processes)
     if draws == 1:
         return np.zeros(len(targets), dtype=float)
     return np.std(estimates, axis=0, ddof=1)
+
+
+def format_duration(seconds: float) -> str:
+    if not math.isfinite(seconds):
+        return "unknown"
+    total = max(0, int(round(seconds)))
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}h{minutes:02d}m{seconds:02d}s"
+    if minutes:
+        return f"{minutes:d}m{seconds:02d}s"
+    return f"{seconds:d}s"
 
 
 _MBAR_BOOTSTRAP_STATE = None
@@ -626,6 +650,12 @@ def analyze(
 
     for L in sorted(by_lattice):
         groups = by_lattice[L]
+        total_samples = sum(group.size for group in groups)
+        print(
+            f"L={L}: preparing {len(groups)} sources with "
+            f"{total_samples:,} total samples",
+            file=sys.stderr, flush=True,
+        )
         target_rows = []
         for t in np.linspace(0.0, 1.0, num):
             target_Z = start[0] + float(t) * (end[0] - start[0])
@@ -648,9 +678,17 @@ def analyze(
         mbar_model = None
         mbar_uncertainties = None
         if source_mode == "mbar":
+            print(f"L={L}: solving initial MBAR model", file=sys.stderr, flush=True)
+            solve_started = time.monotonic()
             mbar_model = prepare_mbar(
                 groups, tolerance=mbar_tolerance,
                 max_iterations=mbar_max_iterations,
+            )
+            print(
+                f"L={L}: initial MBAR converged in {mbar_model.iterations} iterations "
+                f"after {format_duration(time.monotonic() - solve_started)}; "
+                f"starting {bootstrap} bootstrap draws with {min(jobs, bootstrap)} workers",
+                file=sys.stderr, flush=True,
             )
             targets = [(target_Z, target_m2) for _, target_Z, target_m2 in target_rows]
             mbar_uncertainties = bootstrap_mbar_errors(
@@ -832,7 +870,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    print(
+        f"loading {len(args.manifest)} manifest(s)", file=sys.stderr, flush=True
+    )
+    load_started = time.monotonic()
     runs = read_manifests(args.manifest)
+    print(
+        f"loaded {len(runs)} runs in {format_duration(time.monotonic() - load_started)}",
+        file=sys.stderr, flush=True,
+    )
     rows = analyze(runs, tuple(args.start), tuple(args.end), args.num,
                    args.bootstrap, args.block_size, args.min_ess,
                    args.min_ess_fraction, args.seed,
