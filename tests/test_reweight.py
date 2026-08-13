@@ -361,9 +361,17 @@ class ReweightTests(unittest.TestCase):
             )
             self.assertIn('echo "julia=$(command -v julia)"', script)
             self.assertIn("julia --version", script)
+            self.assertIn('echo "checking CUDA runtime and device"', script)
+            self.assertIn("CUDA.functional(true)", script)
+            self.assertIn("CUDA.versioninfo()", script)
             self.assertIn('TASK_ID="$((LSB_JOBINDEX - 1))"', script)
             self.assertIn('--task-id "${TASK_ID}"', script)
             self.assertIn("dry-run: bsub was not invoked", result.stdout)
+
+    def test_cuda_runtime_is_pinned_before_lsf_precompilation(self):
+        preference = (ROOT / "LocalPreferences.toml").read_text()
+        self.assertIn("[CUDA_Runtime_jll]", preference)
+        self.assertIn('version = "12.3"', preference)
 
     def test_tempering_summary_reports_phase_blocks(self):
         with tempfile.TemporaryDirectory() as directory:

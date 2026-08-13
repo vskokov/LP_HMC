@@ -308,6 +308,12 @@ the identical arguments to validate and reuse completed work. All site settings
 have command-line overrides, and repeating `--exclude-host` replaces the default
 host exclusion list.
 
+`LocalPreferences.toml` pins CUDA.jl's artifact runtime to CUDA 12.3. This is
+required when the Julia environment was precompiled on a GPU-less login node. Each
+LSF element runs a short `CUDA.functional(true)`/`CUDA.versioninfo()` preflight and
+prints the resolved Julia version before starting HMC, so runtime-selection and GPU
+failures appear immediately in the job log.
+
 Analyze one or more manifests and overlay all available lattice sizes:
 
 ```bash

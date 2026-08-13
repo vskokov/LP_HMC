@@ -123,6 +123,16 @@ def lsf_script(
     command_text = " ".join(
         item if item == '"${TASK_ID}"' else shlex.quote(item) for item in command
     )
+    cuda_check = " ".join([
+        shlex.quote(args.julia),
+        "--startup-file=no",
+        shlex.quote(f"--project={REPO_ROOT}"),
+        "-e",
+        shlex.quote(
+            'using CUDA; CUDA.functional(true) || error("CUDA is not functional"); '
+            'CUDA.versioninfo()'
+        ),
+    ])
 
     body = [
         "",
@@ -138,6 +148,8 @@ def lsf_script(
         "",
         'echo "julia=$(command -v julia)"',
         "julia --version",
+        'echo "checking CUDA runtime and device"',
+        cuda_check,
         'TASK_ID="$((LSB_JOBINDEX - 1))"',
         command_text,
         "",
