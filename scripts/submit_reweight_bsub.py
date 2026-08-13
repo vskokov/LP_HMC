@@ -22,7 +22,8 @@ from submit_reweight_array import (
 
 
 DEFAULT_DEPOT = "/rsstu/users/v/vskokov/gluon/jd"
-DEFAULT_JULIA_BIN_DIR = "/rsstu/users/v/vskokov/gluon/julia-1.10.3/bin"
+DEFAULT_JULIAUP_DEPOT = "/rsstu/users/v/vskokov/gluon/.julia"
+DEFAULT_JULIA_BIN_DIR = "/rsstu/users/v/vskokov/gluon/juliaup/bin"
 DEFAULT_EXCLUDED_HOSTS = ("gpu16", "gpu33")
 
 
@@ -128,12 +129,15 @@ def lsf_script(
         "set -euo pipefail",
         f"source {shlex.quote(args.module_init)}",
         f"export JULIA_DEPOT_PATH={shlex.quote(args.julia_depot)}",
+        f"export JULIAUP_DEPOT_PATH={shlex.quote(args.juliaup_depot)}",
         f"export PATH={shlex.quote(args.julia_bin_dir)}:\"$PATH\"",
         f"module load {shlex.quote(args.cuda_module)}",
     ]
     body.extend(f"module load {shlex.quote(module)}" for module in args.module)
     body.extend([
         "",
+        'echo "julia=$(command -v julia)"',
+        "julia --version",
         'TASK_ID="$((LSB_JOBINDEX - 1))"',
         command_text,
         "",
@@ -188,6 +192,7 @@ def main() -> int:
     environment.add_argument("--cuda-module", default="cuda/12.3")
     environment.add_argument("--module", action="append", default=[])
     environment.add_argument("--julia-depot", default=DEFAULT_DEPOT)
+    environment.add_argument("--juliaup-depot", default=DEFAULT_JULIAUP_DEPOT)
     environment.add_argument("--julia-bin-dir", default=DEFAULT_JULIA_BIN_DIR)
     environment.add_argument("--julia", default="julia")
     environment.add_argument("--python", default="python3")

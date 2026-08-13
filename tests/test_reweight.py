@@ -351,11 +351,16 @@ class ReweightTests(unittest.TestCase):
             self.assertIn("module load cuda/12.3", script)
             self.assertNotIn("module load julia", script)
             self.assertIn(
-                "export PATH=/rsstu/users/v/vskokov/gluon/julia-1.10.3/bin:", script
+                "export PATH=/rsstu/users/v/vskokov/gluon/juliaup/bin:", script
             )
             self.assertIn(
                 "export JULIA_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/jd", script
             )
+            self.assertIn(
+                "export JULIAUP_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/.julia", script
+            )
+            self.assertIn('echo "julia=$(command -v julia)"', script)
+            self.assertIn("julia --version", script)
             self.assertIn('TASK_ID="$((LSB_JOBINDEX - 1))"', script)
             self.assertIn('--task-id "${TASK_ID}"', script)
             self.assertIn("dry-run: bsub was not invoked", result.stdout)

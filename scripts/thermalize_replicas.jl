@@ -51,6 +51,7 @@ function main()
     @printf("replica_execution=%s replicas=%d batch_shape=%s\n",
             is_batched(state) ? "batched" : "serial", length(state.fields),
             is_batched(state) ? string(size(state.batch)) : "n/a")
+    flush(stdout)
 
     for _ in 1:L
         replica_exchange!(state, L^2, Z, ε, n_lf; swap_every=swap_every)

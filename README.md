@@ -299,8 +299,9 @@ python3 scripts/submit_reweight_bsub.py \
 
 By default this uses queue `short_gpu`, requests an H200, H100, or L40S, excludes
 `gpu16` and `gpu33`, loads `cuda/12.3`, sets `JULIA_DEPOT_PATH` to
-`/rsstu/users/v/vskokov/gluon/jd`, and prepends the private Julia 1.10.3 installation
-under `/rsstu/users/v/vskokov/gluon/` to `PATH`. The generated
+`/rsstu/users/v/vskokov/gluon/jd`, sets the Juliaup depot to
+`/rsstu/users/v/vskokov/gluon/.julia`, and prepends the private Juliaup launcher at
+`/rsstu/users/v/vskokov/gluon/juliaup/bin` to `PATH`. The generated
 `runs/<run-name>/lsf_array_job.sh` maps `LSB_JOBINDEX=1...N` to manifest task IDs
 `0...N-1`. Remove `--dry-run` to pipe that script to `bsub`; use `--resume` with
 the identical arguments to validate and reuse completed work. All site settings
