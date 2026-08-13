@@ -272,6 +272,60 @@ class ReweightTests(unittest.TestCase):
             self.assertNotEqual(repeated.returncode, 0)
             self.assertIn("already exists", repeated.stderr)
 
+    def test_submitters_use_measured_hmc_defaults_when_omitted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            array_command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                "--L", "24", "--point=-0.6,-1.85764", "--samples", "3",
+                "--run-root", str(run_root), "--run-name", "array-default",
+                "--dry-run",
+            ]
+            result = subprocess.run(
+                array_command, check=True, text=True, capture_output=True
+            )
+            with (run_root / "array-default" / "manifest.csv").open(newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertEqual(row["eps"], "0.02318953874")
+            self.assertEqual(row["n_lf"], "4")
+            self.assertIn("measured L default", result.stdout)
+
+            tsp_command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_tsp.py"),
+                "--L", "8", "--point=-0.6,-1.85764", "--samples", "3",
+                "--run-root", str(run_root), "--run-name", "tsp-default",
+                "--dry-run",
+            ]
+            result = subprocess.run(
+                tsp_command, check=True, text=True, capture_output=True
+            )
+            self.assertIn("HMC: eps=0.05286071721 n_lf=16", result.stdout)
+
+    def test_explicit_hmc_parameters_override_measured_defaults(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                "--L", "24", "--point=-0.6,-1.85764", "--eps", "0.01",
+                "--n-lf", "9", "--samples", "3", "--run-root", str(run_root),
+                "--run-name", "explicit", "--dry-run",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            with (run_root / "explicit" / "manifest.csv").open(newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertEqual(row["eps"], "0.01")
+            self.assertEqual(row["n_lf"], "9")
+            self.assertIn("(command line)", result.stdout)
+
+    def test_untuned_lattice_requires_explicit_hmc_parameters(self):
+        command = [
+            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            "--L", "10", "--point=-0.6,-1.85764", "--dry-run",
+        ]
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no tuned HMC defaults for L=10", result.stderr)
+
     def test_tempering_summary_reports_phase_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

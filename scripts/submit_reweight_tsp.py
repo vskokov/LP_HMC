@@ -18,6 +18,7 @@ from submit_reweight_array import (
     read_points_csv,
     write_manifest,
 )
+from hmc_defaults import resolve_hmc_parameters
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -93,8 +94,14 @@ def main() -> int:
     parser.add_argument("--L", type=int, required=True)
     parser.add_argument("--point", action="append", type=parse_point, default=[])
     parser.add_argument("--points-csv", type=Path, action="append", default=[])
-    parser.add_argument("--eps", type=float, required=True)
-    parser.add_argument("--n-lf", type=int, required=True)
+    parser.add_argument(
+        "--eps", type=float,
+        help="HMC step size; omitted values use the measured default for L",
+    )
+    parser.add_argument(
+        "--n-lf", type=int,
+        help="leapfrog steps; omitted values use the measured default for L",
+    )
     parser.add_argument("--samples", type=int, default=1000)
     parser.add_argument("--skip", type=int, default=1)
     parser.add_argument("--warmup", type=int, default=0)
@@ -121,6 +128,12 @@ def main() -> int:
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    try:
+        args.eps, args.n_lf, used_hmc_default = resolve_hmc_parameters(
+            args.L, args.eps, args.n_lf
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     validate_args(parser, args)
 
     points = list(args.point)
@@ -164,6 +177,8 @@ def main() -> int:
         for row in rows
     ]
     print(f"manifest: {manifest}")
+    source = "measured L default" if used_hmc_default else "command line"
+    print(f"HMC: eps={args.eps:.11g} n_lf={args.n_lf} ({source})")
     print(f"tasks: {len(commands)} ({len(points)} points x {args.replicas} replicas)")
     print(f"tsp concurrency: {args.slots}")
     for command in commands:

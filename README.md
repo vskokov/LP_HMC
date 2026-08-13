@@ -143,6 +143,24 @@ Empirical tuning results at `m² = -2.28587` (near the phase transition):
 For L=24, the trajectory length τ=0.2 is shorter than ideal for decorrelation;
 `--n_lf 15 --eps 0.02` (τ=0.3) provides a better balance.
 
+The reweighting submitters have newer, per-volume defaults tuned specifically at
+`Z=-0.6, m²=-1.85764`. If both HMC flags are omitted, these values are used:
+
+| L | ε | n_lf | τ |
+|---|---:|---:|---:|
+| 6 | 0.06558992039 | 32 | 2.0989 |
+| 8 | 0.05286071721 | 16 | 0.8458 |
+| 12 | 0.039 | 6 | 0.2340 |
+| 16 | 0.03143117051 | 4 | 0.1257 |
+| 18 | 0.02877372991 | 6 | 0.1726 |
+| 24 | 0.02318953874 | 4 | 0.0928 |
+| 28 | 0.02065770247 | 4 | 0.0826 |
+| 32 | 0.02070175658 | 4 | 0.0828 |
+
+Explicit `--eps` and `--n-lf` options override the table. For an unlisted L,
+both options are required. The scan and confirmation data are in
+`reports/hmc_tuning_Zm0p6_m2m1p85764/`.
+
 **Do not** follow the naive advice to "increase ε for larger lattices" — the volume
 scaling means you must *decrease* ε as L grows.
 
