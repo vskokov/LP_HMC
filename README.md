@@ -309,6 +309,17 @@ CUDA reports an out-of-memory error. Validate a CUDA installation with:
 python3 scripts/test_mbar_cuda.py
 ```
 
+Find all linearly interpolated crossings of the reweighted curve with
+`U4 = 1/3` and `U4 = 0.465`:
+
+```bash
+python3 scripts/find_binder_crossings.py plots/binder_L8_cuda.csv
+```
+
+The output includes `t`, `Z`, `m2`, crossing direction, and the two scan points
+that bracket each crossing. Use `--output plots/binder_L8_crossings.csv` to save
+the table, or repeat `--level VALUE` to request different levels.
+
 Run the CUDA observable/action-identity and batched-replica HMC check on a GPU node
 before production. This also compares batched and single-replica forces and
 Hamiltonians, verifies a physical slot swap, and advances one complete batch sweep:

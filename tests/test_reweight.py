@@ -35,6 +35,35 @@ def run_data(*, order=0, L=8, Z=1.0, m2=-2.0, seed=1,
 
 
 class ReweightTests(unittest.TestCase):
+    def test_binder_crossing_script_interpolates_all_crossings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "binder.csv"
+            output_path = Path(directory) / "crossings.csv"
+            input_path.write_text(
+                "t,Z,m2,L,U4,uncertainty\n"
+                "0.0,-0.6,-1.8,8,0.2,0.01\n"
+                "0.5,-0.7,-2.0,8,0.6,0.01\n"
+                "1.0,-0.8,-2.2,8,0.3,0.01\n"
+                "0.0,-0.6,-1.8,12,0.465,0.01\n"
+                "1.0,-0.8,-2.2,12,0.5,0.01\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/find_binder_crossings.py"),
+                 str(input_path), "--output", str(output_path)],
+                text=True, capture_output=True, check=True,
+            )
+            rows = list(csv.DictReader(result.stdout.splitlines()))
+            self.assertEqual(len(rows), 5)
+            one_third = [row for row in rows if row["level"].startswith("0.333")]
+            self.assertEqual(len(one_third), 2)
+            self.assertAlmostEqual(float(one_third[0]["t"]), 1.0 / 6.0)
+            levels_0465 = [row for row in rows if float(row["level"]) == 0.465]
+            self.assertEqual(len(levels_0465), 3)
+            exact = next(row for row in levels_0465 if row["L"] == "12")
+            self.assertEqual(exact["kind"], "exact")
+            self.assertEqual(output_path.read_text(), result.stdout)
+
     def test_parallel_mbar_bootstrap_matches_serial(self):
         rng = np.random.default_rng(22)
         runs = []
