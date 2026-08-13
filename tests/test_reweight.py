@@ -345,7 +345,7 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(len(rows), 4)
             self.assertEqual(rows[0]["eps"], "0.02318953874")
             self.assertEqual(rows[0]["n_lf"], "4")
-            self.assertIn('#BSUB -J "lsf-test[1-4%2]"', script)
+            self.assertIn('#BSUB -J "lsf-test[1-4]%2"', script)
             self.assertIn('#BSUB -q short_gpu', script)
             self.assertIn("hname!='gpu16' && hname!='gpu33'", script)
             self.assertIn("module load cuda/12.3", script)

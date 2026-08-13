@@ -82,12 +82,12 @@ def exclusion_expression(hosts: list[str]) -> str:
 def lsf_script(
     args: argparse.Namespace, manifest: Path, task_count: int, logs: Path
 ) -> str:
-    array_range = f"1-{task_count}"
+    array_spec = f"{args.run_name}[1-{task_count}]"
     if args.max_concurrent is not None:
-        array_range += f"%{args.max_concurrent}"
+        array_spec += f"%{args.max_concurrent}"
     directives = [
         "#!/usr/bin/env bash",
-        f'#BSUB -J "{args.run_name}[{array_range}]"',
+        f'#BSUB -J "{array_spec}"',
         f"#BSUB -W {args.walltime}",
         f"#BSUB -n {args.cpus}",
         f"#BSUB -q {args.queue}",
