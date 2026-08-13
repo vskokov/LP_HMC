@@ -7,7 +7,7 @@ using Printf
 
 include("../src/modelA.jl")
 
-function save_checkpoint(path, state)
+function save_checkpoint(path, state; thermalization_complete=false)
     temporary = path * ".tmp"
     host_fields = is_batched(state) ? Array(state.batch) :
                   cat((Array(field) for field in state.fields)...; dims=4)
@@ -19,6 +19,9 @@ function save_checkpoint(path, state)
         sampler="replica_exchange",
         L=L, Z=Float64(Z), m²=Float64(m²), λ=Float64(λ), T=Float64(T),
         epsilon=Float64(ε), n_lf=n_lf, seed=seed,
+        startup_epsilon=Float64(startup_ε), startup_n_lf=startup_n_lf,
+        startup_sweeps=startup_sweeps,
+        thermalization_complete=thermalization_complete,
         fp64=(FloatType == Float64), cpu=cpu,
         replica_execution=(is_batched(state) ? "batched" : "serial"),
         tempering_replicas=length(state.fields), mass_span=Float64(mass_span),
@@ -53,15 +56,38 @@ function main()
             is_batched(state) ? string(size(state.batch)) : "n/a")
     flush(stdout)
 
-    for _ in 1:L
+    if startup_sweeps > 0
+        completed = 0
+        while completed < startup_sweeps
+            block = min(L^2, startup_sweeps - completed)
+            previous_accepts = copy(state.hmc_accepts)
+            previous_attempts = copy(state.hmc_attempts)
+            replica_exchange!(state, block, Z, startup_ε, startup_n_lf;
+                              swap_every=swap_every)
+            rates = acceptance_rates(state.hmc_accepts .- previous_accepts,
+                                     state.hmc_attempts .- previous_attempts)
+            completed += block
+            @printf("stage=startup sweeps=%d/%d hmc_acceptance=%s round_trips=%d\n",
+                    completed, startup_sweeps, join(round.(rates; digits=3), ","),
+                    sum(state.round_trips))
+            flush(stdout)
+        end
+        @printf("stage=startup complete=true eps=%.10g n_lf=%d; resetting diagnostics\n",
+                startup_ε, startup_n_lf)
+        flush(stdout)
+        reset_replica_diagnostics!(state)
+    end
+
+    for block_index in 1:L
         replica_exchange!(state, L^2, Z, ε, n_lf; swap_every=swap_every)
         hmc_rates = acceptance_rates(state.hmc_accepts, state.hmc_attempts)
         swap_rates = acceptance_rates(state.swap_accepts, state.swap_attempts)
-        @printf("sweeps=%d hmc_acceptance=%s swap_acceptance=%s round_trips=%d\n",
+        @printf("stage=production sweeps=%d hmc_acceptance=%s swap_acceptance=%s round_trips=%d\n",
                 state.sweeps, join(round.(hmc_rates; digits=3), ","),
                 join(round.(swap_rates; digits=3), ","), sum(state.round_trips))
         flush(stdout)
-        save_checkpoint(checkpoint, state)
+        save_checkpoint(checkpoint, state;
+                        thermalization_complete=(block_index == L))
     end
     @printf("init_phase=%s ordered_sign=%d\n", init_phase,
             init_phase == "ordered" ? (isodd(seed) ? 1 : -1) : 0)

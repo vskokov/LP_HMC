@@ -40,6 +40,18 @@ function parse_commandline()
             help = "leapfrog step size ε for HMC (tune for ~70-80% acceptance)"
             arg_type = Float64
             default = 0.1
+        "--startup-eps"
+            help = "HMC step size used only during discarded cold-start stabilization"
+            arg_type = Float64
+            default = 0.0
+        "--startup-n-lf"
+            help = "leapfrog steps used only during cold-start stabilization"
+            arg_type = Int
+            default = 0
+        "--startup-sweeps"
+            help = "discarded cold-start HMC sweeps before normal thermalization"
+            arg_type = Int
+            default = 0
         "--checkpoint"
             help = "explicit output checkpoint path (thermalize.jl)"
             arg_type = String
@@ -120,6 +132,9 @@ const ξ = Normal(FloatType(0.0), FloatType(1.0))
 
 const n_lf = parsed_args["n_lf"]
 const ε    = FloatType(parsed_args["eps"])
+const startup_ε = FloatType(parsed_args["startup-eps"])
+const startup_n_lf = parsed_args["startup-n-lf"]
+const startup_sweeps = parsed_args["startup-sweeps"]
 const tempering_replicas = parsed_args["tempering-replicas"]
 const mass_span = FloatType(parsed_args["mass-span"])
 const swap_every = parsed_args["swap-every"]
@@ -130,6 +145,11 @@ init_phase in ("hot", "disordered", "ordered") ||
     error("--init-phase must be hot, disordered, or ordered")
 isfinite(phase_threshold) && phase_threshold > 0 ||
     error("--phase-threshold must be finite and positive")
+startup_sweeps >= 0 || error("--startup-sweeps must be non-negative")
+if startup_sweeps > 0
+    isfinite(startup_ε) && startup_ε > 0 || error("--startup-eps must be positive")
+    startup_n_lf > 0 || error("--startup-n-lf must be positive")
+end
 
 const seed = parsed_args["rng"]
 if seed != 0

@@ -11,7 +11,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from hmc_defaults import resolve_hmc_parameters
+from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
 from submit_reweight_array import (
     REPO_ROOT,
     build_rows,
@@ -32,9 +32,12 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--L must be at least 2")
     if args.eps <= 0 or not math.isfinite(args.eps):
         parser.error("--eps must be finite and positive")
+    if args.startup_eps <= 0 or not math.isfinite(args.startup_eps):
+        parser.error("--startup-eps must be finite and positive")
     if (
         args.n_lf < 1 or args.samples < 1 or args.skip < 1
-        or args.warmup < 0 or args.replicas < 1
+        or args.warmup < 0 or args.replicas < 1 or args.startup_n_lf < 1
+        or args.startup_sweeps < 0
     ):
         parser.error(
             "n-lf, samples, skip, and replicas must be positive; warmup may be zero"
@@ -172,6 +175,9 @@ def main() -> int:
         "--n-lf", type=int,
         help="leapfrog steps; omitted values use the measured default for L",
     )
+    parser.add_argument("--startup-eps", type=float)
+    parser.add_argument("--startup-n-lf", type=int)
+    parser.add_argument("--startup-sweeps", type=int)
     parser.add_argument("--samples", type=int, default=1000)
     parser.add_argument("--skip", type=int, default=1)
     parser.add_argument("--warmup", type=int, default=0)
@@ -223,6 +229,13 @@ def main() -> int:
         )
     except ValueError as exc:
         parser.error(str(exc))
+    try:
+        (args.startup_eps, args.startup_n_lf, args.startup_sweeps,
+         used_startup_default) = resolve_startup_hmc_parameters(
+            args.L, args.startup_eps, args.startup_n_lf, args.startup_sweeps
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     validate_args(parser, args)
 
     points = list(args.point)
@@ -269,6 +282,9 @@ def main() -> int:
     source = "measured L default" if used_hmc_default else "command line"
     print(f"manifest: {manifest}")
     print(f"HMC: eps={args.eps:.11g} n_lf={args.n_lf} ({source})")
+    startup_source = "startup L default" if used_startup_default else "command line"
+    print(f"startup HMC: eps={args.startup_eps:.11g} n_lf={args.startup_n_lf} "
+          f"sweeps={args.startup_sweeps} ({startup_source})")
     print(f"tasks: {len(rows)} ({len(points)} points x {args.replicas} replicas)")
     print(f"excluded hosts: {', '.join(args.exclude_host) or 'none'}")
     print(f"job script: {script_path}")

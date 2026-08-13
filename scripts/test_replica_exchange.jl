@@ -79,6 +79,12 @@ let
            state.sweeps == 2 && state.swap_attempts == [1, 1] &&
            state.hmc_attempts == [2, 2, 2],
            "swap_attempts=$(state.swap_attempts)")
+    reset_replica_diagnostics!(state)
+    report("Discarded-stage diagnostic reset",
+           state.sweeps == 0 && state.walker_ids == [1, 2, 3] &&
+           state.walker_stage == [1, 0, 0] && all(==(0), state.hmc_attempts) &&
+           all(==(0), state.hmc_accepts) && all(==(0), state.swap_attempts) &&
+           all(==(0), state.swap_accepts) && all(==(0), state.round_trips))
 end
 
 @printf("\n%d passed, %d failed\n", passed[], failed[])

@@ -51,6 +51,12 @@ def valid_stats(path: Path, row: dict[str, str]) -> bool:
             and metadata.get("init_phase", "hot") == row.get("init_phase", "hot")
             and float(metadata.get("phase_threshold", "0.25"))
             == float(row.get("phase_threshold", "0.25"))
+            and float(metadata.get("startup_epsilon", "0"))
+            == float(row.get("startup_eps", "0"))
+            and int(metadata.get("startup_n_lf", "0"))
+            == int(row.get("startup_n_lf", "0"))
+            and int(metadata.get("startup_sweeps", "0"))
+            == int(row.get("startup_sweeps", "0"))
         )
     except (OSError, ValueError):
         return False
@@ -107,12 +113,20 @@ def main() -> int:
     swap_every = row.get("swap_every", "1")
     init_phase = row.get("init_phase", "hot")
     phase_threshold = row.get("phase_threshold", "0.25")
+    startup_eps = row.get("startup_eps", "0")
+    startup_n_lf = row.get("startup_n_lf", "0")
+    startup_sweeps = row.get("startup_sweeps", "0")
     validate = prefix + [
         args.julia, f"--project={project}", str(REPO_ROOT / "scripts/validate_checkpoint.jl"),
         str(checkpoint), row["L"], row["Z"], row["m2"], row["eps"], row["n_lf"], row["seed"],
     ]
     if tempering_replicas > 1:
-        validate.extend([str(tempering_replicas), mass_span, swap_every, init_phase])
+        validate.extend([
+            str(tempering_replicas), mass_span, swap_every, init_phase,
+            startup_eps, startup_n_lf, startup_sweeps,
+        ])
+    else:
+        validate.extend(["startup", startup_eps, startup_n_lf, startup_sweeps])
     if args.resume and checkpoint.is_file() and not args.dry_run:
         print("+", shlex.join(validate), flush=True)
         checkpoint_valid = subprocess.run(validate, check=False).returncode == 0
@@ -126,6 +140,8 @@ def main() -> int:
             args.julia, f"--project={project}", str(REPO_ROOT / "scripts" / thermalizer),
             "--fp64", f"--Z={row['Z']}", f"--mass={row['m2']}", f"--rng={row['seed']}",
             f"--eps={row['eps']}", f"--n_lf={row['n_lf']}",
+            f"--startup-eps={startup_eps}", f"--startup-n-lf={startup_n_lf}",
+            f"--startup-sweeps={startup_sweeps}",
             f"--checkpoint={checkpoint}", row["L"],
         ]
         if tempering_replicas > 1:
@@ -146,6 +162,8 @@ def main() -> int:
         args.julia, f"--project={project}", str(REPO_ROOT / "scripts" / collector),
         "--fp64", f"--Z={row['Z']}", f"--mass={row['m2']}", f"--rng={row['seed']}",
         f"--eps={row['eps']}", f"--n_lf={row['n_lf']}", f"--init={checkpoint}",
+        f"--startup-eps={startup_eps}", f"--startup-n-lf={startup_n_lf}",
+        f"--startup-sweeps={startup_sweeps}",
         f"--samples={row['samples']}", f"--skip={row['skip']}", f"--warmup={row['warmup']}",
         f"--output={stats}", row["L"],
     ]

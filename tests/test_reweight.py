@@ -193,12 +193,18 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(row["mass_span"], "0.4")
             self.assertEqual(row["init_phase"], "hot")
             self.assertEqual(row["phase_threshold"], "0.25")
+            self.assertEqual(row["startup_eps"], "0.035")
+            self.assertEqual(row["startup_n_lf"], "7")
+            self.assertEqual(row["startup_sweeps"], "216")
             self.assertIn("diagnostics/task_000000.csv", row["diagnostics_path"])
             self.assertIn("thermalize_replicas.jl", result.stdout)
             self.assertIn("collect_reweight_stats_replicas.jl", result.stdout)
             self.assertIn("--tempering-replicas=5", result.stdout)
             self.assertIn("--init-phase=hot", result.stdout)
             self.assertIn("--phase-threshold=0.25", result.stdout)
+            self.assertIn("--startup-eps=0.035", result.stdout)
+            self.assertIn("--startup-n-lf=7", result.stdout)
+            self.assertIn("--startup-sweeps=216", result.stdout)
 
     def test_split_phase_initialization_schedule(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -288,7 +294,11 @@ class ReweightTests(unittest.TestCase):
                 row = next(csv.DictReader(handle))
             self.assertEqual(row["eps"], "0.02318953874")
             self.assertEqual(row["n_lf"], "4")
+            self.assertEqual(row["startup_eps"], "0.0095")
+            self.assertEqual(row["startup_n_lf"], "25")
+            self.assertEqual(row["startup_sweeps"], "13824")
             self.assertIn("measured L default", result.stdout)
+            self.assertIn("startup L default", result.stdout)
 
             tsp_command = [
                 sys.executable, str(ROOT / "scripts/submit_reweight_tsp.py"),
@@ -316,6 +326,25 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(row["eps"], "0.01")
             self.assertEqual(row["n_lf"], "9")
             self.assertIn("(command line)", result.stdout)
+
+    def test_explicit_startup_parameters_override_defaults(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                "--L", "8", "--point=-0.6,-1.85764", "--samples", "3",
+                "--startup-eps", "0.01", "--startup-n-lf", "20",
+                "--startup-sweeps", "123", "--run-root", str(run_root),
+                "--run-name", "startup-explicit", "--dry-run",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            with (run_root / "startup-explicit" / "manifest.csv").open(newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertEqual(row["startup_eps"], "0.01")
+            self.assertEqual(row["startup_n_lf"], "20")
+            self.assertEqual(row["startup_sweeps"], "123")
+            self.assertIn("startup HMC: eps=0.01 n_lf=20 sweeps=123 (command line)",
+                          result.stdout)
 
     def test_untuned_lattice_requires_explicit_hmc_parameters(self):
         command = [

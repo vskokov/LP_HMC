@@ -6,6 +6,15 @@ using Printf
 
 include("../src/modelA.jl")
 
+function advance_hmc!(field, mass, sweeps, epsilon, leapfrog_steps)
+    accepted = 0
+    for _ in 1:sweeps
+        step_accepted, _ = hmc_step!(field, mass, Z, epsilon, leapfrog_steps)
+        accepted += step_accepted
+    end
+    return sweeps == 0 ? 0.0 : accepted / sweeps
+end
+
 function main()
     @init_state
 
@@ -17,9 +26,21 @@ function main()
         abspath(checkpoint_arg)
     mkpath(dirname(checkpoint))
 
+    if startup_sweeps > 0
+      completed = 0
+      while completed < startup_sweeps
+        block = min(L^2, startup_sweeps - completed)
+        acc = advance_hmc!(ϕ, m², block, startup_ε, startup_n_lf)
+        completed += block
+        @printf("stage=startup sweeps=%d/%d acceptance=%.3f\n",
+                completed, startup_sweeps, acc)
+        flush(stdout)
+      end
+    end
+
     for i in 1:L
-      acc = thermalize(ϕ, m², L^2)
-      @printf("acceptance=%.3f\n", acc)
+      acc = advance_hmc!(ϕ, m², L^2, ε, n_lf)
+      @printf("stage=production acceptance=%.3f\n", acc)
       flush(stdout)
       temporary = checkpoint * ".tmp"
       jldsave(temporary, true;
@@ -32,6 +53,10 @@ function main()
           T=Float64(T),
           epsilon=Float64(ε),
           n_lf=n_lf,
+          startup_epsilon=Float64(startup_ε),
+          startup_n_lf=startup_n_lf,
+          startup_sweeps=startup_sweeps,
+          thermalization_complete=(i == L),
           seed=seed,
           fp64=(FloatType == Float64),
           cpu=cpu,

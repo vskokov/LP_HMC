@@ -65,6 +65,22 @@ end
 
 is_batched(state::ReplicaExchangeState) = !isnothing(state.workspace)
 
+"""Reset counters and walker labels after a discarded startup stage."""
+function reset_replica_diagnostics!(state::ReplicaExchangeState)
+    replicas = length(state.fields)
+    state.walker_ids .= 1:replicas
+    fill!(state.walker_stage, 0)
+    fill!(state.round_trips, 0)
+    state.swap_phase = 1
+    state.sweeps = 0
+    fill!(state.hmc_attempts, 0)
+    fill!(state.hmc_accepts, 0)
+    fill!(state.swap_attempts, 0)
+    fill!(state.swap_accepts, 0)
+    replicas > 1 && (state.walker_stage[1] = 1)
+    return state
+end
+
 function batched_quadratic_statistics(state::ReplicaExchangeState)
     is_batched(state) || return quadratic_statistic.(state.fields)
     values = sum(abs2, state.batch; dims=(1, 2, 3))

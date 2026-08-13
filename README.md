@@ -287,6 +287,45 @@ to validate and reuse matching checkpoints and completed statistics files. Every
 retained configuration records `M`, `M2`, `M4`, `Q=sum(phi^2)`, `G=sum(grad(phi)^2)`,
 and interval acceptance in a metadata-prefixed CSV.
 
+The submitters also run a discarded cold-start stage before the usual L³
+production-parameter thermalization. Its separate `--startup-eps`,
+`--startup-n-lf`, and `--startup-sweeps` controls default to values measured on
+the complete 17-slot, mass-span=0.6 ladder from both phase starts, with L³ sweeps.
+The production `--eps` and `--n-lf` are unchanged after startup.
+
+| L | startup eps | startup n_lf | startup sweeps |
+|---:|---:|---:|---:|
+| 6 | 0.035 | 7 | 216 |
+| 8 | 0.030 | 8 | 512 |
+| 12 | 0.021 | 11 | 1728 |
+| 16 | 0.015 | 16 | 4096 |
+| 18 | 0.013 | 18 | 5832 |
+| 24 | 0.0095 | 25 | 13824 |
+| 28 | 0.0075 | 32 | 21952 |
+| 32 | 0.0065 | 37 | 32768 |
+
+For the selected pairs, the minimum interval acceptance observed over either
+phase start and every L²-sized block was respectively 0.722, 0.750, 0.812,
+0.785, 0.806, 0.712, 0.721, and 0.730 in the table order; no block contained a
+zero-acceptance slot.
+
+To repeat or extend the non-equilibrium measurement, run:
+
+```bash
+julia --project=. scripts/benchmark_hmc_startup.jl --fp64 \
+    --Z=-0.6 --mass=-1.85764 --tempering-replicas=17 --mass-span=0.6 \
+    --swap-every=5 --eps-values=0.006,0.008,0.01,0.012,0.015 \
+    --trajectory-length=0.24 --sweeps=1728 --block-size=144 \
+    --output=startup_hmc_L12.csv 12
+```
+
+The benchmark CSV reports the minimum, mean, and maximum interval acceptance
+across all mass slots, the number of zero-acceptance slots, endpoint/target
+magnetizations, field displacement, and round trips for every block. Select a
+startup pair only if both phase starts move immediately and no ladder slots stay
+at zero acceptance. Checkpoints are marked complete only after the entire normal
+thermalization stage, so `--resume` will reject a checkpoint saved after a timeout.
+
 On the LSF cluster, generate the same manifest as a 1-based `bsub` job array:
 
 ```bash
