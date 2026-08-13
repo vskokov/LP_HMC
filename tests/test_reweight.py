@@ -326,6 +326,40 @@ class ReweightTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("no tuned HMC defaults for L=10", result.stderr)
 
+    def test_lsf_array_uses_private_julia_and_excludes_bad_hosts(self):
+        with tempfile.TemporaryDirectory(prefix="lsf reweight ") as directory:
+            run_root = Path(directory) / "runs with spaces"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_bsub.py"),
+                "--L", "24", "--point=-0.6,-1.85764", "--samples", "3",
+                "--replicas", "4", "--tempering-replicas", "17",
+                "--mass-span", "0.6", "--init-schedule", "split",
+                "--max-concurrent", "2", "--run-root", str(run_root),
+                "--run-name", "lsf-test", "--dry-run",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            run_dir = run_root / "lsf-test"
+            script = (run_dir / "lsf_array_job.sh").read_text()
+            with (run_dir / "manifest.csv").open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(rows[0]["eps"], "0.02318953874")
+            self.assertEqual(rows[0]["n_lf"], "4")
+            self.assertIn('#BSUB -J "lsf-test[1-4%2]"', script)
+            self.assertIn('#BSUB -q short_gpu', script)
+            self.assertIn("hname!='gpu16' && hname!='gpu33'", script)
+            self.assertIn("module load cuda/12.3", script)
+            self.assertNotIn("module load julia", script)
+            self.assertIn(
+                "export PATH=/rsstu/users/v/vskokov/gluon/julia-1.10.3/bin:", script
+            )
+            self.assertIn(
+                "export JULIA_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/jd", script
+            )
+            self.assertIn('TASK_ID="$((LSB_JOBINDEX - 1))"', script)
+            self.assertIn('--task-id "${TASK_ID}"', script)
+            self.assertIn("dry-run: bsub was not invoked", result.stdout)
+
     def test_tempering_summary_reports_phase_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

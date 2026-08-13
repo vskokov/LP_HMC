@@ -269,7 +269,7 @@ for computing means and uncertainties from measurement files.
 ### 6. Two-parameter Binder-cumulant reweighting
 
 Create a Slurm array for one lattice size from repeated points and/or a two-column
-`Z,m2` CSV.  HMC tuning is intentionally required:
+`Z,m2` CSV. Omit `--eps` and `--n-lf` to use the measured per-L defaults above:
 
 ```bash
 python3 scripts/submit_reweight_array.py \
@@ -286,6 +286,26 @@ every command without calling `sbatch`. Remove `--dry-run` to submit. Add `--res
 to validate and reuse matching checkpoints and completed statistics files. Every
 retained configuration records `M`, `M2`, `M4`, `Q=sum(phi^2)`, `G=sum(grad(phi)^2)`,
 and interval acceptance in a metadata-prefixed CSV.
+
+On the LSF cluster, generate the same manifest as a 1-based `bsub` job array:
+
+```bash
+python3 scripts/submit_reweight_bsub.py \
+    --L 24 --points-csv scan_points.csv --replicas 6 \
+    --tempering-replicas 17 --mass-span 0.6 --swap-every 1 \
+    --init-schedule split --samples 30000 --skip 50 --warmup 10000 \
+    --max-concurrent 6 --run-name binder_lsf_L24 --dry-run
+```
+
+By default this uses queue `short_gpu`, requests an H200, H100, or L40S, excludes
+`gpu16` and `gpu33`, loads `cuda/12.3`, sets `JULIA_DEPOT_PATH` to
+`/rsstu/users/v/vskokov/gluon/jd`, and prepends the private Julia 1.10.3 installation
+under `/rsstu/users/v/vskokov/gluon/` to `PATH`. The generated
+`runs/<run-name>/lsf_array_job.sh` maps `LSB_JOBINDEX=1...N` to manifest task IDs
+`0...N-1`. Remove `--dry-run` to pipe that script to `bsub`; use `--resume` with
+the identical arguments to validate and reuse completed work. All site settings
+have command-line overrides, and repeating `--exclude-host` replaces the default
+host exclusion list.
 
 Analyze one or more manifests and overlay all available lattice sizes:
 
