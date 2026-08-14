@@ -310,9 +310,16 @@ def evaluate_group(group: SourceGroup, target_Z: float, target_m2: float):
 
 def prepare_mbar(
     groups: Sequence[SourceGroup], *, tolerance: float = 1e-10,
-    max_iterations: int = 10_000,
+    max_iterations: int = 10_000, progress: bool = False,
 ) -> MbarModel:
-    """Solve the MBAR self-consistency equations for a set of source ensembles."""
+    """Solve the MBAR equations with a damped Newton iteration.
+
+    The number of unknown free energies is the number of source ensembles,
+    which is normally tiny compared with the number of samples.  A direct
+    fixed-point iteration becomes very slow when source overlap is weak;
+    Newton's method uses the exact low-dimensional MBAR Hessian while still
+    streaming vector operations over all samples.
+    """
     if not groups:
         raise ValueError("MBAR requires at least one source group")
     if tolerance <= 0 or not math.isfinite(tolerance):
@@ -338,18 +345,70 @@ def prepare_mbar(
     )
     log_counts = np.log(source_counts)
     free_energies = np.zeros(len(ordered), dtype=float)
+    started = time.monotonic()
 
     for iteration in range(1, max_iterations + 1):
-        log_denominator = logsumexp(
-            log_counts[:, None] + free_energies[:, None] - reduced_potential,
-            axis=0,
+        log_terms = (
+            log_counts[:, None] + free_energies[:, None] - reduced_potential
         )
+        log_denominator = logsumexp(
+            log_terms, axis=0,
+        )
+        probabilities = np.exp(log_terms - log_denominator[None, :])
         updated = -logsumexp(-reduced_potential - log_denominator[None, :], axis=1)
         updated -= updated[0]
-        if np.max(np.abs(updated - free_energies)) < tolerance:
+        error = float(np.max(np.abs(updated - free_energies)))
+        if progress and (iteration == 1 or iteration % 5 == 0 or error < tolerance):
+            print(
+                f"MBAR solve: iteration={iteration}, delta={error:.3e}, "
+                f"elapsed={format_duration(time.monotonic() - started)}",
+                file=sys.stderr, flush=True,
+            )
+        if error < tolerance:
             free_energies = updated
             break
-        free_energies = updated
+
+        # The first free energy fixes the additive gauge.  For the remaining
+        # states, the MBAR likelihood gradient is sum_n p_kn - N_k and its
+        # Hessian is sum_n p_kn (delta_kl - p_ln).
+        if len(ordered) == 1:
+            free_energies = updated
+            continue
+        residual = np.sum(probabilities, axis=1) - source_counts
+        reduced_probabilities = probabilities[1:]
+        hessian = np.diag(np.sum(reduced_probabilities, axis=1))
+        hessian -= reduced_probabilities @ reduced_probabilities.T
+        try:
+            step = np.linalg.solve(hessian, -residual[1:])
+        except np.linalg.LinAlgError:
+            # A singular Hessian signals extremely weak overlap.  Retain the
+            # globally convergent fixed-point step and let max_iterations
+            # produce the existing inadequate-overlap error if necessary.
+            free_energies = updated
+            continue
+        slope = float(np.dot(residual[1:], step))
+        if not np.all(np.isfinite(step)) or not math.isfinite(slope) or slope >= 0:
+            free_energies = updated
+            continue
+
+        objective = float(np.sum(log_denominator) - np.dot(source_counts, free_energies))
+        scale = 1.0
+        while scale >= 2.0**-20:
+            candidate = free_energies.copy()
+            candidate[1:] += scale * step
+            candidate_denominator = logsumexp(
+                log_counts[:, None] + candidate[:, None] - reduced_potential,
+                axis=0,
+            )
+            candidate_objective = float(
+                np.sum(candidate_denominator) - np.dot(source_counts, candidate)
+            )
+            if candidate_objective <= objective + 1e-4 * scale * slope:
+                free_energies = candidate
+                break
+            scale *= 0.5
+        else:
+            free_energies = updated
     else:
         raise RuntimeError(
             f"MBAR did not converge in {max_iterations} iterations; "
@@ -789,6 +848,7 @@ def analyze(
             mbar_model = prepare_mbar(
                 groups, tolerance=mbar_tolerance,
                 max_iterations=mbar_max_iterations,
+                progress=True,
             )
             print(
                 f"L={L}: initial MBAR converged in {mbar_model.iterations} iterations "

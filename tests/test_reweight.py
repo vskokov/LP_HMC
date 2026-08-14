@@ -17,7 +17,9 @@ from reweight_binder import (  # noqa: E402
     bootstrap_mbar_errors,
     evaluate_group,
     group_sources,
+    logsumexp,
     normalize_logweights,
+    prepare_mbar,
     read_stats,
     select_source,
 )
@@ -35,6 +37,32 @@ def run_data(*, order=0, L=8, Z=1.0, m2=-2.0, seed=1,
 
 
 class ReweightTests(unittest.TestCase):
+    def test_newton_mbar_satisfies_self_consistency(self):
+        rng = np.random.default_rng(91)
+        runs = []
+        for order, (Z, m2) in enumerate(((0.0, -2.2), (0.1, -2.0), (0.2, -1.8))):
+            values = rng.normal(loc=0.15 * order, size=128)
+            runs.append(run_data(
+                order=order, Z=Z, m2=m2, seed=order + 1,
+                M2=0.5 + values**2,
+                Q=2.0 + values**2,
+                G=3.0 + (values - 0.1 * order)**2,
+            ))
+        groups = group_sources(runs)[8]
+        model = prepare_mbar(groups, tolerance=1e-10, max_iterations=100)
+        source_m2 = np.asarray([group.m2 for group in model.groups])
+        source_Z = np.asarray([group.Z for group in model.groups])
+        reduced_potential = 0.5 * (
+            source_m2[:, None] * model.Q[None, :]
+            + source_Z[:, None] * model.G[None, :]
+        )
+        fixed_point = -logsumexp(
+            -reduced_potential - model.log_denominator[None, :], axis=1
+        )
+        fixed_point -= fixed_point[0]
+        np.testing.assert_allclose(model.free_energies, fixed_point, atol=1e-9)
+        self.assertLess(model.iterations, 50)
+
     def test_binder_crossing_script_interpolates_all_crossings(self):
         with tempfile.TemporaryDirectory() as directory:
             input_path = Path(directory) / "binder.csv"
