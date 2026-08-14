@@ -14,6 +14,7 @@ from reweight_binder import (  # noqa: E402
     bootstrap_mbar_errors,
     bootstrap_mbar_errors_cuda,
     group_sources,
+    prepare_mbar,
 )
 
 
@@ -31,6 +32,7 @@ def main() -> int:
                 Q=20.0 + values**2, G=30.0 + (values - 0.2)**2,
             ))
     groups = group_sources(runs)[8]
+    model = prepare_mbar(groups, tolerance=1e-10, max_iterations=10_000)
     block_sizes = {(group.L, group.Z, group.m2): 16 for group in groups}
     targets = [(-0.6, -1.85), (-0.75, -2.1), (-0.9, -2.35)]
     options = dict(tolerance=1e-10, max_iterations=10_000)
@@ -39,7 +41,7 @@ def main() -> int:
     )
     cuda = bootstrap_mbar_errors_cuda(
         groups, targets, block_sizes, 8, np.random.default_rng(99),
-        batch_size=4, **options,
+        batch_size=4, initial_free_energies=model.free_energies, **options,
     )
     error = float(np.max(np.abs(cpu - cuda)))
     passed = np.allclose(cuda, cpu, rtol=2e-10, atol=2e-12)

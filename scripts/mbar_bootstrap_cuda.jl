@@ -2,6 +2,7 @@
 
 using ArgParse
 using CUDA
+using LinearAlgebra
 using Printf
 
 function parse_cli()
@@ -103,20 +104,25 @@ function denominator_kernel!(denominator, Q, G, source_m2, source_Z,
     return
 end
 
-function solve_mbar!(Q, G, source_m2, source_Z, log_counts;
-                     tolerance, max_iterations)
+function solve_mbar!(Q, G, source_m2, source_Z, log_counts,
+                     initial_free_energies; tolerance, max_iterations)
     samples, draws = size(Q)
     source_count = length(source_m2)
     source_m2_host = Array(source_m2)
     source_Z_host = Array(source_Z)
+    log_counts_host = Array(log_counts)
+    source_counts_host = exp.(log_counts_host)
     denominator = similar(Q)
+    candidate_denominator = similar(Q)
     work = similar(Q)
-    free_host = zeros(Float64, source_count, draws)
+    probabilities = [similar(Q) for _ in 1:source_count]
+    free_host = repeat(reshape(initial_free_energies, source_count, 1), 1, draws)
     free_device = CuArray(free_host)
     threads = 256
     blocks = cld(length(denominator), threads)
     iterations = 0
     converged = false
+    started = time()
     for iteration in 1:max_iterations
         @cuda threads=threads blocks=blocks denominator_kernel!(
             denominator, Q, G, source_m2, source_Z, log_counts,
@@ -133,13 +139,107 @@ function solve_mbar!(Q, G, source_m2, source_Z, log_counts;
         end
         updated .-= updated[1:1, :]
         difference = maximum(abs.(updated .- free_host))
-        free_host = updated
-        copyto!(free_device, free_host)
         iterations = iteration
+        if iteration == 1 || iteration == 5 || iteration % 25 == 0 ||
+                difference < tolerance
+            @printf(stderr, "CUDA MBAR solve: iteration=%d, delta=%.3e, elapsed=%.1fs\n",
+                    iteration, difference, time() - started)
+            flush(stderr)
+        end
         if difference < tolerance
+            free_host = updated
+            copyto!(free_device, free_host)
             converged = true
             break
         end
+
+        if source_count == 1
+            free_host = updated
+            copyto!(free_device, free_host)
+            continue
+        end
+
+        # Compute state-membership probabilities, followed by the exact MBAR
+        # gradient and its small (sources-1)-dimensional Hessian for each draw.
+        for source in 1:source_count
+            mass = source_m2_host[source]
+            zvalue = source_Z_host[source]
+            log_count = log_counts_host[source]
+            free_row = reshape(@view(free_device[source, :]), 1, draws)
+            @. probabilities[source] = exp(
+                log_count + free_row - 0.5 * (mass * Q + zvalue * G) - denominator
+            )
+        end
+        predicted = Matrix{Float64}(undef, source_count, draws)
+        for source in 1:source_count
+            predicted[source, :] .= vec(Array(sum(probabilities[source]; dims=1)))
+        end
+        residual = predicted .- source_counts_host
+        hessians = Array{Float64}(undef, source_count, source_count, draws)
+        for source in 1:source_count, other in 1:source_count
+            @. work = probabilities[source] * probabilities[other]
+            cross = vec(Array(sum(work; dims=1)))
+            hessians[source, other, :] .= -cross
+            if source == other
+                hessians[source, other, :] .+= predicted[source, :]
+            end
+        end
+
+        steps = zeros(Float64, source_count, draws)
+        slopes = zeros(Float64, draws)
+        active = trues(draws)
+        for draw in 1:draws
+            try
+                hessian = @view hessians[2:end, 2:end, draw]
+                gradient = @view residual[2:end, draw]
+                steps[2:end, draw] .= -(hessian \ gradient)
+                slopes[draw] = dot(
+                    @view(residual[2:end, draw]), @view(steps[2:end, draw])
+                )
+                if !all(isfinite, @view(steps[:, draw])) ||
+                        !isfinite(slopes[draw]) || slopes[draw] >= 0
+                    active[draw] = false
+                end
+            catch error_value
+                if !(error_value isa LinearAlgebra.SingularException)
+                    rethrow()
+                end
+                active[draw] = false
+            end
+        end
+
+        # Armijo backtracking is performed independently for each bootstrap
+        # draw. Draws with a singular overlap Hessian retain the safe
+        # fixed-point update and will ultimately trigger the overlap error.
+        denominator_sums = vec(Array(sum(denominator; dims=1)))
+        objectives = denominator_sums .-
+            vec(transpose(source_counts_host) * free_host)
+        scales = ones(Float64, draws)
+        next_free = copy(updated)
+        for _ in 1:21
+            any(active) || break
+            candidate_host = free_host .+ steps .* reshape(scales, 1, draws)
+            copyto!(free_device, candidate_host)
+            @cuda threads=threads blocks=blocks denominator_kernel!(
+                candidate_denominator, Q, G, source_m2, source_Z, log_counts,
+                free_device, source_count
+            )
+            candidate_sums = vec(Array(sum(candidate_denominator; dims=1)))
+            candidate_objectives = candidate_sums .-
+                vec(transpose(source_counts_host) * candidate_host)
+            for draw in 1:draws
+                active[draw] || continue
+                if candidate_objectives[draw] <=
+                        objectives[draw] + 1e-4 * scales[draw] * slopes[draw]
+                    next_free[:, draw] .= candidate_host[:, draw]
+                    active[draw] = false
+                else
+                    scales[draw] *= 0.5
+                end
+            end
+        end
+        free_host = next_free
+        copyto!(free_device, free_host)
     end
     converged || error("batched MBAR did not converge in $max_iterations iterations")
     @cuda threads=threads blocks=blocks denominator_kernel!(
@@ -198,6 +298,9 @@ function main()
     source_Z = CuArray(read_vector(joinpath(directory, "source_Z.bin"), Float64, source_count))
     source_m2 = CuArray(read_vector(joinpath(directory, "source_m2.bin"), Float64, source_count))
     source_counts = read_vector(joinpath(directory, "source_counts.bin"), Int64, source_count)
+    initial_free_energies = read_vector(
+        joinpath(directory, "initial_free_energies.bin"), Float64, source_count
+    )
     log_counts = CuArray(log.(Float64.(source_counts)))
     target_Z = CuArray(read_vector(joinpath(directory, "target_Z.bin"), Float64, target_count))
     target_m2 = CuArray(read_vector(joinpath(directory, "target_m2.bin"), Float64, target_count))
@@ -228,7 +331,7 @@ function main()
             gather_batch!(Q, base_Q, starts, metadata, samples)
             gather_batch!(G, base_G, starts, metadata, samples)
             denominator, iterations = solve_mbar!(
-                Q, G, source_m2, source_Z, log_counts;
+                Q, G, source_m2, source_Z, log_counts, initial_free_energies;
                 tolerance=args["tolerance"], max_iterations=args["max-iterations"]
             )
             estimates = evaluate_targets(

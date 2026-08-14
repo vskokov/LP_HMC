@@ -652,7 +652,7 @@ def bootstrap_mbar_errors_cuda(
     groups: Sequence[SourceGroup], targets: Sequence[tuple[float, float]],
     block_sizes: dict[tuple[int, float, float], int], draws: int,
     rng: np.random.Generator, *, tolerance: float, max_iterations: int,
-    batch_size: int = 8,
+    batch_size: int = 8, initial_free_energies: np.ndarray | None = None,
 ) -> np.ndarray:
     """Run the exact stratified block bootstrap with a Julia/CUDA MBAR backend."""
     if batch_size < 1:
@@ -662,6 +662,13 @@ def bootstrap_mbar_errors_cuda(
     samples = sum(run.size for run in runs)
     source_counts = np.asarray([group.size for group in ordered], dtype=np.int64)
     target_array = np.asarray(targets, dtype=np.float64)
+    if initial_free_energies is None:
+        initial_free_energies = np.zeros(len(ordered), dtype=np.float64)
+    initial_free_energies = np.asarray(initial_free_energies, dtype=np.float64)
+    if initial_free_energies.shape != (len(ordered),):
+        raise ValueError("initial MBAR free energies disagree with source count")
+    if not np.all(np.isfinite(initial_free_energies)):
+        raise ValueError("initial MBAR free energies must be finite")
 
     run_of_sample = np.empty(samples, dtype=np.int32)
     local_position = np.empty(samples, dtype=np.int32)
@@ -704,6 +711,10 @@ def bootstrap_mbar_errors_cuda(
         _write_binary(directory / "source_Z.bin", [group.Z for group in ordered], np.float64)
         _write_binary(directory / "source_m2.bin", [group.m2 for group in ordered], np.float64)
         _write_binary(directory / "source_counts.bin", source_counts, np.int64)
+        _write_binary(
+            directory / "initial_free_energies.bin",
+            initial_free_energies, np.float64,
+        )
         _write_binary(directory / "target_Z.bin", target_array[:, 0], np.float64)
         _write_binary(directory / "target_m2.bin", target_array[:, 1], np.float64)
         _write_binary(directory / "run_of_sample.bin", run_of_sample, np.int32)
@@ -864,6 +875,7 @@ def analyze(
                     groups, targets, block_cache, bootstrap, rng,
                     tolerance=mbar_tolerance, max_iterations=mbar_max_iterations,
                     batch_size=cuda_batch_size,
+                    initial_free_energies=mbar_model.free_energies,
                 )
             else:
                 mbar_uncertainties = bootstrap_mbar_errors(
