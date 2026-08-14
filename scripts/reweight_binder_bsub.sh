@@ -44,7 +44,10 @@ m2_start="${m2_starts[$scan_index]}"
 m2_end="${m2_ends[$scan_index]}"
 label="${output_labels[$scan_index]}"
 
-manifest="runs/binder_lsf_L${L}/manifest.local.csv"
+# The LSF analysis runs where the simulations were produced, so the original
+# manifest contains the correct absolute HPC paths.  manifest.local.csv is
+# only for data copied to another machine.
+manifest="runs/binder_lsf_L${L}/manifest.csv"
 output="plots/binder_lsf_${label}_L${L}"
 
 [[ -f "$manifest" ]] || {
