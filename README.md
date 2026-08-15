@@ -427,7 +427,21 @@ python3 scripts/find_binder_crossings.py plots/binder_L8_cuda.csv
 
 The output includes `t`, `Z`, `m2`, crossing direction, and the two scan points
 that bracket each crossing. Use `--output plots/binder_L8_crossings.csv` to save
-the table, or repeat `--level VALUE` to request different levels.
+the table, or repeat `--level VALUE` to request different levels. Rows whose
+`warning_status` is not `ok` cannot bracket a crossing by default. The explicit
+`--include-warnings` escape hatch is intended for diagnosis, not publication.
+
+Validate the full critical window and emit the next source coordinates in the same
+two-column format accepted by every submitter:
+
+```bash
+python3 scripts/validate_critical_window.py plots/binder_L24_cuda.csv \
+    --margin 0.01 --suggestions critical_sources_L24.csv
+```
+
+The default gate requires ESS at least 50, ESS fraction at least 1%, top-1 `M4`
+contribution at most 50%, and at least two usable source coordinates at every target
+between both standard crossings plus the margin.
 
 Run the CUDA observable/action-identity and batched-replica HMC check on a GPU node
 before production. This also compares batched and single-replica forces and
@@ -486,7 +500,8 @@ cannot silently reuse a checkpoint from the other basin. The legacy default is
 
 Only the central mass slot is written to the standard statistics CSV, so the existing
 `reweight_binder.py` command is unchanged. `runs/<run-name>/diagnostics/` contains
-per-slot HMC acceptance, per-pair swap acceptance, and completed walker round trips.
+per-slot HMC acceptance, per-pair swap acceptance, per-walker completed round trips,
+exchange-round count, and low/high endpoint coverage.
 Inspect these diagnostics to tune the ladder spacing before trusting a production
 ensemble. `--resume` validates the complete ladder checkpoint as well as its target
 parameters.
@@ -503,8 +518,38 @@ python3 scripts/summarize_tempering.py \
     --block-size 5000 --phase-threshold 0.25
 ```
 
-This writes `phase_blocks.csv` beside the manifest and compares pooled Binder
-cumulants and phase occupancy between ordered-start and disordered-start jobs.
+This writes `phase_blocks.csv` and `tempering_summary.csv` beside the manifest and
+compares pooled Binder cumulants and phase occupancy between ordered-start and
+disordered-start jobs. Round-trip rates use 1,000 exchange rounds—not HMC sweeps—so
+different `--swap-every` values are comparable. The summary also reports integrated
+autocorrelation estimates and orphan `.tmp.*` files without deleting them.
+
+Production critical ladders are fail-closed. `--tempering-profile critical` reads a
+CSV emitted by `scripts/select_tempering_profile.py`; omitted exchange settings come
+only from a unique row marked `validated=true`, while explicit flags override the
+profile. Slurm, LSF, and TSP share the resolver and materialize the same physics:
+
+```bash
+python3 scripts/submit_reweight_tsp.py \
+    --L 24 --points-csv critical_sources_L24.csv --replicas 8 \
+    --tempering-profile critical \
+    --tempering-profile-file reports/tempering_tuning_A6000/recommendations.csv \
+    --init-schedule split --run-name critical_L24
+```
+
+All three launch paths run a Julia 1.12+ and functional-CUDA preflight. On this
+workstation, pass the installed Julia 1.12.6 executable with `--julia`; the current
+default Julia 1.11 environment is incompatible with the pinned JLD2 dependency.
+
+Generate the full A6000 pilot grid (17/25/33/49/65 slots, spans 0.2/0.3/0.4/0.6,
+and swap cadences 1/2) with TSP. Start with `--dry-run`; omitting it writes a new
+pilot manifest and queues tasks at concurrency one by default:
+
+```bash
+python3 scripts/submit_tempering_pilots_tsp.py --L 24 \
+    --point=-0.6,-1.86421 --point=-0.77,-2.12624 --point=-0.9,-2.35116 \
+    --julia /path/to/julia-1.12 --run-name critical_pilots_L24 --dry-run
+```
 
 The replica-exchange CPU correctness check is:
 

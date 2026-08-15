@@ -11,7 +11,11 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
+from hmc_defaults import (
+    resolve_hmc_parameters, resolve_startup_hmc_parameters,
+    resolve_tempering_parameters,
+)
+from runtime_preflight import shell_command as preflight_shell_command
 from submit_reweight_array import (
     REPO_ROOT,
     build_rows,
@@ -126,16 +130,7 @@ def lsf_script(
     command_text = " ".join(
         item if item == '"${TASK_ID}"' else shlex.quote(item) for item in command
     )
-    cuda_check = " ".join([
-        shlex.quote(args.julia),
-        "--startup-file=no",
-        shlex.quote(f"--project={REPO_ROOT}"),
-        "-e",
-        shlex.quote(
-            'using CUDA; CUDA.functional(true) || error("CUDA is not functional"); '
-            'CUDA.versioninfo()'
-        ),
-    ])
+    cuda_check = preflight_shell_command(args.julia, REPO_ROOT)
 
     body = [
         "",
@@ -182,9 +177,11 @@ def main() -> int:
     parser.add_argument("--skip", type=int, default=1)
     parser.add_argument("--warmup", type=int, default=0)
     parser.add_argument("--replicas", type=int, default=1)
-    parser.add_argument("--tempering-replicas", type=int, default=1)
-    parser.add_argument("--mass-span", type=float, default=0.0)
-    parser.add_argument("--swap-every", type=int, default=1)
+    parser.add_argument("--tempering-replicas", type=int)
+    parser.add_argument("--mass-span", type=float)
+    parser.add_argument("--swap-every", type=int)
+    parser.add_argument("--tempering-profile", choices=("critical",))
+    parser.add_argument("--tempering-profile-file", type=Path)
     parser.add_argument(
         "--init-schedule", choices=("hot", "disordered", "ordered", "split"),
         default="hot",
@@ -223,6 +220,14 @@ def main() -> int:
     args = parser.parse_args()
     args.exclude_host = list(DEFAULT_EXCLUDED_HOSTS if args.exclude_host is None
                              else args.exclude_host)
+    try:
+        (args.tempering_replicas, args.mass_span, args.swap_every,
+         used_tempering_profile) = resolve_tempering_parameters(
+            args.L, args.tempering_profile, args.tempering_profile_file,
+            args.tempering_replicas, args.mass_span, args.swap_every,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         args.eps, args.n_lf, used_hmc_default = resolve_hmc_parameters(
             args.L, args.eps, args.n_lf
@@ -285,6 +290,9 @@ def main() -> int:
     startup_source = "startup L default" if used_startup_default else "command line"
     print(f"startup HMC: eps={args.startup_eps:.11g} n_lf={args.startup_n_lf} "
           f"sweeps={args.startup_sweeps} ({startup_source})")
+    tempering_source = "validated critical profile" if used_tempering_profile else "command line/default"
+    print(f"tempering: replicas={args.tempering_replicas} span={args.mass_span:g} "
+          f"swap_every={args.swap_every} ({tempering_source})")
     print(f"tasks: {len(rows)} ({len(points)} points x {args.replicas} replicas)")
     print(f"excluded hosts: {', '.join(args.exclude_host) or 'none'}")
     print(f"job script: {script_path}")

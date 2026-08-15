@@ -183,3 +183,16 @@ end
 
 acceptance_rates(accepts, attempts) =
     [attempts[i] == 0 ? 0.0 : accepts[i] / attempts[i] for i in eachindex(attempts)]
+
+"""Number of attempted exchange rounds represented by the current state."""
+exchange_rounds(state::ReplicaExchangeState, swap_every::Int) = begin
+    swap_every > 0 || throw(ArgumentError("swap_every must be positive"))
+    state.sweeps ÷ swap_every
+end
+
+"""Per-walker endpoint coverage inferred from the round-trip state machine."""
+function walker_endpoint_coverage(state::ReplicaExchangeState)
+    low = state.walker_stage .!= 0
+    high = (state.walker_stage .== 2) .| (state.round_trips .> 0)
+    return low, high
+end

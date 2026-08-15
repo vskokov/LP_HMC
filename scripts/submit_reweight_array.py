@@ -13,7 +13,11 @@ import subprocess
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
+from hmc_defaults import (
+    resolve_hmc_parameters, resolve_startup_hmc_parameters,
+    resolve_tempering_parameters,
+)
+from runtime_preflight import shell_command as preflight_shell_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -137,7 +141,10 @@ def job_script(args: argparse.Namespace, manifest: Path, count: int, logs: Path)
             "fi",
         ])
     body.extend(f"module load {shlex.quote(module)}" for module in args.module)
-    body.extend(["", command_text, ""])
+    body.extend([
+        "", 'echo "checking Julia version and CUDA runtime"',
+        preflight_shell_command(args.julia, REPO_ROOT), "", command_text, "",
+    ])
     return "\n".join(directives + body)
 
 
@@ -163,11 +170,13 @@ def main() -> int:
     parser.add_argument("--skip", type=int, default=1)
     parser.add_argument("--warmup", type=int, default=0)
     parser.add_argument("--replicas", type=int, default=1)
-    parser.add_argument("--tempering-replicas", type=int, default=1)
-    parser.add_argument("--mass-span", type=float, default=0.0,
+    parser.add_argument("--tempering-replicas", type=int)
+    parser.add_argument("--mass-span", type=float,
                         help="total centered m2 span for the exchange ladder")
-    parser.add_argument("--swap-every", type=int, default=1,
+    parser.add_argument("--swap-every", type=int,
                         help="HMC sweeps between adjacent swap attempts")
+    parser.add_argument("--tempering-profile", choices=("critical",))
+    parser.add_argument("--tempering-profile-file", type=Path)
     parser.add_argument(
         "--init-schedule", choices=("hot", "disordered", "ordered", "split"),
         default="hot",
@@ -191,6 +200,15 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    try:
+        (args.tempering_replicas, args.mass_span, args.swap_every,
+         used_tempering_profile) = resolve_tempering_parameters(
+            args.L, args.tempering_profile, args.tempering_profile_file,
+            args.tempering_replicas, args.mass_span, args.swap_every,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     try:
         args.eps, args.n_lf, used_hmc_default = resolve_hmc_parameters(
@@ -267,6 +285,9 @@ def main() -> int:
     startup_source = "startup L default" if used_startup_default else "command line"
     print(f"startup HMC: eps={args.startup_eps:.11g} n_lf={args.startup_n_lf} "
           f"sweeps={args.startup_sweeps} ({startup_source})")
+    tempering_source = "validated critical profile" if used_tempering_profile else "command line/default"
+    print(f"tempering: replicas={args.tempering_replicas} span={args.mass_span:g} "
+          f"swap_every={args.swap_every} ({tempering_source})")
     print(f"tasks: {len(rows)} ({len(points)} points x {args.replicas} replicas)")
     print(f"job script: {script_path}")
     print(script_path.read_text(encoding="utf-8"))

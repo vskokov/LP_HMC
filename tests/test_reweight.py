@@ -92,6 +92,24 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(exact["kind"], "exact")
             self.assertEqual(output_path.read_text(), result.stdout)
 
+    def test_binder_crossings_reject_warning_brackets_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "binder.csv"
+            path.write_text(
+                "t,Z,m2,L,U4,warning_status\n"
+                "0,-0.6,-2,24,0.2,ok\n"
+                "1,-0.6,-1.9,24,0.5,low_ess\n",
+                encoding="utf-8",
+            )
+            base = [sys.executable, str(ROOT / "scripts/find_binder_crossings.py"),
+                    str(path), "--level", "0.465"]
+            safe = subprocess.run(base, check=True, text=True, capture_output=True)
+            self.assertEqual(len(list(csv.DictReader(safe.stdout.splitlines()))), 0)
+            unsafe = subprocess.run(
+                [*base, "--include-warnings"], check=True, text=True, capture_output=True
+            )
+            self.assertEqual(len(list(csv.DictReader(unsafe.stdout.splitlines()))), 1)
+
     def test_parallel_mbar_bootstrap_matches_serial(self):
         rng = np.random.default_rng(22)
         runs = []
@@ -293,7 +311,7 @@ class ReweightTests(unittest.TestCase):
             self.assertIn("no tasks were enqueued", result.stdout)
 
             submit_command = [item for item in command if item != "--dry-run"]
-            submit_command.extend(["--tsp", "/bin/true"])
+            submit_command.extend(["--tsp", "/bin/true", "--skip-preflight"])
             subprocess.run(submit_command, check=True, text=True, capture_output=True)
             with manifest.open(newline="") as handle:
                 rows = list(csv.DictReader(handle))
@@ -354,6 +372,31 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(row["eps"], "0.01")
             self.assertEqual(row["n_lf"], "9")
             self.assertIn("(command line)", result.stdout)
+
+    def test_validated_tempering_profile_and_explicit_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profile.csv"
+            profile.write_text(
+                "profile,L,tempering_replicas,mass_span,swap_every,validated\n"
+                "critical,24,33,0.3,1,true\n",
+                encoding="utf-8",
+            )
+            run_root = root / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                "--L", "24", "--point=-0.6,-1.86", "--samples", "3",
+                "--tempering-profile", "critical", "--tempering-profile-file", str(profile),
+                "--swap-every", "2", "--run-root", str(run_root),
+                "--run-name", "profile", "--dry-run",
+            ]
+            subprocess.run(command, check=True, text=True, capture_output=True)
+            with (run_root / "profile" / "manifest.csv").open(newline="") as handle:
+                row = next(csv.DictReader(handle))
+            self.assertEqual(
+                (row["tempering_replicas"], row["mass_span"], row["swap_every"]),
+                ("33", "0.3", "2"),
+            )
 
     def test_explicit_startup_parameters_override_defaults(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -421,6 +464,7 @@ class ReweightTests(unittest.TestCase):
             self.assertIn('echo "checking CUDA runtime and device"', script)
             self.assertIn("CUDA.functional(true)", script)
             self.assertIn("CUDA.versioninfo()", script)
+            self.assertIn('VERSION >= v"1.12"', script)
             self.assertIn('TASK_ID="$((LSB_JOBINDEX - 1))"', script)
             self.assertIn('--task-id "${TASK_ID}"', script)
             self.assertIn("dry-run: bsub was not invoked", result.stdout)
@@ -454,7 +498,8 @@ class ReweightTests(unittest.TestCase):
             )
             fields = [
                 "task_id", "point_index", "replica", "L", "Z", "m2", "init_phase",
-                "phase_threshold", "stats_path", "diagnostics_path",
+                "phase_threshold", "swap_every", "tempering_replicas",
+                "stats_path", "diagnostics_path",
             ]
             with manifest.open("w", newline="", encoding="utf-8") as handle:
                 writer = csv.DictWriter(handle, fieldnames=fields)
@@ -462,7 +507,8 @@ class ReweightTests(unittest.TestCase):
                 writer.writerow({
                     "task_id": 0, "point_index": 0, "replica": 0, "L": 6,
                     "Z": 1, "m2": -2.25, "init_phase": "ordered",
-                    "phase_threshold": 0.25, "stats_path": stats,
+                    "phase_threshold": 0.25, "swap_every": 2,
+                    "tempering_replicas": 3, "stats_path": stats,
                     "diagnostics_path": diagnostics,
                 })
             result = subprocess.run(
@@ -475,7 +521,67 @@ class ReweightTests(unittest.TestCase):
                 rows = list(csv.DictReader(handle))
             self.assertEqual(len(rows), 2)
             self.assertEqual([row["phase_transitions"] for row in rows], ["1", "1"])
+            with (root / "tempering_summary.csv").open(newline="") as handle:
+                summary = list(csv.DictReader(handle))[0]
+            self.assertEqual(float(summary["round_trips_per_1000_exchange_rounds"]), 400.0)
             self.assertIn("swap_bottlenecks=0", result.stdout)
+
+    def test_all_submitters_materialize_identical_physics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profile.csv"
+            profile.write_text(
+                "profile,L,tempering_replicas,mass_span,swap_every,validated\n"
+                "critical,6,17,0.2,1,true\n",
+                encoding="utf-8",
+            )
+            common = [
+                "--L", "6", "--point=-0.6,-1.86", "--samples", "3",
+                "--replicas", "2", "--init-schedule", "split",
+                "--tempering-profile", "critical", "--tempering-profile-file", str(profile),
+                "--run-name", "same-physics",
+            ]
+            roots = {name: root / name for name in ("slurm", "lsf", "tsp")}
+            commands = [
+                [sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                 *common, "--run-root", str(roots["slurm"]), "--dry-run"],
+                [sys.executable, str(ROOT / "scripts/submit_reweight_bsub.py"),
+                 *common, "--run-root", str(roots["lsf"]), "--dry-run"],
+                [sys.executable, str(ROOT / "scripts/submit_reweight_tsp.py"),
+                 *common, "--run-root", str(roots["tsp"]), "--tsp", "/bin/true",
+                 "--skip-preflight"],
+            ]
+            for command in commands:
+                subprocess.run(command, check=True, text=True, capture_output=True)
+            manifests = []
+            for name in ("slurm", "lsf", "tsp"):
+                path = roots[name] / "same-physics" / "manifest.csv"
+                with path.open(newline="") as handle:
+                    manifests.append(list(csv.DictReader(handle)))
+            physics = [
+                "schema_version", "task_id", "point_index", "replica", "L", "Z", "m2",
+                "eps", "n_lf", "seed", "startup_eps", "startup_n_lf",
+                "startup_sweeps", "samples", "skip", "warmup", "tempering_replicas",
+                "mass_span", "swap_every", "init_phase", "phase_threshold",
+            ]
+            normalized = [[tuple(row[key] for key in physics) for row in rows]
+                          for rows in manifests]
+            self.assertEqual(normalized[0], normalized[1])
+            self.assertEqual(normalized[0], normalized[2])
+
+    def test_tempering_pilot_grid_dry_run_is_complete_and_non_mutating(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_root = Path(directory) / "runs"
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_tempering_pilots_tsp.py"),
+                "--L", "24", "--point=-0.6,-1.86", "--point=-0.77,-2.12",
+                "--point=-0.9,-2.35", "--run-root", str(run_root),
+                "--run-name", "grid", "--dry-run",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            self.assertIn("tasks: 120", result.stdout)
+            self.assertIn("dry-run: no files were written", result.stdout)
+            self.assertFalse(run_root.exists())
 
     def test_even_tempering_count_is_rejected(self):
         command = [

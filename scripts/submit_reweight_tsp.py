@@ -18,7 +18,11 @@ from submit_reweight_array import (
     read_points_csv,
     write_manifest,
 )
-from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
+from hmc_defaults import (
+    resolve_hmc_parameters, resolve_startup_hmc_parameters,
+    resolve_tempering_parameters,
+)
+from runtime_preflight import run as run_preflight
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -112,9 +116,11 @@ def main() -> int:
     parser.add_argument("--skip", type=int, default=1)
     parser.add_argument("--warmup", type=int, default=0)
     parser.add_argument("--replicas", type=int, default=1)
-    parser.add_argument("--tempering-replicas", type=int, default=1)
-    parser.add_argument("--mass-span", type=float, default=0.0)
-    parser.add_argument("--swap-every", type=int, default=1)
+    parser.add_argument("--tempering-replicas", type=int)
+    parser.add_argument("--mass-span", type=float)
+    parser.add_argument("--swap-every", type=int)
+    parser.add_argument("--tempering-profile", choices=("critical",))
+    parser.add_argument("--tempering-profile-file", type=Path)
     parser.add_argument(
         "--init-schedule", choices=("hot", "disordered", "ordered", "split"),
         default="hot",
@@ -133,7 +139,16 @@ def main() -> int:
         help="reuse an exactly matching manifest and ask each task to reuse valid output",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--skip-preflight", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    try:
+        (args.tempering_replicas, args.mass_span, args.swap_every,
+         used_tempering_profile) = resolve_tempering_parameters(
+            args.L, args.tempering_profile, args.tempering_profile_file,
+            args.tempering_replicas, args.mass_span, args.swap_every,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         args.eps, args.n_lf, used_hmc_default = resolve_hmc_parameters(
             args.L, args.eps, args.n_lf
@@ -195,6 +210,9 @@ def main() -> int:
     startup_source = "startup L default" if used_startup_default else "command line"
     print(f"startup HMC: eps={args.startup_eps:.11g} n_lf={args.startup_n_lf} "
           f"sweeps={args.startup_sweeps} ({startup_source})")
+    tempering_source = "validated critical profile" if used_tempering_profile else "command line/default"
+    print(f"tempering: replicas={args.tempering_replicas} span={args.mass_span:g} "
+          f"swap_every={args.swap_every} ({tempering_source})")
     print(f"tasks: {len(commands)} ({len(points)} points x {args.replicas} replicas)")
     print(f"tsp concurrency: {args.slots}")
     for command in commands:
@@ -205,6 +223,11 @@ def main() -> int:
         return 0
     if shutil.which(args.tsp) is None:
         parser.error(f"task-spooler executable not found: {args.tsp}")
+    if not args.skip_preflight:
+        try:
+            run_preflight(args.julia, REPO_ROOT)
+        except RuntimeError as exc:
+            parser.error(str(exc))
 
     subprocess.run([args.tsp, "-S", str(args.slots)], check=True)
     for command in commands:

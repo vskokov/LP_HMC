@@ -1,0 +1,186 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Large-L reweighting and tempering diagnosis",
+    "description": "Technical diagnosis of reweighting warnings and replica-exchange mixing, including A6000 pilot gates.",
+    "generatedAt": "2026-08-15T18:00:00Z",
+    "filters": [],
+    "cards": [],
+    "charts": [
+      {
+        "id": "pilot_round_trips",
+        "title": "Worst-phase walker round-trip coverage",
+        "subtitle": "Final cumulative coverage by lattice, coordinate, and ladder candidate; production gate is 50%.",
+        "type": "bar",
+        "dataset": "pilot_summary",
+        "sourceId": "a6000_pilots",
+        "valueFormat": "percent",
+        "encodings": {
+          "x": {"field": "candidate", "type": "nominal", "label": "Pilot candidate"},
+          "y": {"field": "worst_rt_fraction", "type": "quantitative", "label": "Walkers with a round trip"},
+          "tooltip": [
+            {"field": "worst_min_swap", "type": "quantitative", "label": "Worst edge acceptance", "format": "percent"},
+            {"field": "exchange_rounds", "type": "quantitative", "label": "Exchange rounds"}
+          ]
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "historical_health",
+        "title": "Existing production-run health",
+        "subtitle": "Final diagnostics aggregated across completed tasks; round-trip totals are not normalized for swap cadence.",
+        "dataset": "historical_health",
+        "sourceId": "existing_runs",
+        "defaultSort": {"field": "L", "direction": "asc"},
+        "columns": [
+          {"field": "L", "label": "L", "format": "number"},
+          {"field": "median_hmc", "label": "Median HMC acceptance", "format": "percent"},
+          {"field": "median_min_swap", "label": "Median minimum edge acceptance", "format": "percent"},
+          {"field": "round_trips_total", "label": "Total round trips", "format": "number"},
+          {"field": "zero_rt_tasks", "label": "Zero-round-trip tasks", "format": "number"},
+          {"field": "tasks", "label": "Tasks", "format": "number"}
+        ]
+      },
+      {
+        "id": "warning_windows",
+        "title": "L=24 reweighting warnings",
+        "subtitle": "Warned target rows over each existing 301-point scan.",
+        "dataset": "warning_windows",
+        "sourceId": "reweight_outputs",
+        "defaultSort": {"field": "Z", "direction": "desc"},
+        "columns": [
+          {"field": "Z", "label": "Z", "format": "number"},
+          {"field": "warning_rows", "label": "Warning rows", "format": "number"},
+          {"field": "scan_rows", "label": "Scan rows", "format": "number"},
+          {"field": "warning_fraction", "label": "Warning fraction", "format": "percent"}
+        ]
+      }
+    ],
+    "sources": [
+      {"id": "existing_runs", "label": "Existing run manifests and final diagnostics", "path": "runs/"},
+      {"id": "reweight_outputs", "label": "Binder reweighting CSV outputs", "path": "plots/"},
+      {"id": "a6000_pilots", "label": "A6000 ladder pilot CSV outputs", "path": "reports/tempering_tuning_A6000/"}
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "body": "# Large-L reweighting and tempering diagnosis"},
+      {
+        "id": "technical_summary",
+        "type": "markdown",
+        "body": "## Technical summary\n\nThe dominant large-lattice failure is replica-ladder transport and phase equilibration, not equilibrium HMC acceptance. Existing L=24/L=32 evidence and new A6000 pilots both show healthy HMC acceptance alongside too few completed walker round trips. Reweighted Binder crossings must therefore remain unpublished whenever their brackets carry warnings. No HMC defaults and no production critical profile were promoted: every tested ladder failed at least one predeclared mixing gate."
+      },
+      {
+        "id": "historical_finding",
+        "type": "markdown",
+        "sourceId": "existing_runs",
+        "body": "## HMC remains healthy while transport collapses\n\nMedian HMC acceptance stays between 73% and 78% from L=12 through L=32. In contrast, median minimum edge acceptance falls to 0.1% at L=32 and all 30 L=32 tasks record zero round trips. L=24 is intermediate: 14 of 30 tasks have zero round trips. This divergence identifies ladder overlap and diffusion as the primary lever."
+      },
+      {"id": "historical_table", "type": "table", "tableId": "historical_health"},
+      {
+        "id": "warnings_finding",
+        "type": "markdown",
+        "sourceId": "reweight_outputs",
+        "body": "## Existing L=24 Binder windows are not decision-safe\n\nThe three L=24 scans warn on 230, 256, and 248 of 301 targets at Z=-0.6, -0.77, and -0.9. Applying the stricter critical-window contract—ESS at least 50, ESS fraction at least 1%, top-1 M4 contribution at most 50%, and at least two usable source points—rejects every sampled row inside each crossing window. The validator emits new source points at both crossings, both ±0.01 edges, and the midpoint of the failing region."
+      },
+      {"id": "warnings_table", "type": "table", "tableId": "warning_windows"},
+      {
+        "id": "pilot_finding",
+        "type": "markdown",
+        "sourceId": "a6000_pilots",
+        "body": "## Strong swap acceptance is necessary but not sufficient\n\nAll retained pilots clear the 20% edge-acceptance gate, yet the worst-phase fraction of walkers completing a round trip remains below the 50% production gate for every full three-coordinate candidate. Adding slots improves local overlap but lengthens ladder diffusion: the 33-slot L=32 candidate reaches 56%–74% worst-edge acceptance while completing almost no round trips in 2,048 exchange rounds."
+      },
+      {"id": "pilot_chart", "type": "chart", "chartId": "pilot_round_trips"},
+      {
+        "id": "definitions",
+        "type": "markdown",
+        "body": "## Scope and metric definitions\n\nThe historical cohort is every completed task in the existing L=12, 16, 24, and 32 production manifests. A round trip is a labeled walker visit to the low-mass endpoint, then the high-mass endpoint, then the low endpoint again. The corrected rate denominator is exchange rounds, equal to HMC sweeps divided by `swap_every`. Walker coverage is the fraction of ladder walkers with at least one completed round trip. A critical window spans the two Binder levels U4=1/3 and U4=0.465 plus 0.01 in m2 on each side."
+      },
+      {
+        "id": "method",
+        "type": "markdown",
+        "body": "## Method and promotion gates\n\nA6000 pilots used ordered and disordered cold starts at all three critical coordinates. Candidate promotion requires every edge acceptance at least 20%, median edge acceptance at least 30%, no edge with zero accepted swaps, at least half of walkers completing a round trip, and ordered/disordered agreement within two combined standard errors. HMC changes additionally require minimum acceptance at least 65% and at least 15% improvement in worst-point ESS per 1,000 force evaluations. The selector writes a `validated=true` profile only when every gate passes; all scheduler backends refuse an incomplete critical profile."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "body": "## Limitations and robustness checks\n\nThese are screening pilots, not equilibrium production estimates. Cold-start transients make the first HMC block pessimistic, and block-end magnetization provides a coarse phase-agreement check. The pilots are long enough to reject the tested candidates but not to prove that a larger span/count combination will pass. The original aggregate round-trip totals also used sweep denominators; the implementation now records exchange rounds and per-walker coverage prospectively. Orphan `.tmp.*` files are reported but were not deleted."
+      },
+      {
+        "id": "next_steps",
+        "type": "markdown",
+        "body": "## Recommended next steps\n\n1. Continue the pilot grid with wider spans (0.3 and 0.4) and 25/33 slots, keeping swaps every sweep; increase pilot length proportional to the square of slot count.\n2. Promote only the smallest candidate that passes all gates at all three coordinates and both starts.\n3. Run the generated critical-window source CSVs with independent ordered/disordered replicas.\n4. Reweight and rerun the validator; only then extract warning-free crossings and scale production."
+      },
+      {
+        "id": "questions",
+        "type": "markdown",
+        "body": "## Further questions\n\nDoes a wider mass span actually connect the two basins at L=32, or is a second tempering coordinate required? How many exchange rounds are needed for stable walker-coverage estimates at each slot count? Once phase transport passes, does the existing equilibrium HMC trajectory length remain optimal at all three critical coordinates?"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-15T18:00:00Z",
+    "status": "ready",
+    "datasets": {
+      "historical_health": [
+        {"L": 12, "median_hmc": 0.740, "median_min_swap": 0.452, "round_trips_total": 2739, "zero_rt_tasks": 0, "tasks": 100},
+        {"L": 16, "median_hmc": 0.734, "median_min_swap": 0.639, "round_trips_total": 25004, "zero_rt_tasks": 0, "tasks": 90},
+        {"L": 24, "median_hmc": 0.781, "median_min_swap": 0.344, "round_trips_total": 351, "zero_rt_tasks": 14, "tasks": 30},
+        {"L": 32, "median_hmc": 0.754, "median_min_swap": 0.00114, "round_trips_total": 0, "zero_rt_tasks": 30, "tasks": 30}
+      ],
+      "warning_windows": [
+        {"Z": -0.6, "warning_rows": 230, "scan_rows": 301, "warning_fraction": 0.7641},
+        {"Z": -0.77, "warning_rows": 256, "scan_rows": 301, "warning_fraction": 0.8505},
+        {"Z": -0.9, "warning_rows": 248, "scan_rows": 301, "warning_fraction": 0.8239}
+      ],
+      "pilot_summary": [
+        {"candidate": "L24 Z-0.60 r17", "worst_rt_fraction": 0.294, "worst_min_swap": 0.580, "exchange_rounds": 2048},
+        {"candidate": "L24 Z-0.77 r17", "worst_rt_fraction": 0.471, "worst_min_swap": 0.608, "exchange_rounds": 2048},
+        {"candidate": "L24 Z-0.90 r17", "worst_rt_fraction": 0.471, "worst_min_swap": 0.629, "exchange_rounds": 2048},
+        {"candidate": "L24 Z-0.60 r25", "worst_rt_fraction": 0.040, "worst_min_swap": 0.660, "exchange_rounds": 1024},
+        {"candidate": "L32 Z-0.60 r33", "worst_rt_fraction": 0.030, "worst_min_swap": 0.603, "exchange_rounds": 2048},
+        {"candidate": "L32 Z-0.77 r33", "worst_rt_fraction": 0.000, "worst_min_swap": 0.562, "exchange_rounds": 2048},
+        {"candidate": "L32 Z-0.90 r33", "worst_rt_fraction": 0.000, "worst_min_swap": 0.626, "exchange_rounds": 2048},
+        {"candidate": "L32 Z-0.77 r17", "worst_rt_fraction": 0.118, "worst_min_swap": 0.426, "exchange_rounds": 4096}
+      ]
+    },
+    "accessIssues": []
+  },
+  "sources": [
+    {
+      "id": "existing_runs",
+      "label": "Existing run manifests and final diagnostics",
+      "path": "runs/",
+      "query": {
+        "language": "sql",
+        "engine": "portable SQL",
+        "description": "Reviewed aggregation of completed task manifests and final diagnostics.",
+        "sql": "SELECT * FROM (VALUES (12,0.740,0.452,2739,0,100),(16,0.734,0.639,25004,0,90),(24,0.781,0.344,351,14,30),(32,0.754,0.00114,0,30,30)) AS t(L,median_hmc,median_min_swap,round_trips_total,zero_rt_tasks,tasks)"
+      }
+    },
+    {
+      "id": "reweight_outputs",
+      "label": "Binder reweighting CSV outputs",
+      "path": "plots/",
+      "query": {
+        "language": "sql",
+        "engine": "portable SQL",
+        "description": "Reviewed warning counts from the three L=24 Binder scans.",
+        "sql": "SELECT * FROM (VALUES (-0.6,230,301,0.7641),(-0.77,256,301,0.8505),(-0.9,248,301,0.8239)) AS t(Z,warning_rows,scan_rows,warning_fraction)"
+      }
+    },
+    {
+      "id": "a6000_pilots",
+      "label": "A6000 ladder pilot CSV outputs",
+      "path": "reports/tempering_tuning_A6000/",
+      "query": {
+        "language": "sql",
+        "engine": "portable SQL",
+        "description": "Reviewed worst-phase final rows from the A6000 ladder pilot CSV files.",
+        "sql": "SELECT * FROM (VALUES ('L24 Z-0.60 r17',0.294,0.580,2048),('L24 Z-0.77 r17',0.471,0.608,2048),('L24 Z-0.90 r17',0.471,0.629,2048),('L24 Z-0.60 r25',0.040,0.660,1024),('L32 Z-0.60 r33',0.030,0.603,2048),('L32 Z-0.77 r33',0.000,0.562,2048),('L32 Z-0.90 r33',0.000,0.626,2048),('L32 Z-0.77 r17',0.118,0.426,4096)) AS t(candidate,worst_rt_fraction,worst_min_swap,exchange_rounds)"
+      }
+    }
+  ]
+}

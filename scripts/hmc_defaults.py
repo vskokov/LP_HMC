@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
+
 
 # Tuned on CUDA at Z=-0.6, m2=-1.85764 using ordered and disordered chains.
 # epsilon was chosen near 70--80% acceptance; n_lf maximizes effective samples
@@ -33,6 +36,60 @@ STARTUP_HMC_DEFAULTS: dict[int, tuple[float, int]] = {
     28: (0.0075, 32),
     32: (0.0065, 37),
 }
+
+
+def resolve_tempering_parameters(
+    lattice_size: int,
+    profile: str | None,
+    profile_file: Path | None,
+    replicas: int | None,
+    mass_span: float | None,
+    swap_every: int | None,
+) -> tuple[int, float, int, bool]:
+    """Resolve exchange settings, requiring validated data for critical profiles.
+
+    Explicit command-line values override profile fields.  With no profile this
+    preserves the historical single-replica defaults.
+    """
+
+    if profile is None:
+        return (
+            1 if replicas is None else replicas,
+            0.0 if mass_span is None else mass_span,
+            1 if swap_every is None else swap_every,
+            False,
+        )
+    if profile != "critical":
+        raise ValueError(f"unknown tempering profile: {profile}")
+    if replicas is not None and mass_span is not None and swap_every is not None:
+        return replicas, mass_span, swap_every, False
+    if profile_file is None:
+        raise ValueError(
+            "--tempering-profile=critical needs --tempering-profile-file unless "
+            "all three exchange settings are explicit"
+        )
+    try:
+        with profile_file.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+    except OSError as exc:
+        raise ValueError(f"cannot read tempering profile file {profile_file}: {exc}") from exc
+    matches = [
+        row for row in rows
+        if row.get("profile", "critical").strip().lower() == "critical"
+        and int(row["L"]) == lattice_size
+        and row.get("validated", "").strip().lower() in {"1", "true", "yes"}
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"{profile_file}: expected exactly one validated critical row for L={lattice_size}"
+        )
+    selected = matches[0]
+    return (
+        int(selected["tempering_replicas"]) if replicas is None else replicas,
+        float(selected["mass_span"]) if mass_span is None else mass_span,
+        int(selected["swap_every"]) if swap_every is None else swap_every,
+        True,
+    )
 
 
 def resolve_hmc_parameters(

@@ -40,6 +40,18 @@ let
 end
 
 let
+    fields = [zeros(L, L, L) for _ in 1:3]
+    state = ReplicaExchangeState(fields, mass_ladder(-2.25, 3, 0.2);
+                                 walker_stage=[1, 2, 1], round_trips=[0, 0, 2],
+                                 sweeps=11)
+    low, high = walker_endpoint_coverage(state)
+    report("Exchange-round denominator", exchange_rounds(state, 2) == 5)
+    report("Per-walker endpoint coverage",
+           low == [true, true, true] && high == [false, true, true],
+           "low=$(low) high=$(high)")
+end
+
+let
     first = randn(L, L, L)
     second = randn(L, L, L)
     m1, m2 = -2.4, -2.1

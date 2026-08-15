@@ -7,6 +7,7 @@ using CUDA
 using Distributions
 using Printf
 using Random
+using Statistics
 
 function arguments()
     settings = ArgParseSettings()
@@ -24,6 +25,10 @@ function arguments()
             help = "target eps*n_lf; n_lf is rounded separately for each eps"
             arg_type = Float64
             default = 0.24
+        "--fixed-n-lf"
+            help = "fixed leapfrog count for ladder screening (zero uses trajectory length)"
+            arg_type = Int
+            default = 0
         "--min-acceptance"
             help = "minimum per-slot interval acceptance required in every block and phase"
             arg_type = Float64
@@ -127,9 +132,13 @@ function main()
     screening = Dict{Float64,NamedTuple}()
 
     open(temporary, "w") do io
-        println(io, "L,Z,m2,phase,epsilon,n_lf,trajectory_length,block,sweeps," *
+        println(io, "L,Z,m2,phase,epsilon,n_lf,trajectory_length,tempering_replicas," *
+                    "mass_span,swap_every,block,sweeps," *
                     "acceptance_min,acceptance_mean,acceptance_max,zero_slots," *
-                    "M_low,M_target,M_high,rms_displacement,round_trips,seconds")
+                    "swap_acceptance_min,swap_acceptance_median,unused_edges," *
+                    "M_low,M_target,M_high,rms_displacement,round_trips," *
+                    "exchange_rounds,round_trip_walker_fraction," *
+                    "low_endpoint_walker_fraction,high_endpoint_walker_fraction,seconds")
         for epsilon64 in eps_values,
             (phase_index, phase) in enumerate(("disordered", "ordered"))
             # Common random numbers make candidate comparisons sensitive to the
@@ -139,7 +148,8 @@ function main()
             !cpu && CUDA.seed!(seed_value)
             state = make_state(masses, phase, seed_value)
             initial = host_batch(state)
-            leapfrog_steps = max(1, round(Int, tau / epsilon64))
+            leapfrog_steps = options["fixed-n-lf"] > 0 ? options["fixed-n-lf"] :
+                               max(1, round(Int, tau / epsilon64))
             candidate_worst = get(screening, epsilon64,
                                   (minimum=1.0, zero_slots=0,
                                    n_lf=leapfrog_steps))
@@ -167,15 +177,23 @@ function main()
                 center = target_slot(state)
                 current = host_batch(state)
                 rms = sqrt(sum(abs2, current .- initial) / length(initial))
-                @printf(io, "%d,%.17g,%.17g,%s,%.17g,%d,%.17g,%d,%d,%.17g,%.17g,%.17g,%d,%.17g,%.17g,%.17g,%.17g,%d,%.17g\n",
-                        L, Float64(Z), options["mass"], phase, epsilon64,
-                        leapfrog_steps, epsilon64 * leapfrog_steps, block_index,
-                        completed, minimum(rates), sum(rates) / length(rates),
-                        maximum(rates), count(==(0.0), rates),
-                        magnetization(state.fields[1]),
-                        magnetization(state.fields[center]),
-                        magnetization(state.fields[end]), rms,
-                        sum(state.round_trips), elapsed)
+                swap_rates = acceptance_rates(state.swap_accepts, state.swap_attempts)
+                low_coverage, high_coverage = walker_endpoint_coverage(state)
+                values = (
+                    L, Float64(Z), options["mass"], phase, epsilon64,
+                    leapfrog_steps, epsilon64 * leapfrog_steps, replicas,
+                    options["mass-span"], options["swap-every"], block_index,
+                    completed, minimum(rates), sum(rates) / length(rates),
+                    maximum(rates), count(==(0.0), rates), minimum(swap_rates),
+                    median(swap_rates), count(==(0), state.swap_accepts),
+                    magnetization(state.fields[1]), magnetization(state.fields[center]),
+                    magnetization(state.fields[end]), rms, sum(state.round_trips),
+                    exchange_rounds(state, options["swap-every"]),
+                    count(>(0), state.round_trips) / replicas,
+                    count(low_coverage) / replicas, count(high_coverage) / replicas,
+                    elapsed,
+                )
+                println(io, join(values, ','))
                 flush(io)
                 @printf("phase=%s eps=%.6g n_lf=%d sweeps=%d/%d acceptance[min/mean/max]=%.3f/%.3f/%.3f zero_slots=%d\n",
                         phase, epsilon64, leapfrog_steps, completed, sweeps,

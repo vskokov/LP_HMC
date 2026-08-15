@@ -54,10 +54,13 @@ def read_statistics(path: Path) -> dict[str, np.ndarray]:
 
 def read_final_diagnostics(path: Path) -> tuple[dict[str, float], list[str], list[str]]:
     with path.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    if not rows:
+        reader = csv.DictReader(handle)
+        last = None
+        for last in reader:
+            pass
+    if last is None:
         raise ValueError(f"{path}: contains no diagnostic rows")
-    final = {key: float(value) for key, value in rows[-1].items() if key and value != ""}
+    final = {key: float(value) for key, value in last.items() if key and value != ""}
     hmc_columns = sorted(key for key in final if key.startswith("hmc_acceptance_slot_"))
     swap_columns = sorted(key for key in final if key.startswith("swap_acceptance_"))
     return final, hmc_columns, swap_columns
@@ -70,6 +73,24 @@ def binder(m2: np.ndarray, m4: np.ndarray) -> float:
 
 def transition_count(ordered: np.ndarray) -> int:
     return int(np.count_nonzero(ordered[1:] != ordered[:-1])) if len(ordered) > 1 else 0
+
+
+def integrated_autocorrelation_time(values: np.ndarray) -> float:
+    """Initial-positive-sequence estimate, in retained samples."""
+    centered = np.asarray(values, dtype=float) - float(np.mean(values))
+    count = len(centered)
+    if count < 2:
+        return math.nan
+    variance = float(np.dot(centered, centered) / count)
+    if variance <= 0 or not math.isfinite(variance):
+        return math.nan
+    tau = 1.0
+    for lag in range(1, min(count, count // 2 + 1)):
+        rho = float(np.dot(centered[:-lag], centered[lag:]) / ((count - lag) * variance))
+        if rho <= 0:
+            break
+        tau += 2.0 * rho
+    return tau
 
 
 def analyze_task(
@@ -92,7 +113,26 @@ def analyze_task(
     mean_hmc = float(np.mean([final[column] for column in hmc_columns]))
     round_trips = final.get("round_trips_total", math.nan)
     last_trajectory = float(trajectories[-1])
-    round_trip_rate = 1000.0 * round_trips / last_trajectory if last_trajectory > 0 else math.nan
+    swap_every = int(row.get("swap_every") or metadata.get("swap_every", "1"))
+    exchange_rounds = final.get(
+        "exchange_rounds", math.floor(last_trajectory / swap_every)
+    )
+    round_trip_rate = (
+        1000.0 * round_trips / exchange_rounds if exchange_rounds > 0 else math.nan
+    )
+    walker_rt_columns = sorted(key for key in final if key.startswith("round_trips_walker_"))
+    walkers_with_round_trip = final.get(
+        "walkers_with_round_trip",
+        sum(final[column] > 0 for column in walker_rt_columns) if walker_rt_columns else math.nan,
+    )
+    replica_count = int(row.get("tempering_replicas") or len(hmc_columns))
+    round_trip_walker_fraction = (
+        walkers_with_round_trip / replica_count if replica_count > 1 else math.nan
+    )
+    orphan_tmp_files = sum(
+        1 for output_path in (stats_path, diagnostics_path)
+        for _ in output_path.parent.glob(output_path.name + ".tmp.*")
+    )
     init_phase = row.get("init_phase") or metadata.get("init_phase", "hot")
 
     blocks: list[dict[str, object]] = []
@@ -120,7 +160,9 @@ def analyze_task(
             "mean_hmc_acceptance": mean_hmc,
             "min_swap_acceptance": min_swap,
             "round_trips_total": round_trips,
-            "round_trips_per_1000_sweeps": round_trip_rate,
+            "exchange_rounds": exchange_rounds,
+            "round_trips_per_1000_exchange_rounds": round_trip_rate,
+            "round_trip_walker_fraction": round_trip_walker_fraction,
         })
 
     summary: dict[str, object] = {
@@ -132,7 +174,14 @@ def analyze_task(
         "ordered_fraction": float(np.mean(ordered)),
         "phase_transitions": transition_count(ordered),
         "mean_hmc_acceptance": mean_hmc, "min_swap_acceptance": min_swap,
-        "round_trips_per_1000_sweeps": round_trip_rate,
+        "round_trips_total": round_trips, "exchange_rounds": exchange_rounds,
+        "round_trips_per_1000_exchange_rounds": round_trip_rate,
+        "round_trip_walker_fraction": round_trip_walker_fraction,
+        "walkers_visited_low": final.get("walkers_visited_low", math.nan),
+        "walkers_visited_high": final.get("walkers_visited_high", math.nan),
+        "tau_int_M": integrated_autocorrelation_time(magnetization),
+        "tau_int_M2": integrated_autocorrelation_time(stats["M2"]),
+        "orphan_tmp_files": orphan_tmp_files,
     }
     return blocks, summary, stats
 
@@ -158,7 +207,7 @@ def print_report(
             f"{str(item['init_phase']):11s} {item['samples']:7d} "
             f"{item['U4']:8.3f} {item['ordered_fraction']:9.3f} "
             f"{item['phase_transitions']:11d} {item['min_swap_acceptance']:8.3f} "
-            f"{item['round_trips_per_1000_sweeps']:5.1f}"
+            f"{item['round_trips_per_1000_exchange_rounds']:5.1f}"
         )
 
     grouped: dict[tuple[int, float, float, str], list[dict[str, object]]] = defaultdict(list)
@@ -193,6 +242,7 @@ def main() -> int:
     parser.add_argument("--phase-threshold", type=float)
     parser.add_argument("--min-swap", type=float, default=0.2)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--summary-output", type=Path)
     args = parser.parse_args()
     if args.block_size < 2:
         parser.error("--block-size must be at least 2")
@@ -221,9 +271,11 @@ def main() -> int:
         stats_by_task[int(row["task_id"])] = stats
 
     output = args.output or manifest.parent / "phase_blocks.csv"
+    summary_output = args.summary_output or manifest.parent / "tempering_summary.csv"
     write_rows(output, block_rows)
+    write_rows(summary_output, summaries)
     print_report(summaries, stats_by_task, args.min_swap)
-    print(f"\nwrote {output}")
+    print(f"\nwrote {output}\nwrote {summary_output}")
     return 0
 
 

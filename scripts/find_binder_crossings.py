@@ -24,6 +24,7 @@ class Point:
     Z: float
     m2: float
     U4: float
+    warning_status: str = "ok"
 
 
 def finite_float(raw: str | None, *, column: str, row: int, path: Path) -> float:
@@ -58,6 +59,7 @@ def read_points(path: Path) -> dict[int, list[Point]]:
                 Z=finite_float(record.get("Z"), column="Z", row=row_number, path=path),
                 m2=finite_float(record.get("m2"), column="m2", row=row_number, path=path),
                 U4=finite_float(record.get("U4"), column="U4", row=row_number, path=path),
+                warning_status=(record.get("warning_status") or "ok").strip().lower(),
             )
             grouped.setdefault(lattice, []).append(point)
     if not grouped:
@@ -77,7 +79,8 @@ def interpolate(left: Point, right: Point, fraction: float) -> tuple[float, floa
 
 
 def find_crossings(
-    points: Iterable[Point], level: float, *, tolerance: float = 1e-12
+    points: Iterable[Point], level: float, *, tolerance: float = 1e-12,
+    include_warnings: bool = False,
 ) -> list[dict[str, object]]:
     ordered = list(points)
     results: list[dict[str, object]] = []
@@ -87,7 +90,11 @@ def find_crossings(
         right_delta = right.U4 - level
         left_exact = math.isclose(left.U4, level, rel_tol=0.0, abs_tol=tolerance)
         right_exact = math.isclose(right.U4, level, rel_tol=0.0, abs_tol=tolerance)
+        left_usable = include_warnings or left.warning_status == "ok"
+        right_usable = include_warnings or right.warning_status == "ok"
         if left_exact and right_exact:
+            if not (left_usable and right_usable):
+                continue
             results.append({
                 "L": left.L, "level": level, "kind": "plateau",
                 "direction": "flat", "t": "", "Z": "", "m2": "",
@@ -98,7 +105,8 @@ def find_crossings(
             continue
         exact = left if left_exact else right if right_exact else None
         if exact is not None:
-            if exact.row not in seen_exact:
+            exact_usable = left_usable if exact is left else right_usable
+            if exact.row not in seen_exact and exact_usable:
                 results.append({
                     "L": exact.L, "level": level, "kind": "exact",
                     "direction": "up" if right.U4 > left.U4 else "down",
@@ -109,6 +117,8 @@ def find_crossings(
                 seen_exact.add(exact.row)
             continue
         if left_delta * right_delta < 0.0:
+            if not (left_usable and right_usable):
+                continue
             fraction = (level - left.U4) / (right.U4 - left.U4)
             t, Z, m2 = interpolate(left, right, fraction)
             results.append({
@@ -127,6 +137,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--level", dest="levels", type=float, action="append",
         help="U4 level to find; repeat for several levels (default: 1/3 and 0.465)",
+    )
+    parser.add_argument(
+        "--include-warnings", action="store_true",
+        help="allow crossings bracketed by rows whose warning_status is not ok",
     )
     parser.add_argument(
         "--output", type=Path,
@@ -162,7 +176,10 @@ def main() -> int:
         crossing
         for lattice in sorted(grouped)
         for level in args.levels
-        for crossing in find_crossings(grouped[lattice], level, tolerance=args.tolerance)
+        for crossing in find_crossings(
+            grouped[lattice], level, tolerance=args.tolerance,
+            include_warnings=args.include_warnings,
+        )
     ]
     write_results(rows, sys.stdout)
     if args.output is not None:
