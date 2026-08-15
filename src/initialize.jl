@@ -52,6 +52,10 @@ function parse_commandline()
             help = "discarded cold-start HMC sweeps before normal thermalization"
             arg_type = Int
             default = 0
+        "--production-sweeps"
+            help = "explicit production thermalization sweeps (0 uses the script default)"
+            arg_type = Int
+            default = 0
         "--checkpoint"
             help = "explicit output checkpoint path (thermalize.jl)"
             arg_type = String
@@ -81,12 +85,32 @@ function parse_commandline()
             help = "total centered m² span covered by the tempering ladder"
             arg_type = Float64
             default = 0.0
+        "--umbrella-replicas"
+            help = "number of fixed-mass M² umbrella windows (0 disables umbrella exchange)"
+            arg_type = Int
+            default = 0
+        "--umbrella-min"
+            help = "lowest M² umbrella center"
+            arg_type = Float64
+            default = 0.0
+        "--umbrella-max"
+            help = "highest M² umbrella center"
+            arg_type = Float64
+            default = 0.4
+        "--umbrella-kappa"
+            help = "harmonic M² umbrella stiffness κ"
+            arg_type = Float64
+            default = 0.0
+        "--umbrella-power"
+            help = "power-law exponent for center spacing (>1 concentrates windows near M²=minimum)"
+            arg_type = Float64
+            default = 1.0
         "--swap-every"
             help = "replica-exchange attempt cadence in complete HMC sweeps"
             arg_type = Int
             default = 1
         "--init-phase"
-            help = "initial field basin: hot, disordered, or ordered"
+            help = "initial field basin: hot, disordered, ordered, or umbrella-centered"
             arg_type = String
             default = "hot"
         "--phase-threshold"
@@ -135,17 +159,38 @@ const ε    = FloatType(parsed_args["eps"])
 const startup_ε = FloatType(parsed_args["startup-eps"])
 const startup_n_lf = parsed_args["startup-n-lf"]
 const startup_sweeps = parsed_args["startup-sweeps"]
+const production_sweeps = parsed_args["production-sweeps"]
 const tempering_replicas = parsed_args["tempering-replicas"]
 const mass_span = FloatType(parsed_args["mass-span"])
+const umbrella_replicas = parsed_args["umbrella-replicas"]
+const umbrella_min = FloatType(parsed_args["umbrella-min"])
+const umbrella_max = FloatType(parsed_args["umbrella-max"])
+const umbrella_kappa = FloatType(parsed_args["umbrella-kappa"])
+const umbrella_power = FloatType(parsed_args["umbrella-power"])
 const swap_every = parsed_args["swap-every"]
 const init_phase = parsed_args["init-phase"]
 const phase_threshold = Float64(parsed_args["phase-threshold"])
 
-init_phase in ("hot", "disordered", "ordered") ||
-    error("--init-phase must be hot, disordered, or ordered")
+init_phase in ("hot", "disordered", "ordered", "umbrella") ||
+    error("--init-phase must be hot, disordered, ordered, or umbrella")
 isfinite(phase_threshold) && phase_threshold > 0 ||
     error("--phase-threshold must be finite and positive")
 startup_sweeps >= 0 || error("--startup-sweeps must be non-negative")
+production_sweeps >= 0 || error("--production-sweeps must be non-negative")
+umbrella_replicas >= 0 || error("--umbrella-replicas must be non-negative")
+if umbrella_replicas > 0
+    tempering_replicas == 1 ||
+        error("mass tempering and umbrella exchange cannot be enabled together")
+    umbrella_replicas >= 2 || error("--umbrella-replicas must be at least 2")
+    isfinite(umbrella_min) && umbrella_min >= 0 ||
+        error("--umbrella-min must be finite and non-negative")
+    isfinite(umbrella_max) && umbrella_max > umbrella_min ||
+        error("--umbrella-max must exceed --umbrella-min")
+    isfinite(umbrella_kappa) && umbrella_kappa > 0 ||
+        error("--umbrella-kappa must be finite and positive")
+    isfinite(umbrella_power) && umbrella_power > 0 ||
+        error("--umbrella-power must be finite and positive")
+end
 if startup_sweeps > 0
     isfinite(startup_ε) && startup_ε > 0 || error("--startup-eps must be positive")
     startup_n_lf > 0 || error("--startup-n-lf must be positive")
@@ -175,11 +220,25 @@ function orderedstart(n, mass; sign::Int=(isodd(seed) ? 1 : -1))
     return field
 end
 
-function initial_field(n, mass, phase::AbstractString=init_phase)
+"""Seed a window near `M²=center`; useful because the M² force vanishes at M=0."""
+function umbrellastart(n, center; sign::Int=(isodd(seed) ? 1 : -1))
+    sign in (-1, 1) || throw(ArgumentError("umbrella-start sign must be -1 or 1"))
+    amplitude = sqrt(max(FloatType(center), zero(FloatType)))
+    field = ArrayType(fill(FloatType(sign) * amplitude, n, n, n))
+    field .+= FloatType(0.05) .* hotstart(n)
+    return field
+end
+
+function initial_field(n, mass, phase::AbstractString=init_phase; umbrella_center=nothing)
     phase == "hot" && return hotstart(n)
     phase == "disordered" && return disorderedstart(n)
     phase == "ordered" && return orderedstart(n, mass)
-    throw(ArgumentError("initial phase must be hot, disordered, or ordered"))
+    if phase == "umbrella"
+        isnothing(umbrella_center) &&
+            throw(ArgumentError("umbrella initialization requires an umbrella center"))
+        return umbrellastart(n, umbrella_center)
+    end
+    throw(ArgumentError("initial phase must be hot, disordered, ordered, or umbrella"))
 end
 
 init_arg = parsed_args["init"]

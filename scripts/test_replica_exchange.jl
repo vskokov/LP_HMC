@@ -40,6 +40,33 @@ let
 end
 
 let
+    centers, kappas = umbrella_ladder(0.0, 0.4, 5, 80.0)
+    report("Umbrella ladder",
+           centers ≈ [0.0, 0.1, 0.2, 0.3, 0.4] && kappas == fill(80.0, 5),
+           "centers=$(centers)")
+end
+
+let
+    Random.seed!(31)
+    field = randn(L, L, L)
+    force = similar(field)
+    center, kappa = 0.2, 37.0
+    compute_force_umbrella!(force, field, -2.1, Z, center, kappa)
+    site = CartesianIndex(2, 3, 1)
+    delta = 1e-6
+    plus, minus = copy(field), copy(field)
+    plus[site] += delta
+    minus[site] -= delta
+    finite_difference = -(
+        calc_total_energy(plus, -2.1, Z) + umbrella_energy(plus, center, kappa) -
+        calc_total_energy(minus, -2.1, Z) - umbrella_energy(minus, center, kappa)
+    ) / (2delta)
+    error_value = abs(force[site] - finite_difference)
+    report("Umbrella force finite difference", error_value < 2e-6,
+           @sprintf("err=%.2e", error_value))
+end
+
+let
     fields = [zeros(L, L, L) for _ in 1:3]
     state = ReplicaExchangeState(fields, mass_ladder(-2.25, 3, 0.2);
                                  walker_stage=[1, 2, 1], round_trips=[0, 0, 2],
@@ -61,6 +88,28 @@ let
                                         quadratic_statistic(second))
     err = abs(direct - sufficient)
     report("Exact swap action", err < 1e-10 * max(1.0, abs(direct)), @sprintf("err=%.2e", err))
+end
+
+
+let
+    first = randn(L, L, L)
+    second = randn(L, L, L)
+    masses = [-2.2, -2.2]
+    centers, kappas = [0.05, 0.35], [60.0, 60.0]
+    q1, q2 = quadratic_statistic(first), quadratic_statistic(second)
+    s1, s2 = umbrella_coordinate(first), umbrella_coordinate(second)
+    direct =
+        calc_total_energy(second, masses[1], Z) + umbrella_energy(second, centers[1], kappas[1]) +
+        calc_total_energy(first, masses[2], Z) + umbrella_energy(first, centers[2], kappas[2]) -
+        calc_total_energy(first, masses[1], Z) - umbrella_energy(first, centers[1], kappas[1]) -
+        calc_total_energy(second, masses[2], Z) - umbrella_energy(second, centers[2], kappas[2])
+    sufficient = exchange_action_difference(
+        masses[1], masses[2], q1, q2, centers[1], centers[2],
+        kappas[1], kappas[2], s1, s2,
+    )
+    error_value = abs(direct - sufficient)
+    report("Exact umbrella swap action", error_value < 1e-10 * max(1.0, abs(direct)),
+           @sprintf("err=%.2e", error_value))
 end
 
 let

@@ -174,6 +174,67 @@ scaling means you must *decrease* ε as L grows.
 Force evaluation has no data races — every site can be computed simultaneously —
 so no sublattice decomposition is needed.
 
+## M² umbrella replica exchange
+
+Mass tempering can retain acceptable local swap rates while failing to cross the
+ordered/disordered interface.  The umbrella sampler instead keeps `(Z,m²)` fixed and
+adds a harmonic bias in the smooth collective variable `s=M²`:
+
+```text
+W_k = κ_k/2 (M²-s_k)²
+```
+
+All windows are advanced in one CUDA batch.  Adjacent exchanges use the exact crossed
+physical-plus-bias action, and the collector retains every window for MBAR unbiasing.
+The original mass-tempering and single-HMC APIs are unchanged.
+
+Run a local A6000 job through task-spooler:
+
+```bash
+python3 scripts/submit_umbrella_tsp.py \
+  --L 24 --point=-0.6,-1.86421 \
+  --replicas 2 --init-schedule umbrella \
+  --umbrella-windows 241 --umbrella-min 0 --umbrella-max 0.4 \
+  --umbrella-kappa 160000 --umbrella-power 1.3 \
+  --samples 2000 --skip 2 \
+  --run-name umbrella_L24
+```
+
+`submit_umbrella_array.py` and `submit_umbrella_bsub.py` materialize equivalent
+Slurm and LSF arrays for HPC systems. Add `--dry-run` to any submitter to inspect the
+manifest and commands without submitting work. The per-task workflow first writes a
+schema-3 checkpoint with `thermalize_umbrella.jl`, then an all-window statistics CSV
+with `collect_umbrella_stats.jl`.
+
+The submitters supply A6000-probed defaults when the umbrella flags are omitted:
+
+| L | windows | M² range | κ | power | startup `(ε,n_lf,sweeps)` | thermalization sweeps |
+|---|---:|---:|---:|---:|---:|---:|
+| 24 | 241 | 0–0.4 | 160,000 | 1.3 | (0.002, 25, 1024) | 120,000 |
+| 32 | 369 | 0–0.4 | 380,000 | 1.3 | (0.0015, 37, 2048) | 280,000 |
+
+These are pilot defaults, not certified production profiles. The short probes had
+minimum/median swap acceptance of 0.41/0.65 (L24) and 0.31/0.64 (L32), with production
+HMC acceptance centered near 0.78 and 0.76 respectively. Full-length runs still need
+to demonstrate round trips and independent-run agreement.
+
+Reconstruct the canonical ensemble and the `M²` free-energy profile with:
+
+```bash
+python3 scripts/analyze_umbrella.py \
+  runs/umbrella_L24/statistics/RUN.csv \
+  --bootstrap 200 --block-size 20 --bins 512 \
+  --output reports/umbrella_L24.json \
+  --profile-output reports/umbrella_L24_free_energy.csv
+```
+
+For a small-volume validation, pass an ordinary `collect_reweight_stats.jl` CSV via
+`--reference`. The output reports combined-error z-scores as well as neighboring
+histogram overlap. Before trusting a large-volume run, require reasonable overlap on
+every edge, repeated walker round trips, and agreement between independent ordered
+and disordered starts. `--bins 0` selects exact unbinned MBAR for small validation
+runs; binned WHAM avoids a windows-by-samples memory allocation at L24/L32.
+
 ---
 
 ## Parameters
@@ -213,6 +274,14 @@ julia --project=. scripts/test_hmc.jl
 Runs four correctness checks on a small L=6 lattice (CPU, Float64, no CLI args):
 force finite-difference check, energy conservation, reversibility, and acceptance
 rate sanity. All four should print `PASS`.
+
+The replica and umbrella tests are:
+
+```bash
+julia --project=. scripts/test_replica_exchange.jl
+julia --project=. scripts/test_umbrella_gpu.jl  # requires CUDA
+python3 -m unittest discover -s tests -v
+```
 
 ### 1. Thermalization
 

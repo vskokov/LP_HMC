@@ -200,20 +200,31 @@ mutable struct BatchedHMCWorkspace{A,V}
     laplacian::A
     site_energy::V
     device_masses::V
+    device_umbrella_centers::V
+    device_umbrella_kappas::V
+    device_magnetizations::V
     device_accepts::CuArray{Bool,1}
     swap_buffer::CuArray{FloatType,3}
     old_hamiltonians::Vector{Float64}
     new_hamiltonians::Vector{Float64}
 end
 
-function make_batched_workspace(fields::CuArray{FloatType,4}, masses)
+function make_batched_workspace(fields::CuArray{FloatType,4}, masses;
+                                umbrella_centers=zeros(length(masses)),
+                                umbrella_kappas=zeros(length(masses)))
     size(fields)[1:3] == (L, L, L) ||
         throw(ArgumentError("batched fields must have shape (L,L,L,replicas)"))
     nrep = size(fields, 4)
     length(masses) == nrep || throw(ArgumentError("one mass is required per replica"))
+    length(umbrella_centers) == nrep ||
+        throw(ArgumentError("one umbrella center is required per replica"))
+    length(umbrella_kappas) == nrep ||
+        throw(ArgumentError("one umbrella kappa is required per replica"))
     return BatchedHMCWorkspace(
         similar(fields), similar(fields), similar(fields), similar(fields),
         CuArray{FloatType}(undef, length(fields)), CuArray(FloatType.(masses)),
+        CuArray(FloatType.(umbrella_centers)), CuArray(FloatType.(umbrella_kappas)),
+        CuArray{FloatType}(undef, nrep),
         CuArray{Bool}(undef, nrep), CuArray{FloatType}(undef, L, L, L),
         zeros(Float64, nrep), zeros(Float64, nrep),
     )
@@ -238,7 +249,8 @@ function _batch_lap_kernel!(lapϕ, ϕ, sites_per_replica)
     return nothing
 end
 
-function _batch_force_kernel!(F, lapϕ, ϕ, masses, Z_value, sites_per_replica)
+function _batch_force_kernel!(F, lapϕ, ϕ, masses, Z_value, umbrella_centers,
+                              umbrella_kappas, magnetizations, sites_per_replica)
     idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if idx <= length(ϕ)
         zero_based = idx - 1
@@ -254,23 +266,38 @@ function _batch_force_kernel!(F, lapϕ, ϕ, masses, Z_value, sites_per_replica)
             lapϕ[x1,x2,NNp(x3),replica] + lapϕ[x1,x2,NNm(x3),replica] - 6*l0
         )
         value = ϕ[x1,x2,x3,replica]
-        F[x1,x2,x3,replica] = Z_value*l0 - lap2 - masses[replica]*value - λ*value^3
+        magnetization = magnetizations[replica]
+        umbrella_force = -FloatType(2) * umbrella_kappas[replica] *
+            (magnetization^2 - umbrella_centers[replica]) * magnetization /
+            FloatType(sites_per_replica)
+        F[x1,x2,x3,replica] = Z_value*l0 - lap2 - masses[replica]*value -
+                              λ*value^3 + umbrella_force
     end
     return nothing
 end
 
-function compute_force_batched!(F, lapϕ, ϕ, masses, Z_value)
+function update_batched_magnetizations!(workspace, ϕ)
+    destination = reshape(workspace.device_magnetizations, 1, 1, 1, size(ϕ, 4))
+    sum!(destination, ϕ)
+    workspace.device_magnetizations ./= FloatType(L^3)
+    return workspace.device_magnetizations
+end
+
+function compute_force_batched!(F, lapϕ, ϕ, masses, Z_value, workspace)
+    update_batched_magnetizations!(workspace, ϕ)
     threads = BATCH_THREADS
     blocks = cld(length(ϕ), threads)
     @cuda threads=threads blocks=blocks _batch_lap_kernel!(lapϕ, ϕ, L^3)
     @cuda threads=threads blocks=blocks _batch_force_kernel!(
-        F, lapϕ, ϕ, masses, Z_value, L^3
+        F, lapϕ, ϕ, masses, Z_value, workspace.device_umbrella_centers,
+        workspace.device_umbrella_kappas, workspace.device_magnetizations, L^3
     )
     return nothing
 end
 
 function _batch_hamiltonian_kernel!(site_energy, ϕ, π_field, masses, Z_value,
-                                    sites_per_replica)
+                                    umbrella_centers, umbrella_kappas,
+                                    magnetizations, sites_per_replica)
     idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if idx <= length(ϕ)
         zero_based = idx - 1
@@ -289,18 +316,24 @@ function _batch_hamiltonian_kernel!(site_energy, ϕ, π_field, masses, Z_value,
                 (ϕ[x1,NNp(x2),x3,replica] - value)^2 +
                 (ϕ[x1,x2,NNp(x3),replica] - value)^2
         momentum = π_field[x1,x2,x3,replica]
+        umbrella_delta = magnetizations[replica]^2 - umbrella_centers[replica]
         site_energy[idx] = FloatType(0.5)*lapl^2 + FloatType(0.5)*Z_value*grad2 +
                            FloatType(0.5)*masses[replica]*value^2 +
-                           FloatType(0.25)*λ*value^4 + FloatType(0.5)*momentum^2
+                           FloatType(0.25)*λ*value^4 + FloatType(0.5)*momentum^2 +
+                           FloatType(0.5)*umbrella_kappas[replica]*umbrella_delta^2 /
+                           FloatType(sites_per_replica)
     end
     return nothing
 end
 
-function batched_hamiltonians!(destination, site_energy, ϕ, π_field, masses, Z_value)
+function batched_hamiltonians!(destination, site_energy, ϕ, π_field, masses, Z_value,
+                               workspace)
+    update_batched_magnetizations!(workspace, ϕ)
     threads = BATCH_THREADS
     blocks = cld(length(ϕ), threads)
     @cuda threads=threads blocks=blocks _batch_hamiltonian_kernel!(
-        site_energy, ϕ, π_field, masses, Z_value, L^3
+        site_energy, ϕ, π_field, masses, Z_value, workspace.device_umbrella_centers,
+        workspace.device_umbrella_kappas, workspace.device_magnetizations, L^3
     )
     reduced = sum(reshape(site_energy, L^3, size(ϕ, 4)); dims=1)
     destination .= vec(Array(reduced))
@@ -308,15 +341,18 @@ function batched_hamiltonians!(destination, site_energy, ϕ, π_field, masses, Z
 end
 
 function leapfrog_batched!(ϕ, π_field, masses, Z_value, eps, leapfrog_steps, workspace)
-    compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value)
+    compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value,
+                           workspace)
     π_field .+= (eps / 2) .* workspace.force
     for _ in 1:(leapfrog_steps - 1)
         ϕ .+= eps .* π_field
-        compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value)
+        compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value,
+                               workspace)
         π_field .+= eps .* workspace.force
     end
     ϕ .+= eps .* π_field
-    compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value)
+    compute_force_batched!(workspace.force, workspace.laplacian, ϕ, masses, Z_value,
+                           workspace)
     π_field .+= (eps / 2) .* workspace.force
     return nothing
 end
@@ -335,13 +371,13 @@ function hmc_step_batched!(fields, Z_value, eps, leapfrog_steps, workspace;
                            rng=Random.default_rng())
     randn!(workspace.momentum)
     batched_hamiltonians!(workspace.old_hamiltonians, workspace.site_energy, fields,
-                          workspace.momentum, workspace.device_masses, Z_value)
+                          workspace.momentum, workspace.device_masses, Z_value, workspace)
     copyto!(workspace.proposal, fields)
     leapfrog_batched!(workspace.proposal, workspace.momentum, workspace.device_masses,
                       Z_value, eps, leapfrog_steps, workspace)
     batched_hamiltonians!(workspace.new_hamiltonians, workspace.site_energy,
                           workspace.proposal, workspace.momentum,
-                          workspace.device_masses, Z_value)
+                          workspace.device_masses, Z_value, workspace)
     delta_h = workspace.new_hamiltonians .- workspace.old_hamiltonians
     accepted = [value < 0 || rand(rng) < exp(-value / Float64(T)) for value in delta_h]
     copyto!(workspace.device_accepts, accepted)
@@ -353,14 +389,78 @@ function hmc_step_batched!(fields, Z_value, eps, leapfrog_steps, workspace;
     return accepted, delta_h
 end
 
+function _batch_statistics_kernel!(sum_sites, q_sites, g_sites, fields,
+                                   sites_per_replica)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if idx <= length(fields)
+        zero_based = idx - 1
+        site = zero_based % sites_per_replica
+        replica = zero_based ÷ sites_per_replica + 1
+        x1 = site % L + 1
+        x2 = (site ÷ L) % L + 1
+        x3 = site ÷ L^2 + 1
+        value = fields[x1,x2,x3,replica]
+        sum_sites[x1,x2,x3,replica] = value
+        q_sites[x1,x2,x3,replica] = value^2
+        g_sites[x1,x2,x3,replica] =
+            (fields[NNp(x1),x2,x3,replica] - value)^2 +
+            (fields[x1,NNp(x2),x3,replica] - value)^2 +
+            (fields[x1,x2,NNp(x3),replica] - value)^2
+    end
+    return nothing
+end
+
+"""Collect `(M,Q,G)` for every CUDA replica with one site kernel."""
+function sufficient_statistics_batched(fields, workspace)
+    threads = BATCH_THREADS
+    blocks = cld(length(fields), threads)
+    @cuda threads=threads blocks=blocks _batch_statistics_kernel!(
+        workspace.proposal, workspace.momentum, workspace.force, fields, L^3
+    )
+    replicas = size(fields, 4)
+    magnetizations = vec(Array(sum(reshape(workspace.proposal, L^3, replicas); dims=1))) ./ L^3
+    quadratic = vec(Array(sum(reshape(workspace.momentum, L^3, replicas); dims=1)))
+    gradients = vec(Array(sum(reshape(workspace.force, L^3, replicas); dims=1)))
+    return (M=Float64.(magnetizations), Q=Float64.(quadratic), G=Float64.(gradients))
+end
+
 end
 
 ##
+
+"""Smooth collective variable used by umbrella sampling: `s = M^2`."""
+umbrella_coordinate(ϕ) = (Float64(sum(ϕ)) / L^3)^2
+
+"""Harmonic umbrella potential `κ/2 (M^2-center)^2`."""
+umbrella_energy_from_coordinate(s, center, kappa) =
+    0.5 * Float64(kappa) * (Float64(s) - Float64(center))^2
+
+umbrella_energy(ϕ, center, kappa) =
+    umbrella_energy_from_coordinate(umbrella_coordinate(ϕ), center, kappa)
+
+"""Add the negative derivative of a harmonic `M^2` umbrella to an HMC force."""
+function add_umbrella_force!(F, ϕ, center, kappa)
+    iszero(kappa) && return F
+    magnetization = Float64(sum(ϕ)) / L^3
+    force_shift = -2 * Float64(kappa) *
+                  (magnetization^2 - Float64(center)) * magnetization / L^3
+    F .+= FloatType(force_shift)
+    return F
+end
+
+function compute_force_umbrella!(F, ϕ, m², Z, center, kappa)
+    compute_force!(F, ϕ, m², Z)
+    return add_umbrella_force!(F, ϕ, center, kappa)
+end
 
 function calc_hamiltonian(ϕ, π_field, m², Z)
     H_field = calc_total_energy(ϕ, m², Z)
     K = sum(π_field .^ 2) / 2
     return H_field + K
+end
+
+function calc_hamiltonian_umbrella(ϕ, π_field, m², Z, center, kappa)
+    return calc_hamiltonian(ϕ, π_field, m², Z) + umbrella_energy(ϕ, center, kappa)
 end
 
 function leapfrog!(ϕ, π_field, m², Z, ε, n_lf)
@@ -374,6 +474,21 @@ function leapfrog!(ϕ, π_field, m², Z, ε, n_lf)
     end
     ϕ .+= ε .* π_field
     compute_force!(F, ϕ, m², Z)
+    π_field .+= (ε / 2) .* F
+end
+
+
+function leapfrog_umbrella!(ϕ, π_field, m², Z, ε, n_lf, center, kappa)
+    F = similar(ϕ)
+    compute_force_umbrella!(F, ϕ, m², Z, center, kappa)
+    π_field .+= (ε / 2) .* F
+    for _ in 1:(n_lf - 1)
+        ϕ .+= ε .* π_field
+        compute_force_umbrella!(F, ϕ, m², Z, center, kappa)
+        π_field .+= ε .* F
+    end
+    ϕ .+= ε .* π_field
+    compute_force_umbrella!(F, ϕ, m², Z, center, kappa)
     π_field .+= (ε / 2) .* F
 end
 
@@ -398,6 +513,25 @@ function hmc_step!(ϕ, m², Z, ε, n_lf)
     if accepted
         ϕ .= ϕ_prop
     end
+    return accepted, Float64(ΔH)
+end
+
+
+function hmc_step_umbrella!(ϕ, m², Z, ε, n_lf, center, kappa)
+    if cpu
+        π_field = Array{FloatType}(undef, L, L, L)
+        randn!(π_field)
+    else
+        π_field = CUDA.randn(FloatType, L, L, L)
+    end
+    H_old = calc_hamiltonian_umbrella(ϕ, π_field, m², Z, center, kappa)
+    ϕ_prop = copy(ϕ)
+    π_prop = copy(π_field)
+    leapfrog_umbrella!(ϕ_prop, π_prop, m², Z, ε, n_lf, center, kappa)
+    H_new = calc_hamiltonian_umbrella(ϕ_prop, π_prop, m², Z, center, kappa)
+    ΔH = H_new - H_old
+    accepted = ΔH < 0 || rand() < exp(-ΔH / T)
+    accepted && (ϕ .= ϕ_prop)
     return accepted, Float64(ΔH)
 end
 
