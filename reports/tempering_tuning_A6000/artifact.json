@@ -12,7 +12,7 @@
       {
         "id": "pilot_round_trips",
         "title": "Worst-phase walker round-trip coverage",
-        "subtitle": "Final cumulative coverage by lattice, coordinate, and ladder candidate; production gate is 50%.",
+        "subtitle": "Legacy one-stage cold-start diagnostics; these rows explain the rejection but cannot validate production mixing.",
         "type": "bar",
         "dataset": "pilot_summary",
         "sourceId": "a6000_pilots",
@@ -69,7 +69,7 @@
       {
         "id": "technical_summary",
         "type": "markdown",
-        "body": "## Technical summary\n\nThe dominant large-lattice failure is replica-ladder transport and phase equilibration, not equilibrium HMC acceptance. Existing L=24/L=32 evidence and new A6000 pilots both show healthy HMC acceptance alongside too few completed walker round trips. Reweighted Binder crossings must therefore remain unpublished whenever their brackets carry warnings. No HMC defaults and no production critical profile were promoted: every tested ladder failed at least one predeclared mixing gate."
+        "body": "## Technical summary\n\nThe existing production runs still identify replica-ladder transport as the large-lattice problem, but the copied A6000 grid does not provide a valid equilibrium test of the proposed ladders. Those pilots used the conservative startup integrator for their entire duration, ended before the prescribed L^3 startup stage, never reset exchange diagnostics, and compared noisy block-end magnetizations. Their all-reject result must not be used to choose or discard a production profile. The corrected workflow now separates discarded startup from equilibrium measurement."
       },
       {
         "id": "historical_finding",
@@ -89,7 +89,7 @@
         "id": "pilot_finding",
         "type": "markdown",
         "sourceId": "a6000_pilots",
-        "body": "## Strong swap acceptance is necessary but not sufficient\n\nAll retained pilots clear the 20% edge-acceptance gate, yet the worst-phase fraction of walkers completing a round trip remains below the 50% production gate for every full three-coordinate candidate. Adding slots improves local overlap but lengthens ladder diffusion: the 33-slot L=32 candidate reaches 56%–74% worst-edge acceptance while completing almost no round trips in 2,048 exchange rounds."
+        "body": "## The copied pilot rejection is method-driven\n\nL=24 pilots measured 8,192 sweeps although the prescribed cold-start stage is 13,824 sweeps; L=32 measured 16,384 versus a 32,768-sweep startup stage. Final minimum HMC acceptance remained 93%–96%, confirming that the conservative startup integrator never switched to the 70%–80% equilibrium regime. Low round-trip coverage and ordered/disordered separation are therefore expected cold-start outcomes. The edge-acceptance pattern is still useful for screening—especially the L=32 bottlenecks—but it is not sufficient for profile promotion or final rejection."
       },
       {"id": "pilot_chart", "type": "chart", "chartId": "pilot_round_trips"},
       {
@@ -100,17 +100,17 @@
       {
         "id": "method",
         "type": "markdown",
-        "body": "## Method and promotion gates\n\nA6000 pilots used ordered and disordered cold starts at all three critical coordinates. Candidate promotion requires every edge acceptance at least 20%, median edge acceptance at least 30%, no edge with zero accepted swaps, at least half of walkers completing a round trip, and ordered/disordered agreement within two combined standard errors. HMC changes additionally require minimum acceptance at least 65% and at least 15% improvement in worst-point ESS per 1,000 force evaluations. The selector writes a `validated=true` profile only when every gate passes; all scheduler backends refuse an incomplete critical profile."
+        "body": "## Corrected method and promotion gates\n\nEach corrected pilot runs the full L^3 cold-start schedule with the startup integrator, discards that state history, resets all HMC/swap/walker diagnostics, and then switches to the equilibrium HMC defaults for measured sweeps. Phase agreement uses block-mean target abs(M) from the final half of measurement blocks. Candidate promotion still requires every edge acceptance at least 20%, median edge acceptance at least 30%, no unused edge, at least half of walkers completing a round trip, and ordered/disordered agreement within two combined standard errors. Legacy CSVs lacking the block-mean phase metric are now rejected explicitly."
       },
       {
         "id": "limitations",
         "type": "markdown",
-        "body": "## Limitations and robustness checks\n\nThese are screening pilots, not equilibrium production estimates. Cold-start transients make the first HMC block pessimistic, and block-end magnetization provides a coarse phase-agreement check. The pilots are long enough to reject the tested candidates but not to prove that a larger span/count combination will pass. The original aggregate round-trip totals also used sweep denominators; the implementation now records exchange rounds and per-walker coverage prospectively. Orphan `.tmp.*` files are reported but were not deleted."
+        "body": "## Limitations and robustness checks\n\nNo corrected L=24/L=32 grid has completed yet, so no ladder is validated or scientifically rejected by the new protocol. The copied runs do show that L=32 uniform ladders with too few slots develop weak edges as span increases, which narrows the next candidate set. The original aggregate round-trip totals also used sweep denominators; corrected pilots reset diagnostics after startup and use exchange rounds. Orphan `.tmp.*` files are reported but were not deleted."
       },
       {
         "id": "next_steps",
         "type": "markdown",
-        "body": "## Recommended next steps\n\n1. Continue the pilot grid with wider spans (0.3 and 0.4) and 25/33 slots, keeping swaps every sweep; increase pilot length proportional to the square of slot count.\n2. Promote only the smallest candidate that passes all gates at all three coordinates and both starts.\n3. Run the generated critical-window source CSVs with independent ordered/disordered replicas.\n4. Reweight and rerun the validator; only then extract warning-free crossings and scale production."
+        "body": "## Recommended next steps\n\n1. Rerun a reduced corrected grid rather than repeating all 12 legacy candidates: L=24 with 17/0.3, 25/0.4, and 33/0.3; L=32 with 25/0.3, 33/0.3, and 33/0.4. Keep swaps every sweep.\n2. Use a new run name so legacy files cannot be mixed with corrected outputs.\n3. Promote only the smallest candidate that passes all gates at all three coordinates and both starts.\n4. Only after promotion, run the critical-window source CSVs, reweight, and extract warning-free crossings."
       },
       {
         "id": "questions",
@@ -122,7 +122,7 @@
   "snapshot": {
     "version": 1,
     "generatedAt": "2026-08-15T18:00:00Z",
-    "status": "ready",
+    "status": "partial",
     "datasets": {
       "historical_health": [
         {"L": 12, "median_hmc": 0.740, "median_min_swap": 0.452, "round_trips_total": 2739, "zero_rt_tasks": 0, "tasks": 100},
@@ -146,7 +146,13 @@
         {"candidate": "L32 Z-0.77 r17", "worst_rt_fraction": 0.118, "worst_min_swap": 0.426, "exchange_rounds": 4096}
       ]
     },
-    "accessIssues": []
+    "accessIssues": [
+      {
+        "id": "corrected_pilots_pending",
+        "dataset": "pilot_summary",
+        "message": "Corrected two-stage equilibrium pilots have not completed; the displayed pilot dataset is legacy screening evidence only."
+      }
+    ]
   },
   "sources": [
     {

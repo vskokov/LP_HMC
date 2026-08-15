@@ -28,6 +28,10 @@ def main() -> int:
     parser.add_argument("--min-edge-acceptance", type=float, default=0.20)
     parser.add_argument("--min-median-edge-acceptance", type=float, default=0.30)
     parser.add_argument("--min-round-trip-walker-fraction", type=float, default=0.50)
+    parser.add_argument(
+        "--phase-tail-fraction", type=float, default=0.5,
+        help="fraction of final measurement blocks used for phase agreement",
+    )
     args = parser.parse_args()
 
     rows: list[dict[str, str]] = []
@@ -36,16 +40,22 @@ def main() -> int:
             rows.extend(csv.DictReader(handle))
     if not rows:
         parser.error("pilot inputs contain no rows")
+    if not 0 < args.phase_tail_fraction <= 1:
+        parser.error("--phase-tail-fraction must be in (0,1]")
 
     # Retain the cumulative final block for each phase/configuration/point.
     final: dict[tuple[object, ...], dict[str, str]] = {}
-    histories: dict[tuple[object, ...], list[float]] = defaultdict(list)
+    histories: dict[tuple[object, ...], list[tuple[int, float]]] = defaultdict(list)
+    legacy_phase_metric = "block_abs_M_mean" not in rows[0]
     for row in rows:
         config = tuple(row[name] for name in CONFIG)
         point_phase = config + (row["Z"], row["m2"], row["phase"])
         if point_phase not in final or int(row["sweeps"]) > int(final[point_phase]["sweeps"]):
             final[point_phase] = row
-        histories[point_phase].append(abs(float(row["M_target"])))
+        phase_value = abs(float(row["M_target"])) if legacy_phase_metric else float(
+            row["block_abs_M_mean"]
+        )
+        histories[point_phase].append((int(row["sweeps"]), phase_value))
 
     configurations: dict[tuple[str, ...], list[dict[str, str]]] = defaultdict(list)
     for key, row in final.items():
@@ -56,6 +66,9 @@ def main() -> int:
     for config, candidate_rows in configurations.items():
         points = {(row["Z"], row["m2"]) for row in candidate_rows}
         reasons: list[str] = []
+        if legacy_phase_metric:
+            rejected.append((config, "legacy_cold_start_pilot_not_equilibrium_measurement"))
+            continue
         if len(points) < args.expected_points:
             reasons.append(f"points={len(points)}<{args.expected_points}")
         if any(float(row["acceptance_min"]) < args.min_hmc_acceptance for row in candidate_rows):
@@ -76,7 +89,11 @@ def main() -> int:
             if any(key not in histories for key in phase_keys):
                 reasons.append("missing_phase")
                 continue
-            phase_values = [histories[key] for key in phase_keys]
+            phase_values = []
+            for key in phase_keys:
+                ordered_history = [value for _, value in sorted(histories[key])]
+                keep = max(2, math.ceil(len(ordered_history) * args.phase_tail_fraction))
+                phase_values.append(ordered_history[-keep:])
             difference = abs(float(np.mean(phase_values[0])) - float(np.mean(phase_values[1])))
             combined_se = math.hypot(*(standard_error(values) for values in phase_values))
             if difference > 2.0 * combined_se:

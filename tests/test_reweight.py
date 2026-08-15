@@ -580,8 +580,41 @@ class ReweightTests(unittest.TestCase):
             ]
             result = subprocess.run(command, check=True, text=True, capture_output=True)
             self.assertIn("tasks: 120", result.stdout)
+            self.assertIn("startup: eps=0.0095 n_lf=25 sweeps=13824 (discarded)", result.stdout)
+            self.assertIn("measurement: eps=0.0231895 n_lf=4", result.stdout)
+            self.assertIn("--startup-sweeps=13824", result.stdout)
+            self.assertIn("--measurement-eps=0.02318953874", result.stdout)
             self.assertIn("dry-run: no files were written", result.stdout)
             self.assertFalse(run_root.exists())
+            focused = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/submit_tempering_pilots_tsp.py"),
+                 "--L", "24", "--point=-0.6,-1.86", "--point=-0.77,-2.12",
+                 "--point=-0.9,-2.35", "--candidate=17,0.3,1",
+                 "--candidate=25,0.4,1", "--candidate=33,0.3,1",
+                 "--run-root", str(run_root), "--run-name", "focused", "--dry-run"],
+                check=True, text=True, capture_output=True,
+            )
+            self.assertIn("tasks: 9", focused.stdout)
+
+    def test_profile_selector_rejects_legacy_cold_start_pilots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pilot = root / "legacy.csv"
+            pilot.write_text(
+                "L,Z,m2,phase,epsilon,n_lf,tempering_replicas,mass_span,swap_every,"
+                "sweeps,acceptance_min,swap_acceptance_min,swap_acceptance_median,"
+                "unused_edges,round_trip_walker_fraction,M_target\n"
+                "24,-0.6,-1.86,disordered,0.0095,25,17,0.3,1,100,0.9,0.4,0.5,0,0.6,0.1\n"
+                "24,-0.6,-1.86,ordered,0.0095,25,17,0.3,1,100,0.9,0.4,0.5,0,0.6,0.5\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/select_tempering_profile.py"),
+                 str(pilot), "--expected-points", "1", "--output", str(root / "out.csv")],
+                text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("legacy_cold_start_pilot_not_equilibrium_measurement", result.stdout)
 
     def test_even_tempering_count_is_rejected(self):
         command = [

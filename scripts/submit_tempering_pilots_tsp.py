@@ -12,7 +12,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from hmc_defaults import resolve_startup_hmc_parameters
+from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
 from runtime_preflight import run as run_preflight
 from submit_reweight_array import REPO_ROOT, parse_point
 
@@ -30,6 +30,16 @@ def comma_values(text: str, value_type):
     return values
 
 
+def parse_candidate(text: str) -> tuple[int, float, int]:
+    fields = text.split(",")
+    if len(fields) != 3:
+        raise argparse.ArgumentTypeError("--candidate must be REPLICAS,SPAN,SWAP_EVERY")
+    try:
+        return int(fields[0]), float(fields[1]), int(fields[2])
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid pilot candidate: {text}") from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -39,9 +49,17 @@ def main() -> int:
     parser.add_argument("--replica-counts", default="17,25,33,49,65")
     parser.add_argument("--mass-spans", default="0.2,0.3,0.4,0.6")
     parser.add_argument("--swap-every-values", default="1,2")
-    parser.add_argument("--eps", type=float, help="fixed cold-start epsilon")
-    parser.add_argument("--n-lf", type=int, help="fixed cold-start leapfrog count")
-    parser.add_argument("--sweeps", type=int, default=4096)
+    parser.add_argument(
+        "--candidate", action="append", type=parse_candidate,
+        help="exact REPLICAS,SPAN,SWAP_EVERY candidate; repeat to replace the Cartesian grid",
+    )
+    parser.add_argument("--eps", type=float, help="equilibrium measurement epsilon")
+    parser.add_argument("--n-lf", type=int, help="equilibrium measurement leapfrog count")
+    parser.add_argument("--startup-eps", type=float)
+    parser.add_argument("--startup-n-lf", type=int)
+    parser.add_argument("--startup-sweeps", type=int)
+    parser.add_argument("--sweeps", type=int, default=4096,
+                        help="measured sweeps after the discarded startup stage")
     parser.add_argument("--block-size", type=int, default=512)
     parser.add_argument("--slots", type=int, default=1)
     parser.add_argument("--run-name")
@@ -51,9 +69,16 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    counts = comma_values(args.replica_counts, int)
-    spans = comma_values(args.mass_spans, float)
-    cadences = comma_values(args.swap_every_values, int)
+    if args.candidate:
+        configurations = list(args.candidate)
+    else:
+        counts = comma_values(args.replica_counts, int)
+        spans = comma_values(args.mass_spans, float)
+        cadences = comma_values(args.swap_every_values, int)
+        configurations = list(itertools.product(counts, spans, cadences))
+    counts = [candidate[0] for candidate in configurations]
+    spans = [candidate[1] for candidate in configurations]
+    cadences = [candidate[2] for candidate in configurations]
     if any(count < 3 or count % 2 == 0 for count in counts):
         parser.error("all replica counts must be odd integers at least 3")
     if any(span <= 0 or not math.isfinite(span) for span in spans):
@@ -63,8 +88,11 @@ def main() -> int:
     if args.sweeps < 1 or args.block_size < 1 or args.slots < 1:
         parser.error("sweeps, block size, and slots must be positive")
     try:
-        epsilon, leapfrog, _, _ = resolve_startup_hmc_parameters(
-            args.L, args.eps, args.n_lf, args.sweeps
+        epsilon, leapfrog, _ = resolve_hmc_parameters(args.L, args.eps, args.n_lf)
+        startup_epsilon, startup_leapfrog, startup_sweeps, _ = (
+            resolve_startup_hmc_parameters(
+                args.L, args.startup_eps, args.startup_n_lf, args.startup_sweeps
+            )
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -79,26 +107,35 @@ def main() -> int:
 
     rows: list[dict[str, object]] = []
     commands: list[list[str]] = []
-    for task_id, ((z_value, mass), count, span, cadence) in enumerate(
-        itertools.product(args.point, counts, spans, cadences)
+    for task_id, ((z_value, mass), (count, span, cadence)) in enumerate(
+        itertools.product(args.point, configurations)
     ):
         output = run_dir / "pilots" / f"task_{task_id:04d}.csv"
         row = {
             "task_id": task_id, "L": args.L, "Z": z_value, "m2": mass,
             "epsilon": epsilon, "n_lf": leapfrog, "tempering_replicas": count,
+            "startup_epsilon": startup_epsilon,
+            "startup_n_lf": startup_leapfrog, "startup_sweeps": startup_sweeps,
             "mass_span": span, "swap_every": cadence, "sweeps": args.sweeps,
             "block_size": args.block_size, "output": output,
         }
         rows.append(row)
         commands.append([
             args.julia, f"--project={REPO_ROOT}", str(BENCHMARK), str(args.L),
-            f"--Z={z_value}", f"--mass={mass}", f"--eps-values={epsilon}",
-            f"--fixed-n-lf={leapfrog}", f"--sweeps={args.sweeps}",
+            f"--Z={z_value}", f"--mass={mass}",
+            f"--eps-values={startup_epsilon}", f"--fixed-n-lf={startup_leapfrog}",
+            f"--startup-sweeps={startup_sweeps}", f"--measurement-eps={epsilon}",
+            f"--measurement-n-lf={leapfrog}", f"--sweeps={args.sweeps}",
             f"--block-size={args.block_size}", f"--tempering-replicas={count}",
             f"--mass-span={span}", f"--swap-every={cadence}", f"--output={output}",
         ])
 
-    print(f"manifest: {manifest}\ntasks: {len(rows)}\ntsp concurrency: {args.slots}")
+    print(
+        f"manifest: {manifest}\ntasks: {len(rows)}\ntsp concurrency: {args.slots}\n"
+        f"startup: eps={startup_epsilon:g} n_lf={startup_leapfrog} "
+        f"sweeps={startup_sweeps} (discarded)\n"
+        f"measurement: eps={epsilon:g} n_lf={leapfrog} sweeps={args.sweeps}"
+    )
     for command in commands:
         print("+", shlex.join([args.tsp, *command]))
     if args.dry_run:

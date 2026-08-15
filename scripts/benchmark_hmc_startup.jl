@@ -29,6 +29,22 @@ function arguments()
             help = "fixed leapfrog count for ladder screening (zero uses trajectory length)"
             arg_type = Int
             default = 0
+        "--measurement-eps"
+            help = "equilibrium epsilon after a discarded cold-start stage; zero disables two-stage mode"
+            arg_type = Float64
+            default = 0.0
+        "--measurement-n-lf"
+            help = "equilibrium leapfrog count used with --measurement-eps"
+            arg_type = Int
+            default = 0
+        "--startup-sweeps"
+            help = "discarded cold-start sweeps in two-stage mode; zero means L^3"
+            arg_type = Int
+            default = 0
+        "--observe-every"
+            help = "measurement sweeps between target |M| observations"
+            arg_type = Int
+            default = 16
         "--min-acceptance"
             help = "minimum per-slot interval acceptance required in every block and phase"
             arg_type = Float64
@@ -123,6 +139,12 @@ function main()
     tau > 0 || error("--trajectory-length must be positive")
     0 <= options["min-acceptance"] <= 1 || error("--min-acceptance must be in [0,1]")
     eps_values = parse_eps_values(options["eps-values"])
+    measurement_mode = options["measurement-eps"] > 0
+    measurement_mode == (options["measurement-n-lf"] > 0) ||
+        error("--measurement-eps and --measurement-n-lf must be supplied together")
+    options["startup-sweeps"] >= 0 || error("--startup-sweeps must be non-negative")
+    options["observe-every"] > 0 || error("--observe-every must be positive")
+    startup_sweeps = options["startup-sweeps"] == 0 ? L^3 : options["startup-sweeps"]
     masses = FloatType.(mass_ladder(FloatType(options["mass"]), replicas,
                                     FloatType(options["mass-span"])))
     output = isempty(options["output"]) ?
@@ -132,14 +154,16 @@ function main()
     screening = Dict{Float64,NamedTuple}()
 
     open(temporary, "w") do io
-        println(io, "L,Z,m2,phase,epsilon,n_lf,trajectory_length,tempering_replicas," *
+        println(io, "L,Z,m2,phase,epsilon,n_lf,trajectory_length,startup_epsilon," *
+                    "startup_n_lf,startup_sweeps,tempering_replicas," *
                     "mass_span,swap_every,block,sweeps," *
                     "acceptance_min,acceptance_mean,acceptance_max,zero_slots," *
                     "swap_acceptance_min,swap_acceptance_median,unused_edges," *
                     "M_low,M_target,M_high,rms_displacement,round_trips," *
                     "exchange_rounds,round_trip_walker_fraction," *
-                    "low_endpoint_walker_fraction,high_endpoint_walker_fraction,seconds")
-        for epsilon64 in eps_values,
+                    "low_endpoint_walker_fraction,high_endpoint_walker_fraction," *
+                    "block_abs_M_mean,block_abs_M_se,seconds")
+        for startup_epsilon64 in eps_values,
             (phase_index, phase) in enumerate(("disordered", "ordered"))
             # Common random numbers make candidate comparisons sensitive to the
             # integrator rather than to a luckier initial field or RNG stream.
@@ -147,9 +171,16 @@ function main()
             Random.seed!(seed_value)
             !cpu && CUDA.seed!(seed_value)
             state = make_state(masses, phase, seed_value)
+            startup_n_lf = options["fixed-n-lf"] > 0 ? options["fixed-n-lf"] :
+                             max(1, round(Int, tau / startup_epsilon64))
+            if measurement_mode
+                replica_exchange!(state, startup_sweeps, Z, FloatType(startup_epsilon64),
+                                  startup_n_lf; swap_every=options["swap-every"])
+                reset_replica_diagnostics!(state)
+            end
             initial = host_batch(state)
-            leapfrog_steps = options["fixed-n-lf"] > 0 ? options["fixed-n-lf"] :
-                               max(1, round(Int, tau / epsilon64))
+            epsilon64 = measurement_mode ? options["measurement-eps"] : startup_epsilon64
+            leapfrog_steps = measurement_mode ? options["measurement-n-lf"] : startup_n_lf
             candidate_worst = get(screening, epsilon64,
                                   (minimum=1.0, zero_slots=0,
                                    n_lf=leapfrog_steps))
@@ -160,10 +191,15 @@ function main()
                 block_sweeps = min(block_size, sweeps - completed)
                 previous_accepts = copy(state.hmc_accepts)
                 previous_attempts = copy(state.hmc_attempts)
-                elapsed = @elapsed replica_exchange!(
-                    state, block_sweeps, Z, epsilon, leapfrog_steps;
-                    swap_every=options["swap-every"]
-                )
+                abs_M_observations = Float64[]
+                elapsed = @elapsed for sweep in 1:block_sweeps
+                    replica_exchange_sweep!(state, Z, epsilon, leapfrog_steps;
+                                            swap_every=options["swap-every"])
+                    if sweep % options["observe-every"] == 0 || sweep == block_sweeps
+                        push!(abs_M_observations,
+                              abs(magnetization(state.fields[target_slot(state)])))
+                    end
+                end
                 rates = acceptance_rates(state.hmc_accepts .- previous_accepts,
                                          state.hmc_attempts .- previous_attempts)
                 candidate_worst = (
@@ -179,9 +215,13 @@ function main()
                 rms = sqrt(sum(abs2, current .- initial) / length(initial))
                 swap_rates = acceptance_rates(state.swap_accepts, state.swap_attempts)
                 low_coverage, high_coverage = walker_endpoint_coverage(state)
+                abs_M_mean = sum(abs_M_observations) / length(abs_M_observations)
+                abs_M_se = length(abs_M_observations) > 1 ?
+                    std(abs_M_observations) / sqrt(length(abs_M_observations)) : NaN
                 values = (
                     L, Float64(Z), options["mass"], phase, epsilon64,
-                    leapfrog_steps, epsilon64 * leapfrog_steps, replicas,
+                    leapfrog_steps, epsilon64 * leapfrog_steps, startup_epsilon64,
+                    startup_n_lf, measurement_mode ? startup_sweeps : 0, replicas,
                     options["mass-span"], options["swap-every"], block_index,
                     completed, minimum(rates), sum(rates) / length(rates),
                     maximum(rates), count(==(0.0), rates), minimum(swap_rates),
@@ -191,7 +231,7 @@ function main()
                     exchange_rounds(state, options["swap-every"]),
                     count(>(0), state.round_trips) / replicas,
                     count(low_coverage) / replicas, count(high_coverage) / replicas,
-                    elapsed,
+                    abs_M_mean, abs_M_se, elapsed,
                 )
                 println(io, join(values, ','))
                 flush(io)

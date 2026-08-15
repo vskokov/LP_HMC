@@ -551,6 +551,13 @@ python3 scripts/submit_tempering_pilots_tsp.py --L 24 \
     --julia /path/to/julia-1.12 --run-name critical_pilots_L24 --dry-run
 ```
 
+Each pilot is explicitly two-stage. It first runs and discards the measured
+`L^3` cold-start schedule, resets HMC/swap/walker diagnostics, then switches to the
+equilibrium HMC defaults for `--sweeps` measured sweeps. Phase agreement uses
+block-mean target `abs(M)` from the final half of measurement blocks. Pilot CSVs
+without `block_abs_M_mean` predate this protocol and are rejected as
+`legacy_cold_start_pilot_not_equilibrium_measurement`; do not promote them.
+
 The replica-exchange CPU correctness check is:
 
 ```bash
