@@ -1,20 +1,59 @@
 #!/usr/bin/env bash
-# Submit from the LP_HMC repository root with:
-#   mkdir -p runs/reweight_binder_lsf/logs plots
-#   bsub < scripts/reweight_binder_bsub.sh
-
-#BSUB -J "reweight_binder[1-18]%4"
-#BSUB -W 120
-#BSUB -n 1
-#BSUB -q short_gpu
-#BSUB -R "select[h200 || h100 || l40s]"
-#BSUB -R "select[hname!='gpu16' && hname!='gpu33']"
-#BSUB -R "rusage[mem=32]"
-#BSUB -gpu "num=1:mode=shared:mps=no"
-#BSUB -o "runs/reweight_binder_lsf/logs/%J_%I.out"
-#BSUB -e "runs/reweight_binder_lsf/logs/%J_%I.err"
+# Worker for submit_binder_analysis_bsub.py. Run it through that submitter so
+# LSB_JOBINDEX and the matching dynamic LSF array are configured together.
 
 set -euo pipefail
+
+data_prefix="binder_lsf_"
+output_prefix=""
+lattice_csv="6,8,12,16,24,32"
+run_root="runs"
+output_root="plots"
+num=301
+bootstrap=1000
+block_size="auto"
+cuda_batch_size=32
+scans=()
+
+while (($#)); do
+    case "$1" in
+        --data-prefix) data_prefix="$2"; shift 2 ;;
+        --output-prefix) output_prefix="$2"; shift 2 ;;
+        --lattice-sizes) lattice_csv="$2"; shift 2 ;;
+        --run-root) run_root="$2"; shift 2 ;;
+        --output-root) output_root="$2"; shift 2 ;;
+        --num) num="$2"; shift 2 ;;
+        --bootstrap) bootstrap="$2"; shift 2 ;;
+        --block-size) block_size="$2"; shift 2 ;;
+        --cuda-batch-size) cuda_batch_size="$2"; shift 2 ;;
+        --scan) scans+=("$2"); shift 2 ;;
+        *) echo "unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+
+if ((${#scans[@]} == 0)); then
+    scans=(
+        "-0.6,-1.95,-1.75,mZ0.6"
+        "-0.77,-2.25,-2.0,mZ0.77"
+        "-0.9,-2.45,-2.2,mZ0.9"
+    )
+fi
+[[ -n "$output_prefix" ]] || output_prefix="$data_prefix"
+
+IFS=',' read -r -a lattice_sizes <<< "$lattice_csv"
+scan_count=${#scans[@]}
+task_count=$((${#lattice_sizes[@]} * scan_count))
+task_index=${LSB_JOBINDEX:?LSB_JOBINDEX is not set}
+if ((task_index < 1 || task_index > task_count)); then
+    echo "LSB_JOBINDEX=$task_index is outside 1-$task_count" >&2
+    exit 2
+fi
+
+array_offset=$((task_index - 1))
+lattice_index=$((array_offset / scan_count))
+scan_index=$((array_offset % scan_count))
+L="${lattice_sizes[$lattice_index]}"
+IFS=',' read -r Z m2_start m2_end label <<< "${scans[$scan_index]}"
 
 source /usr/share/Modules/init/bash
 export JULIA_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/jd
@@ -26,29 +65,10 @@ module load cuda/12.3
 
 project_dir="${LS_SUBCWD:-$PWD}"
 cd "$project_dir"
-mkdir -p plots
+mkdir -p "$output_root"
 
-lattice_sizes=(6 8 12 16 24 32)
-z_values=(-0.6 -0.77 -0.9)
-m2_starts=(-1.95 -2.25 -2.45)
-m2_ends=(-1.75 -2.0 -2.2)
-output_labels=(mZ0.6 mZ0.77 mZ0.9)
-
-array_offset=$((LSB_JOBINDEX - 1))
-lattice_index=$((array_offset / 3))
-scan_index=$((array_offset % 3))
-
-L="${lattice_sizes[$lattice_index]}"
-Z="${z_values[$scan_index]}"
-m2_start="${m2_starts[$scan_index]}"
-m2_end="${m2_ends[$scan_index]}"
-label="${output_labels[$scan_index]}"
-
-# The LSF analysis runs where the simulations were produced, so the original
-# manifest contains the correct absolute HPC paths.  manifest.local.csv is
-# only for data copied to another machine.
-manifest="runs/binder_lsf_L${L}/manifest.csv"
-output="plots/binder_lsf_${label}_L${L}"
+manifest="${run_root}/${data_prefix}L${L}/manifest.csv"
+output="${output_root}/${output_prefix}${label}_L${L}"
 
 [[ -f "$manifest" ]] || {
     echo "missing manifest: $manifest" >&2
@@ -56,7 +76,7 @@ output="plots/binder_lsf_${label}_L${L}"
 }
 
 echo "host=$(hostname)"
-echo "task_index=$LSB_JOBINDEX L=$L Z=$Z m2_start=$m2_start m2_end=$m2_end"
+echo "task_index=$task_index/$task_count L=$L Z=$Z m2_start=$m2_start m2_end=$m2_end"
 echo "manifest=$manifest output=$output"
 echo "julia=$(command -v julia)"
 julia --version
@@ -67,10 +87,10 @@ python3 reweight_binder.py \
     --manifest "$manifest" \
     --start "$Z" "$m2_start" \
     --end "$Z" "$m2_end" \
-    --num 301 \
+    --num "$num" \
     --source-mode mbar \
-    --bootstrap 1000 \
-    --block-size auto \
+    --bootstrap "$bootstrap" \
+    --block-size "$block_size" \
     --backend cuda \
-    --cuda-batch-size 32 \
+    --cuda-batch-size "$cuda_batch_size" \
     --output "$output"

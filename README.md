@@ -393,6 +393,31 @@ CUDA reports an out-of-memory error. Validate a CUDA installation with:
 python3 scripts/test_mbar_cuda.py
 ```
 
+Submit the standard three fixed-Z analyses as a dynamic LSF array with:
+
+```bash
+python3 scripts/submit_binder_analysis_bsub.py \
+    --data-prefix binder_lsf_ \
+    --L 6 8 12 16 24 32 \
+    --max-concurrent 4 \
+    --job-name reweight_binder
+```
+
+Here `--data-prefix binder_lsf_` maps each lattice size to
+`runs/binder_lsf_L<L>/manifest.csv`. The output prefix defaults to the same value.
+The submitter derives the array range from the number of lattice sizes and scans,
+prints every array-index mapping, and invokes `bsub` in command mode. Use `--dry-run`
+to inspect the complete submission command. Replace the default scans by repeating,
+for example:
+
+```bash
+--scan=-1.05,-2.85,-2.65,mZ1.05
+```
+
+The scan syntax is `Z,M2_START,M2_END,LABEL`. Analysis controls such as
+`--bootstrap`, `--num`, `--block-size`, and `--cuda-batch-size`, plus the queue,
+memory, GPU selection, host exclusions, and concurrency, are configurable.
+
 Find all linearly interpolated crossings of the reweighted curve with
 `U4 = 1/3` and `U4 = 0.465`:
 
