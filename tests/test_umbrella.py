@@ -98,6 +98,21 @@ class UmbrellaTests(unittest.TestCase):
             self.assertIn("--min-round-trip-fraction=0.25", worker.stdout)
             self.assertIn("--min-swap-acceptance=0.20000000000000001", worker.stdout)
 
+    def test_lsf_memory_request_is_in_gigabytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_umbrella_bsub.py"),
+                "--L=4", "--point=1,-2", "--eps=.03", "--n-lf=4",
+                "--startup-eps=.02", "--startup-n-lf=4", "--startup-sweeps=4",
+                "--umbrella-windows=5", "--umbrella-max=.4",
+                "--umbrella-kappa=80", "--samples=10", "--mem-gb=24",
+                f"--run-root={directory}", "--run-name=lsf_memory", "--dry-run",
+            ]
+            subprocess.run(command, check=True, text=True, capture_output=True)
+            script = (Path(directory) / "lsf_memory/lsf_job.sh").read_text()
+            self.assertIn('#BSUB -R "rusage[mem=24]"', script)
+            self.assertNotIn("rusage[mem=24000]", script)
+
 
 if __name__ == "__main__":
     unittest.main()
