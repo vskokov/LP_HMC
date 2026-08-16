@@ -1,0 +1,55 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "L=24, 161-window umbrella transport audit",
+    "description": "Code-correctness and effective-transport review of the transferred umbrella_L24_w161 checkpoints.",
+    "generatedAt": "2026-08-16T00:00:00-04:00",
+    "status": "diagnostic",
+    "sources": [
+      {"id": "checkpoints", "label": "Transferred w161 checkpoints", "path": "../../runs/umbrella_L24_w161/"},
+      {"id": "exchange_code", "label": "Replica-exchange implementation", "path": "../../src/replica_exchange.jl"},
+      {"id": "hmc_code", "label": "HMC and umbrella implementation", "path": "../../src/simulation.jl"},
+      {"id": "audit", "label": "Transport audit utility", "path": "../../scripts/audit_umbrella_transport.jl"}
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "status": "partial",
+    "datasets": {
+      "checkpoint_summary": [
+        {"replica": "r0 disordered", "sweeps": 600000, "min_hmc": 0.769937, "median_hmc": 0.776768, "min_swap": 0.386993, "median_swap": 0.455588, "round_trips": 0, "walkers_reached_high_after_low": 2, "median_abs_final_displacement": 27, "max_abs_final_displacement": 157},
+        {"replica": "r1 ordered", "sweeps": 600000, "min_hmc": 0.770398, "median_hmc": 0.776745, "min_swap": 0.388353, "median_swap": 0.455452, "round_trips": 0, "walkers_reached_high_after_low": 2, "median_abs_final_displacement": 32, "max_abs_final_displacement": 133}
+      ],
+      "trajectory_probe": [
+        {"n_lf": 4, "trajectory_length": 0.0927582, "probe_sweeps": 2000, "hmc_acceptance": 0.776768, "swap_acceptance": 0.492250, "continuation_fraction": 0.473122, "msd_lag_1000": 22.6918, "msd_per_lf_step": 5.67295},
+        {"n_lf": 8, "trajectory_length": 0.1855163, "probe_sweeps": 1000, "hmc_acceptance": 0.708056, "swap_acceptance": 0.492213, "continuation_fraction": 0.500604, "msd_lag_1000": 52.2857, "msd_per_lf_step": 6.53571},
+        {"n_lf": 16, "trajectory_length": 0.3710326, "probe_sweeps": 1000, "hmc_acceptance": 0.824186, "swap_acceptance": 0.493588, "continuation_fraction": 0.576529, "msd_lag_1000": 138.6832, "msd_per_lf_step": 8.66770},
+        {"n_lf": 24, "trajectory_length": 0.5565489, "probe_sweeps": 1000, "hmc_acceptance": 0.774317, "swap_acceptance": 0.493525, "continuation_fraction": 0.614926, "msd_lag_1000": 202.9068, "msd_per_lf_step": 8.45445}
+      ],
+      "swap_cadence_probe": [
+        {"swap_every": 1, "continuation_fraction": 0.473122, "msd_lag_1000": 22.6918},
+        {"swap_every": 2, "continuation_fraction": 0.482854, "msd_lag_1000": 18.3606},
+        {"swap_every": 5, "continuation_fraction": 0.510982, "msd_lag_1000": 17.5976}
+      ],
+      "validation_checks": [
+        {"check": "CPU replica-exchange suite", "result": "PASS", "detail": "12/12 tests"},
+        {"check": "Exact umbrella crossed action", "result": "PASS", "detail": "absolute error 2.10e-13"},
+        {"check": "CPU umbrella force finite difference", "result": "PASS", "detail": "absolute error 6.98e-08"},
+        {"check": "A6000 batched umbrella suite", "result": "PASS", "detail": "4/4 tests"},
+        {"check": "A6000 batched Hamiltonian", "result": "PASS", "detail": "maximum error 1.613e-04; tolerance 2e-04"},
+        {"check": "Accepted swaps versus label moves", "result": "PASS", "detail": "78,760 swaps = 157,520 one-edge walker moves / 2"}
+      ],
+      "null_comparison": [
+        {"system": "Observed n_lf=4 continuation", "msd_lag_1000": 22.6918, "round_trips_600k": 0},
+        {"system": "Independent swaps at measured edge rates", "msd_lag_1000": 731.0678, "round_trips_600k": 1588.5}
+      ]
+    },
+    "accessIssues": [
+      {"id": "checkpoint_only", "message": "The transferred folder has checkpoints and a manifest but no per-sweep diagnostics, statistics, logs, or completion markers."},
+      {"id": "short_probe", "message": "Trajectory-length comparisons are short continuation probes from r0 only; validate the finalist on both initial phases before production."},
+      {"id": "non_equilibrium", "message": "Both checkpoints failed the transport gate and are not valid starting points for retained statistics without further discarded thermalization."}
+    ]
+  }
+}
