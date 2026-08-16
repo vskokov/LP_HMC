@@ -276,3 +276,14 @@ function walker_endpoint_coverage(state::ReplicaExchangeState)
     high = (state.walker_stage .== 2) .| (state.round_trips .> 0)
     return low, high
 end
+
+"""Fraction of labeled walkers that completed at least one low-high-low round trip."""
+round_trip_walker_fraction(state::ReplicaExchangeState) =
+    count(>(0), state.round_trips) / length(state.round_trips)
+
+"""Whether minimum sweeps and labeled-walker transport coverage both pass."""
+transport_gate_passed(state::ReplicaExchangeState, minimum_sweeps::Int,
+                      minimum_fraction::Real, minimum_swap::Real=0.0) =
+    state.sweeps >= minimum_sweeps &&
+    round_trip_walker_fraction(state) >= minimum_fraction &&
+    minimum(acceptance_rates(state.swap_accepts, state.swap_attempts)) >= minimum_swap

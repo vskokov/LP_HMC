@@ -2,8 +2,8 @@
 
 using JLD2
 
-length(ARGS) == 11 || error(
-    "usage: validate_umbrella_checkpoint.jl PATH L Z M2 EPS N_LF REPLICAS MIN MAX KAPPA POWER"
+length(ARGS) == 14 || error(
+    "usage: validate_umbrella_checkpoint.jl PATH L Z M2 EPS N_LF REPLICAS MIN MAX KAPPA POWER MIN_SWEEPS MIN_RT_FRACTION MIN_SWAP_ACCEPTANCE"
 )
 
 path = ARGS[1]
@@ -13,13 +13,15 @@ expected = (
     minimum=parse(Float64, ARGS[8]), maximum=parse(Float64, ARGS[9]),
     kappa=parse(Float64, ARGS[10]),
     power=parse(Float64, ARGS[11]),
+    minimum_sweeps=parse(Int, ARGS[12]),
+    minimum_round_trip_fraction=parse(Float64, ARGS[13]),
+    minimum_swap_acceptance=parse(Float64, ARGS[14]),
 )
 close(left, right) = isapprox(Float64(left), Float64(right); rtol=2e-6, atol=2e-7)
 
-jldopen(path, "r") do file
+passed = jldopen(path, "r") do file
     file["schema_version"] == 3 || error("schema mismatch")
     file["sampler"] == "umbrella_exchange" || error("sampler mismatch")
-    file["thermalization_complete"] || error("thermalization incomplete")
     file["L"] == expected.L || error("L mismatch")
     close(file["Z"], expected.Z) || error("Z mismatch")
     close(file["m²"], expected.m2) || error("mass mismatch")
@@ -34,6 +36,19 @@ jldopen(path, "r") do file
     all(close.(centers, expected_centers)) ||
         error("center mismatch")
     all(close.(kappas, fill(expected.kappa, expected.replicas))) || error("kappa mismatch")
+    round_trips = file["round_trips"]
+    fraction = count(>(0), round_trips) / length(round_trips)
+    attempts, accepts = file["swap_attempts"], file["swap_accepts"]
+    swap_rates = [attempts[i] == 0 ? 0.0 : accepts[i] / attempts[i]
+                  for i in eachindex(attempts)]
+    file["sweeps"] >= expected.minimum_sweeps &&
+        fraction >= expected.minimum_round_trip_fraction &&
+        minimum(swap_rates) >= expected.minimum_swap_acceptance
 end
 
-println("valid umbrella checkpoint")
+if passed
+    println("valid complete umbrella checkpoint")
+else
+    println("valid resumable umbrella checkpoint")
+    exit(10)
+end

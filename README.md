@@ -196,6 +196,8 @@ python3 scripts/submit_umbrella_tsp.py \
   --replicas 2 --init-schedule umbrella \
   --umbrella-windows 241 --umbrella-min 0 --umbrella-max 0.4 \
   --umbrella-kappa 160000 --umbrella-power 1.3 \
+  --thermalization-sweeps 120000 --max-thermalization-sweeps 600000 \
+  --min-round-trip-fraction 0.5 --min-swap-acceptance 0.25 \
   --samples 2000 --skip 2 \
   --run-name umbrella_L24
 ```
@@ -208,15 +210,45 @@ with `collect_umbrella_stats.jl`.
 
 The submitters supply A6000-probed defaults when the umbrella flags are omitted:
 
-| L | windows | M² range | κ | power | startup `(ε,n_lf,sweeps)` | thermalization sweeps |
-|---|---:|---:|---:|---:|---:|---:|
-| 24 | 241 | 0–0.4 | 160,000 | 1.3 | (0.002, 25, 1024) | 120,000 |
-| 32 | 369 | 0–0.4 | 380,000 | 1.3 | (0.0015, 37, 2048) | 280,000 |
+| L | windows | M² range | κ | power | startup `(ε,n_lf,sweeps)` | min/max thermalization sweeps | walker / edge gates |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 24 | 241 | 0–0.4 | 160,000 | 1.3 | (0.002, 25, 1024) | 120,000 / 600,000 | 50% / 25% |
+| 32 | 369 | 0–0.4 | 380,000 | 1.3 | (0.0015, 37, 2048) | 280,000 / 1,400,000 | 50% / 25% |
 
-These are pilot defaults, not certified production profiles. The short probes had
+These are fail-closed pilot defaults, not certified production profiles. The short probes had
 minimum/median swap acceptance of 0.41/0.65 (L24) and 0.31/0.64 (L32), with production
 HMC acceptance centered near 0.78 and 0.76 respectively. Full-length runs still need
 to demonstrate round trips and independent-run agreement.
+
+The first sweep count is now a minimum, not an automatic transition to collection.
+After that minimum, thermalization continues in checkpointed blocks until at least
+`--min-round-trip-fraction` of labeled walkers have completed a low→high→low trip
+and every edge meets `--min-swap-acceptance`.
+If the gate is still unmet at `--max-thermalization-sweeps`, the task exits nonzero,
+writes no statistics or completion marker, and leaves a resumable checkpoint. A
+later `--resume` continues its fields, walker labels, round-trip state, acceptance
+counters, and sweep count. Compatible legacy checkpoints that ended at the old fixed
+sweep limit are also treated as resumable when they fail the new transport gate.
+
+Collection resets HMC, swap, walker, round-trip, and trajectory diagnostics after
+the gated thermalization state is loaded. The statistics metadata retains the gated
+thermalization sweep count, total round trips, and walker coverage. Thus production
+diagnostics describe production only. `--resume` reuses an already completed task
+only after its checkpoint passes the current transport gate.
+
+For the completed zero-round-trip L24 checkpoints, continue safely with:
+
+```bash
+python3 scripts/submit_umbrella_tsp.py \
+  --L 24 --point=-0.6,-1.86421 --replicas 2 \
+  --init-schedule umbrella --run-name umbrella_L24 \
+  --max-thermalization-sweeps 600000 \
+  --min-round-trip-fraction 0.5 --min-swap-acceptance 0.25 --resume
+```
+
+Passing this per-task gate is necessary but not sufficient for a scientific result.
+After both independent tasks finish, require stable blockwise WHAM estimates and
+agreement between the independent reconstructions before combining them.
 
 Reconstruct the canonical ensemble and the `M²` free-energy profile with:
 

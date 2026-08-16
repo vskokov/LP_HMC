@@ -100,8 +100,10 @@ def sample_log_denominator(m2_values: np.ndarray, centers: np.ndarray,
 
 def solve_binned_wham(m2_values: np.ndarray, centers: np.ndarray,
                       kappas: np.ndarray, counts: np.ndarray, bins: int,
-                      tolerance: float = 1e-11,
-                      max_iterations: int = 20_000) -> tuple[np.ndarray, np.ndarray, int]:
+                      tolerance: float = 1e-9,
+                      max_iterations: int = 200,
+                      initial_free: np.ndarray | None = None,
+                      ) -> tuple[np.ndarray, np.ndarray, int]:
     edges = np.linspace(float(np.min(m2_values)), float(np.max(m2_values)), bins + 1)
     histogram, _ = np.histogram(m2_values, bins=edges)
     occupied = histogram > 0
@@ -110,23 +112,73 @@ def solve_binned_wham(m2_values: np.ndarray, centers: np.ndarray,
     multiplicities = histogram[occupied].astype(float)
     reduced = 0.5 * kappas[:, None] * (positions[None, :] - centers[:, None]) ** 2
     log_counts = np.log(counts)
-    free = np.zeros(len(counts))
-    for iteration in range(1, max_iterations + 1):
-        denominator = logsumexp(log_counts[:, None] + free[:, None] - reduced, axis=0)
-        updated = -logsumexp(
-            np.log(multiplicities)[None, :] - reduced - denominator[None, :], axis=1
+    total_count = float(np.sum(multiplicities))
+    free = (np.zeros(len(counts)) if initial_free is None
+            else np.asarray(initial_free, dtype=float).copy())
+    if free.shape != counts.shape or not np.all(np.isfinite(free)):
+        raise ValueError("invalid initial binned-WHAM free energies")
+    free -= free[0]
+
+    def objective(candidate: np.ndarray) -> float:
+        log_denominator = logsumexp(
+            log_counts[:, None] + candidate[:, None] - reduced, axis=0
         )
-        updated -= updated[0]
-        if np.max(np.abs(updated - free)) < tolerance:
-            free = updated
+        return float(
+            (np.dot(multiplicities, log_denominator)
+             - np.dot(counts, candidate)) / total_count
+        )
+
+    # The usual self-consistent WHAM iteration behaves diffusively along a long
+    # window ladder: with O(10^2) windows it can have excellent local overlap yet
+    # still need far more than 20,000 iterations.  Minimize the equivalent convex
+    # log-likelihood with a gauge-fixed, damped Newton solve instead.  The Hessian
+    # is the summed categorical covariance of the window responsibilities.
+    for iteration in range(1, max_iterations + 1):
+        logits = log_counts[:, None] + free[:, None] - reduced
+        denominator = logsumexp(logits, axis=0)
+        responsibilities = np.exp(logits - denominator[None, :])
+        expected = responsibilities @ multiplicities
+        gradient = (expected - counts) / total_count
+        if np.max(np.abs(gradient[1:])) < tolerance:
             break
-        free = 0.5 * free + 0.5 * updated
+
+        weighted = responsibilities * multiplicities[None, :]
+        hessian = (
+            np.diag(expected) - weighted @ responsibilities.T
+        ) / total_count
+        gauge_hessian = hessian[1:, 1:]
+        try:
+            step = np.linalg.solve(
+                gauge_hessian + 1e-12 * np.eye(len(counts) - 1),
+                -gradient[1:],
+            )
+        except np.linalg.LinAlgError:
+            step = np.linalg.lstsq(
+                gauge_hessian, -gradient[1:], rcond=1e-12
+            )[0]
+        slope = float(np.dot(gradient[1:], step))
+        if not np.isfinite(slope) or slope >= 0.0:
+            step = -gradient[1:]
+            slope = -float(np.dot(gradient[1:], gradient[1:]))
+
+        current_objective = objective(free)
+        scale = 1.0
+        while scale >= 1e-10:
+            candidate = free.copy()
+            candidate[1:] += scale * step
+            if objective(candidate) <= current_objective + 1e-4 * scale * slope:
+                free = candidate
+                break
+            scale *= 0.5
+        else:
+            raise RuntimeError("binned umbrella WHAM line search failed")
     else:
-        raise RuntimeError("binned umbrella WHAM did not converge; overlap is inadequate")
+        raise RuntimeError("binned umbrella WHAM did not converge within the iteration limit")
     return free, sample_log_denominator(m2_values, centers, kappas, counts, free), iteration
 
 
-def estimate(arrays: dict[str, np.ndarray], bins: int = 0) -> dict[str, object]:
+def estimate(arrays: dict[str, np.ndarray], bins: int = 0,
+             initial_free: np.ndarray | None = None) -> dict[str, object]:
     slots = arrays["slot"].astype(int)
     order = np.argsort(slots, kind="stable")
     slots = slots[order]
@@ -143,7 +195,8 @@ def estimate(arrays: dict[str, np.ndarray], bins: int = 0) -> dict[str, object]:
     counts = np.bincount(slots)[1:].astype(float)
     if bins > 0:
         free, denominator, iterations = solve_binned_wham(
-            m2_values, centers, kappas, counts, bins
+            m2_values, centers, kappas, counts, bins,
+            initial_free=initial_free,
         )
     else:
         reduced = 0.5 * kappas[:, None] * (m2_values[None, :] - centers[:, None]) ** 2
@@ -192,6 +245,9 @@ def block_bootstrap(metadata: dict[str, str], arrays: dict[str, np.ndarray], dra
     blocks_needed = math.ceil(samples / block_size)
     rng = np.random.default_rng(seed)
     estimates = []
+    initial_free = None
+    if bins > 0:
+        initial_free = np.asarray(estimate(arrays, bins)["free_energies"])
     # Rows are emitted time-major, one row per slot. Resample synchronized time
     # blocks so exchange-induced correlations between windows are retained.
     row_grid = np.arange(samples * replicas).reshape(samples, replicas)
@@ -200,7 +256,7 @@ def block_bootstrap(metadata: dict[str, str], arrays: dict[str, np.ndarray], dra
         times = np.concatenate([np.arange(start, start + block_size) for start in chosen])[:samples]
         indices = row_grid[times].reshape(-1)
         sample_arrays = {key: values[indices] for key, values in arrays.items()}
-        result = estimate(sample_arrays, bins)
+        result = estimate(sample_arrays, bins, initial_free=initial_free)
         estimates.append((result["mean_M2"], result["binder"]))
     values = np.asarray(estimates)
     return {

@@ -1,0 +1,152 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "L=24 umbrella-exchange completion check",
+    "description": "Technical validation of two completed L=24 M²-umbrella replicas at Z=-0.6 and m²=-1.86421.",
+    "generatedAt": "2026-08-15T23:45:00Z",
+    "filters": [],
+    "cards": [],
+    "charts": [
+      {
+        "id": "quarter_m2",
+        "title": "Quarter-run canonical mean M² estimates",
+        "subtitle": "Four consecutive 500-sample blocks per independent replica; stable equilibrated runs should fluctuate around a shared level.",
+        "type": "line",
+        "dataset": "quarter_estimates",
+        "sourceId": "umbrella_run",
+        "encodings": {
+          "x": {"field": "quarter", "type": "ordinal", "label": "Collection quarter"},
+          "y": {"field": "mean_M2", "type": "quantitative", "label": "Canonical mean M²"},
+          "color": {"field": "replica", "type": "nominal", "label": "Replica"},
+          "tooltip": [
+            {"field": "binder", "type": "quantitative", "label": "Binder U"},
+            {"field": "ess", "type": "quantitative", "label": "WHAM ESS"}
+          ]
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "replica_summary",
+        "title": "Completed-replica validation summary",
+        "subtitle": "Final diagnostics and 512-bin WHAM point estimates over all 2,000 samples per window.",
+        "dataset": "replica_summary",
+        "sourceId": "umbrella_run",
+        "defaultSort": {"field": "replica", "direction": "asc"},
+        "columns": [
+          {"field": "replica", "label": "Replica", "format": "string"},
+          {"field": "mean_M2", "label": "Canonical mean M²", "format": "number"},
+          {"field": "binder", "label": "Binder U", "format": "number"},
+          {"field": "wham_ess", "label": "WHAM ESS", "format": "number"},
+          {"field": "min_hmc", "label": "Minimum HMC acceptance", "format": "percent"},
+          {"field": "min_swap", "label": "Minimum swap acceptance", "format": "percent"},
+          {"field": "neighbor_overlap_min", "label": "Minimum histogram overlap", "format": "percent"},
+          {"field": "round_trips", "label": "Round trips", "format": "number"},
+          {"field": "median_walker_span", "label": "Median collection span (edges)", "format": "number"}
+        ]
+      }
+    ],
+    "sources": [
+      {"id": "umbrella_run", "label": "Completed L=24 umbrella run files", "path": "runs/umbrella_L24/"}
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "body": "# L=24 umbrella-exchange completion check"},
+      {
+        "id": "summary",
+        "type": "markdown",
+        "sourceId": "umbrella_run",
+        "body": "## Verdict: complete files, failed equilibration\n\nBoth replicas are structurally complete and have healthy local dynamics, but they are not safe for physics results. They record zero full walker round trips and reconstruct mutually incompatible canonical ensembles: replica 0 gives mean M²=0.01158 and Binder U=-0.520, while replica 1 gives mean M²=0.19601 and U=0.623. Quarter-run estimates drift strongly within each replica. Do not average these runs or use either one in a production Binder analysis."
+      },
+      {
+        "id": "objective",
+        "type": "markdown",
+        "body": "## Objective and run definition\n\nThe check asks whether the two independent L=24, Z=-0.6, m²=-1.86421 M²-umbrella replicas are complete, internally valid, locally connected across all 241 windows, and globally equilibrated enough to support WHAM reconstruction. Each run used κ=160,000, centers from 0 to 0.4 with power 1.3, 120,000 production sweeps, and 2,000 retained samples per window at skip 2."
+      },
+      {
+        "id": "quality",
+        "type": "markdown",
+        "sourceId": "umbrella_run",
+        "body": "## File and row-level quality pass\n\nEach statistics file contains exactly 482,000 rows: 241 windows times 2,000 sampled trajectories. Every sampled trajectory contains every slot and every walker exactly once. The trajectory-slot grain is unique; all numeric values are finite; and M²=M×M and M⁴=(M²)² hold to about 2×10⁻¹⁶. Both completion markers and checkpoints are present."
+      },
+      {
+        "id": "local_dynamics",
+        "type": "markdown",
+        "sourceId": "umbrella_run",
+        "body": "## Local dynamics and window overlap pass\n\nFinal minimum HMC acceptance is 76.95% and 77.00%; final minimum adjacent-swap acceptance is 56.20% and 55.85%. Empirical neighboring M²-histogram overlap is strong on every edge: minima are 66.35% and 62.70%, with medians 79.83% and 79.28%. The 241-window geometry is therefore not suffering from a local overlap bottleneck."
+      },
+      {"id": "summary_table", "type": "table", "tableId": "replica_summary"},
+      {
+        "id": "global_transport",
+        "type": "markdown",
+        "sourceId": "umbrella_run",
+        "body": "## Global transport fails\n\nNeither replica completed a low→high→low walker round trip after 124,000 total trajectories. At checkpoint, only 38 and 39 of 241 walkers had even entered the tracker state that follows a visit to the low endpoint. During the 4,000-trajectory collection interval, the median walker covered only 23 of 240 ladder edges; the maximum spans were 55 and 60 edges, and no walker visited both endpoints. High adjacent acceptance therefore did not translate into end-to-end diffusion on this ladder length."
+      },
+      {
+        "id": "estimator_disagreement",
+        "type": "markdown",
+        "sourceId": "umbrella_run",
+        "body": "## Independent and within-run estimates disagree\n\nThe two full-run WHAM point estimates differ by 0.1844 in mean M² and 1.143 in Binder U. Even against nominal 10-draw synchronized block-bootstrap errors, those gaps are 9.2 and 5.2 combined standard errors. Replica 0 remains primarily in the low-M² basin, though its final quarter moves upward. Replica 1 remains in the high-M² basin and also drifts upward across the last two quarters. This start/history dependence is direct evidence that the samples do not represent one stationary canonical distribution."
+      },
+      {"id": "quarter_chart", "type": "chart", "chartId": "quarter_m2"},
+      {
+        "id": "method",
+        "type": "markdown",
+        "body": "## Reconstruction method and analyzer correction\n\nThe canonical estimates use 512-bin WHAM with synchronized time ordering preserved. The original fixed-point implementation hit its 20,000-iteration limit and reported inadequate overlap. Direct overlap checks disproved that message. The solver was replaced with the equivalent gauge-fixed convex likelihood solved by damped Newton steps; the full replicas then converged in 18 and 21 iterations. This correction changes only the analysis algorithm, not the generated samples."
+      },
+      {
+        "id": "uncertainty",
+        "type": "markdown",
+        "body": "## Uncertainty and limitations\n\nOrdinary within-run bootstrap errors are not a sufficient uncertainty summary here because the chains are nonstationary and lack global transport. Ten-draw synchronized block bootstraps give mean-M² errors of 0.00178 and 0.01991 and Binder errors of 0.2198 and 0.0183 for replicas 0 and 1. Ten draws are only diagnostic, but the independent-run gaps already exceed the combined nominal errors by 9.2σ and 5.2σ. The quarter-run drift independently confirms nonstationarity, so no combined estimate is reported."
+      },
+      {
+        "id": "recommendations",
+        "type": "markdown",
+        "body": "## Recommended action\n\n1. Preserve these files as a failed equilibration diagnostic; do not merge or publish their observables.\n2. Continue from checkpoints only as additional thermalization, with statistics discarded until multiple walkers complete round trips and the round-trip count grows approximately linearly.\n3. Given the observed median collection span, budget substantially more than 120,000 sweeps; use a gate rather than a fixed sweep count. Require repeated round trips in both independent replicas plus agreement of blockwise WHAM observables before collection.\n4. To reduce wall time, consider fewer windows while retaining a conservative minimum adjacent acceptance around 25%–35%; the present 56% minimum indicates oversampling of the ladder coordinate. Test the reduced ladder on short transport pilots before committing new production runs."
+      },
+      {
+        "id": "questions",
+        "type": "markdown",
+        "body": "## Further questions\n\nHow does round-trip time scale when the L=24 window count is reduced while keeping every edge above the acceptance floor? Does resuming these exact checkpoints eventually erase the two-basin disagreement, or does the M² coordinate leave an additional slow mode unresolved?"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-15T23:45:00Z",
+    "status": "partial",
+    "datasets": {
+      "replica_summary": [
+        {"replica": "r0", "mean_M2": 0.01158118845, "binder": -0.5203980623, "wham_ess": 55090.1, "min_hmc": 0.7695242, "min_swap": 0.562, "neighbor_overlap_min": 0.6635, "round_trips": 0, "median_walker_span": 23},
+        {"replica": "r1", "mean_M2": 0.1960062389, "binder": 0.6226067869, "wham_ess": 235034.8, "min_hmc": 0.7700323, "min_swap": 0.5585323, "neighbor_overlap_min": 0.627, "round_trips": 0, "median_walker_span": 23}
+      ],
+      "quarter_estimates": [
+        {"replica": "r0", "quarter": 1, "mean_M2": 0.0092777691, "binder": -0.2685067, "ess": 12669.0},
+        {"replica": "r0", "quarter": 2, "mean_M2": 0.0080008254, "binder": -0.1218303, "ess": 12245.1},
+        {"replica": "r0", "quarter": 3, "mean_M2": 0.0112129041, "binder": -0.8453697, "ess": 12401.3},
+        {"replica": "r0", "quarter": 4, "mean_M2": 0.0422040437, "binder": 0.0146239, "ess": 33517.6},
+        {"replica": "r1", "quarter": 1, "mean_M2": 0.1468361804, "binder": 0.5921993, "ess": 54226.9},
+        {"replica": "r1", "quarter": 2, "mean_M2": 0.1012426986, "binder": 0.5800611, "ess": 30494.3},
+        {"replica": "r1", "quarter": 3, "mean_M2": 0.2150505304, "binder": 0.6450096, "ess": 46120.2},
+        {"replica": "r1", "quarter": 4, "mean_M2": 0.2541788911, "binder": 0.6611716, "ess": 20044.7}
+      ]
+    },
+    "accessIssues": [
+      {"id": "non_equilibrium", "dataset": "replica_summary", "message": "The completed files are nonstationary and lack end-to-end transport; canonical estimates are diagnostic only."}
+    ]
+  },
+  "sources": [
+    {
+      "id": "umbrella_run",
+      "label": "Completed L=24 umbrella run files",
+      "path": "runs/umbrella_L24/",
+      "query": {
+        "language": "sql",
+        "engine": "portable SQL",
+        "description": "Reviewed final diagnostics, WHAM reconstructions, integrity checks, checkpoint transport state, and quarter-run estimates for replicas r0 and r1.",
+        "sql": "SELECT * FROM (VALUES ('r0',0.01158118845,-0.5203980623,55090.1,0.7695242,0.5620,0.6635,0,23),('r1',0.1960062389,0.6226067869,235034.8,0.7700323,0.5585323,0.6270,0,23)) AS t(replica,mean_M2,binder,wham_ess,min_hmc,min_swap,neighbor_overlap_min,round_trips,median_walker_span)"
+      }
+    }
+  ]
+}

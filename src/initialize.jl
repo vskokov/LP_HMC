@@ -53,9 +53,21 @@ function parse_commandline()
             arg_type = Int
             default = 0
         "--production-sweeps"
-            help = "explicit production thermalization sweeps (0 uses the script default)"
+            help = "minimum production thermalization sweeps (0 uses the script default)"
             arg_type = Int
             default = 0
+        "--max-production-sweeps"
+            help = "maximum production thermalization sweeps before failing the transport gate (0 equals the minimum)"
+            arg_type = Int
+            default = 0
+        "--min-round-trip-fraction"
+            help = "minimum fraction of walkers completing a round trip before collection"
+            arg_type = Float64
+            default = 0.0
+        "--min-swap-acceptance"
+            help = "minimum cumulative acceptance on every exchange edge before collection"
+            arg_type = Float64
+            default = 0.0
         "--checkpoint"
             help = "explicit output checkpoint path (thermalize.jl)"
             arg_type = String
@@ -160,6 +172,9 @@ const startup_ε = FloatType(parsed_args["startup-eps"])
 const startup_n_lf = parsed_args["startup-n-lf"]
 const startup_sweeps = parsed_args["startup-sweeps"]
 const production_sweeps = parsed_args["production-sweeps"]
+const max_production_sweeps = parsed_args["max-production-sweeps"]
+const min_round_trip_fraction = parsed_args["min-round-trip-fraction"]
+const min_swap_acceptance = parsed_args["min-swap-acceptance"]
 const tempering_replicas = parsed_args["tempering-replicas"]
 const mass_span = FloatType(parsed_args["mass-span"])
 const umbrella_replicas = parsed_args["umbrella-replicas"]
@@ -177,6 +192,11 @@ isfinite(phase_threshold) && phase_threshold > 0 ||
     error("--phase-threshold must be finite and positive")
 startup_sweeps >= 0 || error("--startup-sweeps must be non-negative")
 production_sweeps >= 0 || error("--production-sweeps must be non-negative")
+max_production_sweeps >= 0 || error("--max-production-sweeps must be non-negative")
+0.0 <= min_round_trip_fraction <= 1.0 ||
+    error("--min-round-trip-fraction must be between 0 and 1")
+0.0 <= min_swap_acceptance <= 1.0 ||
+    error("--min-swap-acceptance must be between 0 and 1")
 umbrella_replicas >= 0 || error("--umbrella-replicas must be non-negative")
 if umbrella_replicas > 0
     tempering_replicas == 1 ||

@@ -10,7 +10,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from analyze_umbrella import estimate, read_umbrella  # noqa: E402
+from analyze_umbrella import estimate, read_umbrella, solve_binned_wham  # noqa: E402
 
 
 class UmbrellaTests(unittest.TestCase):
@@ -31,6 +31,24 @@ class UmbrellaTests(unittest.TestCase):
         self.assertAlmostEqual(result["mean_M2"], expected_m2)
         self.assertAlmostEqual(result["binder"], expected_binder)
         self.assertTrue(all(abs(value) < 1e-12 for value in result["free_energies"]))
+
+    def test_binned_wham_converges_for_long_overlapping_ladder(self):
+        rng = np.random.default_rng(1729)
+        replicas = 81
+        samples = 80
+        centers = np.linspace(0.0, 0.4, replicas)
+        kappas = np.full(replicas, 20_000.0)
+        counts = np.full(replicas, samples, dtype=float)
+        values = np.concatenate([
+            rng.normal(center, 1.0 / np.sqrt(kappa), samples)
+            for center, kappa in zip(centers, kappas)
+        ])
+        free, denominator, iterations = solve_binned_wham(
+            values, centers, kappas, counts, bins=256
+        )
+        self.assertTrue(np.all(np.isfinite(free)))
+        self.assertTrue(np.all(np.isfinite(denominator)))
+        self.assertLess(iterations, 100)
 
     def test_schema_reader_rejects_missing_window(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -53,6 +71,9 @@ class UmbrellaTests(unittest.TestCase):
                 sys.executable, str(ROOT / "scripts/submit_umbrella_tsp.py"),
                 "--L=4", "--point=1,-2", "--eps=.03", "--n-lf=4",
                 "--startup-eps=.02", "--startup-n-lf=4", "--startup-sweeps=4",
+                "--max-thermalization-sweeps=128",
+                "--min-round-trip-fraction=.25",
+                "--min-swap-acceptance=.2",
                 "--umbrella-windows=5", "--umbrella-max=.4",
                 "--umbrella-kappa=80", "--samples=10",
                 f"--run-root={directory}", "--run-name=test", "--dry-run",
@@ -63,6 +84,19 @@ class UmbrellaTests(unittest.TestCase):
             self.assertEqual(row["umbrella_replicas"], "5")
             self.assertEqual(float(row["umbrella_max"]), 0.4)
             self.assertEqual(float(row["umbrella_kappa"]), 80.0)
+            self.assertEqual(int(row["production_sweeps"]), 64)
+            self.assertEqual(int(row["max_production_sweeps"]), 128)
+            self.assertEqual(float(row["min_round_trip_fraction"]), 0.25)
+            self.assertEqual(float(row["min_swap_acceptance"]), 0.2)
+            worker = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/run_umbrella_task.py"),
+                 "--manifest", str(Path(directory) / "test/manifest.csv"),
+                 "--task-id=0", "--dry-run"],
+                check=True, text=True, capture_output=True,
+            )
+            self.assertIn("--max-production-sweeps=128", worker.stdout)
+            self.assertIn("--min-round-trip-fraction=0.25", worker.stdout)
+            self.assertIn("--min-swap-acceptance=0.20000000000000001", worker.stdout)
 
 
 if __name__ == "__main__":

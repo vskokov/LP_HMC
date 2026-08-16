@@ -21,6 +21,18 @@ function load_umbrella_state(path)
             sweeps=file["sweeps"], hmc_attempts=file["hmc_attempts"],
             hmc_accepts=file["hmc_accepts"], swap_attempts=file["swap_attempts"],
             swap_accepts=file["swap_accepts"], init_phase=file["init_phase"],
+            thermalization_sweeps=file["sweeps"],
+            thermalization_round_trips=sum(file["round_trips"]),
+            thermalization_round_trip_fraction=
+                count(>(0), file["round_trips"]) / length(file["round_trips"]),
+            thermalization_min_swap_acceptance=minimum([
+                file["swap_attempts"][i] == 0 ? 0.0 :
+                file["swap_accepts"][i] / file["swap_attempts"][i]
+                for i in eachindex(file["swap_attempts"])
+            ]),
+            transport_gate_passed=(haskey(file, "transport_gate_passed") ?
+                                   file["transport_gate_passed"] :
+                                   file["thermalization_complete"]),
         )
     end
     nrep = size(payload.fields, 4)
@@ -40,10 +52,17 @@ function load_umbrella_state(path)
         hmc_attempts=payload.hmc_attempts, hmc_accepts=payload.hmc_accepts,
         swap_attempts=payload.swap_attempts, swap_accepts=payload.swap_accepts,
     )
-    return state, String(payload.init_phase)
+    summary = (
+        sweeps=Int(payload.thermalization_sweeps),
+        round_trips=Int(payload.thermalization_round_trips),
+        round_trip_fraction=Float64(payload.thermalization_round_trip_fraction),
+        min_swap_acceptance=Float64(payload.thermalization_min_swap_acceptance),
+        gate_passed=Bool(payload.transport_gate_passed),
+    )
+    return state, String(payload.init_phase), summary
 end
 
-function write_metadata(io, state, samples, skip, warmup)
+function write_metadata(io, state, samples, skip, warmup, thermalization)
     println(io, "# schema_version=3")
     println(io, "# sampler=umbrella_exchange")
     println(io, "# L=$(L)")
@@ -59,6 +78,11 @@ function write_metadata(io, state, samples, skip, warmup)
     println(io, "# samples_per_window=$(samples)")
     println(io, "# skip=$(skip)")
     println(io, "# warmup=$(warmup)")
+    println(io, "# thermalization_sweeps=$(thermalization.sweeps)")
+    println(io, "# thermalization_round_trips=$(thermalization.round_trips)")
+    println(io, "# thermalization_round_trip_fraction=$(thermalization.round_trip_fraction)")
+    println(io, "# thermalization_min_swap_acceptance=$(thermalization.min_swap_acceptance)")
+    println(io, "# transport_gate_passed=$(thermalization.gate_passed)")
     println(io, "# umbrella_replicas=$(length(state.fields))")
     println(io, "# umbrella_coordinate=M2")
     println(io, "# umbrella_centers=$(join(Float64.(state.umbrella_centers), ";"))")
@@ -81,8 +105,13 @@ function main()
     isnothing(output_arg) && error("--output is required")
     isnothing(diagnostics_arg) && error("--diagnostics is required")
 
-    state, checkpoint_phase = load_umbrella_state(init_arg)
+    state, checkpoint_phase, thermalization = load_umbrella_state(init_arg)
     checkpoint_phase == init_phase || error("checkpoint initial phase mismatch")
+    minimum_sweeps = production_sweeps > 0 ? production_sweeps : L^3
+    (thermalization.gate_passed && thermalization.sweeps >= minimum_sweeps &&
+     thermalization.round_trip_fraction >= min_round_trip_fraction &&
+     thermalization.min_swap_acceptance >= min_swap_acceptance) ||
+        error("checkpoint transport gate did not pass")
     expected_centers, expected_kappas = umbrella_ladder(
         umbrella_min, umbrella_max, umbrella_replicas, umbrella_kappa;
         power=umbrella_power
@@ -92,6 +121,7 @@ function main()
     all(==(m²), state.masses) || error("checkpoint mass mismatch")
     warmup > 0 && replica_exchange!(state, warmup, Z, ε, n_lf;
                                     swap_every=swap_every)
+    reset_replica_diagnostics!(state)
 
     output = abspath(output_arg)
     diagnostics = abspath(diagnostics_arg)
@@ -101,7 +131,7 @@ function main()
     try
         open(output_tmp, "w") do stats_io
             open(diagnostics_tmp, "w") do diag_io
-                write_metadata(stats_io, state, samples, skip, warmup)
+                write_metadata(stats_io, state, samples, skip, warmup, thermalization)
                 println(stats_io,
                     "trajectory,slot,walker_id,umbrella_center,umbrella_kappa,M,M2,M4,Q,G,acceptance_rate")
                 println(diag_io,

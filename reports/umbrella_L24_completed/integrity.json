@@ -1,0 +1,52 @@
+{
+  "r0": {
+    "rows": 482000,
+    "trajectories": 2000,
+    "trajectory_min": 120002,
+    "trajectory_max": 124000,
+    "slots": 241,
+    "walkers": 241,
+    "grain_unique": true,
+    "permutation_each_sample": true,
+    "nonfinite_numeric": 0,
+    "M2_identity_max_abs": 1.6653345369377348e-16,
+    "M4_identity_max_abs": 1.1102230246251565e-16,
+    "acceptance_range": [
+      0.0,
+      1.0
+    ],
+    "walkers_visit_low_slot": 15,
+    "walkers_visit_high_slot": 23,
+    "walkers_visit_both_endpoints_during_collection": 0,
+    "walker_span_median": 23.0,
+    "walker_span_p90": 35.0,
+    "walker_span_max": 55,
+    "slot_mean_abs_center_error_max": 0.012042508711153144,
+    "slot_mean_abs_center_error_median": 0.00033888071411863896
+  },
+  "r1": {
+    "rows": 482000,
+    "trajectories": 2000,
+    "trajectory_min": 120002,
+    "trajectory_max": 124000,
+    "slots": 241,
+    "walkers": 241,
+    "grain_unique": true,
+    "permutation_each_sample": true,
+    "nonfinite_numeric": 0,
+    "M2_identity_max_abs": 1.6653345369377348e-16,
+    "M4_identity_max_abs": 1.1102230246251565e-16,
+    "acceptance_range": [
+      0.0,
+      1.0
+    ],
+    "walkers_visit_low_slot": 18,
+    "walkers_visit_high_slot": 20,
+    "walkers_visit_both_endpoints_during_collection": 0,
+    "walker_span_median": 23.0,
+    "walker_span_p90": 34.0,
+    "walker_span_max": 60,
+    "slot_mean_abs_center_error_max": 0.011864939027868504,
+    "slot_mean_abs_center_error_median": 0.0002744807935221409
+  }
+}

@@ -25,13 +25,17 @@ UMBRELLA_PROFILES = {
         "windows": 241, "minimum": 0.0, "maximum": 0.4,
         "kappa": 160_000.0, "power": 1.3,
         "startup_eps": 0.002, "startup_n_lf": 25, "startup_sweeps": 1024,
-        "production_sweeps": 120_000,
+        "production_sweeps": 120_000, "max_production_sweeps": 600_000,
+        "min_round_trip_fraction": 0.5,
+        "min_swap_acceptance": 0.25,
     },
     32: {
         "windows": 369, "minimum": 0.0, "maximum": 0.4,
         "kappa": 380_000.0, "power": 1.3,
         "startup_eps": 0.0015, "startup_n_lf": 37, "startup_sweeps": 2048,
-        "production_sweeps": 280_000,
+        "production_sweeps": 280_000, "max_production_sweeps": 1_400_000,
+        "min_round_trip_fraction": 0.5,
+        "min_swap_acceptance": 0.25,
     },
 }
 
@@ -49,6 +53,9 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--startup-n-lf", type=int)
     parser.add_argument("--startup-sweeps", type=int)
     parser.add_argument("--thermalization-sweeps", type=int)
+    parser.add_argument("--max-thermalization-sweeps", type=int)
+    parser.add_argument("--min-round-trip-fraction", type=float)
+    parser.add_argument("--min-swap-acceptance", type=float)
     parser.add_argument("--samples", type=int, default=2000)
     parser.add_argument("--skip", type=int, default=2)
     parser.add_argument("--warmup", type=int, default=0)
@@ -94,6 +101,12 @@ def validate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
         parser.error("invalid sweep/sample counts")
     if args.thermalization_sweeps < 1:
         parser.error("--thermalization-sweeps must be positive")
+    if args.max_thermalization_sweeps < args.thermalization_sweeps:
+        parser.error("--max-thermalization-sweeps must be at least the minimum")
+    if not 0.0 <= args.min_round_trip_fraction <= 1.0:
+        parser.error("--min-round-trip-fraction must be between 0 and 1")
+    if not 0.0 <= args.min_swap_acceptance <= 1.0:
+        parser.error("--min-swap-acceptance must be between 0 and 1")
     if args.replicas < 1 or args.umbrella_windows < 2 or args.swap_every < 1:
         parser.error("replicas/swap cadence invalid")
     if not (math.isfinite(args.umbrella_min) and args.umbrella_min >= 0 and
@@ -126,6 +139,9 @@ def build_rows(args: argparse.Namespace, points: list[tuple[float, float]], run_
                 "startup_n_lf": args.startup_n_lf,
                 "startup_sweeps": args.startup_sweeps,
                 "production_sweeps": args.thermalization_sweeps,
+                "max_production_sweeps": args.max_thermalization_sweeps,
+                "min_round_trip_fraction": f"{args.min_round_trip_fraction:.17g}",
+                "min_swap_acceptance": f"{args.min_swap_acceptance:.17g}",
                 "samples": args.samples, "skip": args.skip, "warmup": args.warmup,
                 "umbrella_replicas": args.umbrella_windows,
                 "umbrella_min": f"{args.umbrella_min:.17g}",
@@ -195,6 +211,15 @@ def main(scheduler_default: str | None = None) -> int:
         args.thermalization_sweeps = profile.get(
             "production_sweeps", max(args.L**3, 2 * args.umbrella_windows**2)
         )
+    if args.max_thermalization_sweeps is None:
+        args.max_thermalization_sweeps = max(
+            args.thermalization_sweeps,
+            profile.get("max_production_sweeps", 5 * args.thermalization_sweeps),
+        )
+    if args.min_round_trip_fraction is None:
+        args.min_round_trip_fraction = profile.get("min_round_trip_fraction", 0.5)
+    if args.min_swap_acceptance is None:
+        args.min_swap_acceptance = profile.get("min_swap_acceptance", 0.25)
     try:
         args.eps, args.n_lf, _ = resolve_hmc_parameters(args.L, args.eps, args.n_lf)
         if (args.startup_eps is None and args.startup_n_lf is None and
@@ -229,7 +254,10 @@ def main(scheduler_default: str | None = None) -> int:
           f"{args.umbrella_max:g}] kappa={args.umbrella_kappa:g} "
           f"power={args.umbrella_power:g}")
     print(f"thermalization: startup={args.startup_sweeps} "
-          f"production={args.thermalization_sweeps} sweeps")
+          f"minimum={args.thermalization_sweeps} maximum="
+          f"{args.max_thermalization_sweeps} sweeps "
+          f"round_trip_fraction={args.min_round_trip_fraction:g} "
+          f"min_swap_acceptance={args.min_swap_acceptance:g}")
 
     if args.scheduler == "tsp":
         commands = [worker_command(args, manifest, str(index)) for index in range(len(rows))]

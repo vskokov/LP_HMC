@@ -32,6 +32,11 @@ def invoke(command: list[str], launcher: str, dry_run: bool) -> None:
 
 
 def common_arguments(row: dict[str, str]) -> list[str]:
+    maximum_sweeps = row.get(
+        "max_production_sweeps", str(5 * int(row["production_sweeps"]))
+    )
+    minimum_fraction = row.get("min_round_trip_fraction", "0.5")
+    minimum_swap = row.get("min_swap_acceptance", "0.25")
     return [
         row["L"], f"--Z={row['Z']}", f"--mass={row['m2']}",
         f"--eps={row['eps']}", f"--n_lf={row['n_lf']}",
@@ -39,6 +44,9 @@ def common_arguments(row: dict[str, str]) -> list[str]:
         f"--startup-n-lf={row['startup_n_lf']}",
         f"--startup-sweeps={row['startup_sweeps']}",
         f"--production-sweeps={row['production_sweeps']}",
+        f"--max-production-sweeps={maximum_sweeps}",
+        f"--min-round-trip-fraction={minimum_fraction}",
+        f"--min-swap-acceptance={minimum_swap}",
         f"--umbrella-replicas={row['umbrella_replicas']}",
         f"--umbrella-min={row['umbrella_min']}",
         f"--umbrella-max={row['umbrella_max']}",
@@ -67,6 +75,9 @@ def main() -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
 
     checkpoint_valid = False
+    checkpoint_resumable = False
+    minimum_fraction = row.get("min_round_trip_fraction", "0.5")
+    minimum_swap = row.get("min_swap_acceptance", "0.25")
     if args.resume and checkpoint.is_file() and not args.dry_run:
         validation = [
             args.julia, f"--project={REPO_ROOT}",
@@ -75,15 +86,28 @@ def main() -> int:
             row["n_lf"], row["umbrella_replicas"], row["umbrella_min"],
             row["umbrella_max"], row["umbrella_kappa"],
             row["umbrella_power"],
+            row["production_sweeps"], minimum_fraction, minimum_swap,
         ]
-        checkpoint_valid = subprocess.run(validation, cwd=REPO_ROOT).returncode == 0
+        validation_result = subprocess.run(validation, cwd=REPO_ROOT)
+        checkpoint_valid = validation_result.returncode == 0
+        checkpoint_resumable = validation_result.returncode == 10
+        if not checkpoint_valid and not checkpoint_resumable:
+            raise subprocess.CalledProcessError(validation_result.returncode, validation)
+
+    if (args.resume and checkpoint_valid and marker.is_file() and
+            statistics.is_file() and diagnostics.is_file()):
+        print(f"reusing completed gated task {args.task_id}", flush=True)
+        return 0
 
     if not checkpoint_valid:
-        invoke([
+        thermalize = [
             args.julia, f"--project={REPO_ROOT}",
             str(REPO_ROOT / "scripts/thermalize_umbrella.jl"),
             *common_arguments(row), f"--checkpoint={checkpoint}",
-        ], args.launcher, args.dry_run)
+        ]
+        if checkpoint_resumable:
+            thermalize.append(f"--init={checkpoint}")
+        invoke(thermalize, args.launcher, args.dry_run)
 
     invoke([
         args.julia, f"--project={REPO_ROOT}",

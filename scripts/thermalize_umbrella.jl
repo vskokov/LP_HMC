@@ -20,6 +20,11 @@ function save_umbrella_checkpoint(path, state; thermalization_complete=false)
         startup_epsilon=Float64(startup_ε), startup_n_lf=startup_n_lf,
         startup_sweeps=startup_sweeps,
         requested_production_sweeps=production_sweeps,
+        maximum_production_sweeps=max_production_sweeps,
+        minimum_round_trip_fraction=Float64(min_round_trip_fraction),
+        minimum_swap_acceptance=Float64(min_swap_acceptance),
+        round_trip_walker_fraction=round_trip_walker_fraction(state),
+        transport_gate_passed=thermalization_complete,
         thermalization_complete=thermalization_complete,
         fp64=(FloatType == Float64), cpu=cpu,
         replica_execution=(is_batched(state) ? "batched" : "serial"),
@@ -38,6 +43,41 @@ function save_umbrella_checkpoint(path, state; thermalization_complete=false)
     mv(temporary, path; force=true)
 end
 
+function load_umbrella_state(path)
+    payload = jldopen(path, "r") do file
+        file["schema_version"] == 3 || error("umbrella checkpoint schema must be 3")
+        file["sampler"] == "umbrella_exchange" ||
+            error("checkpoint is not umbrella exchange")
+        (
+            fields=file["replica_fields"], masses=file["masses"],
+            centers=file["umbrella_centers"], kappas=file["umbrella_kappas"],
+            walker_ids=file["walker_ids"], walker_stage=file["walker_stage"],
+            round_trips=file["round_trips"], swap_phase=file["swap_phase"],
+            sweeps=file["sweeps"], hmc_attempts=file["hmc_attempts"],
+            hmc_accepts=file["hmc_accepts"], swap_attempts=file["swap_attempts"],
+            swap_accepts=file["swap_accepts"], init_phase=file["init_phase"],
+        )
+    end
+    nrep = size(payload.fields, 4)
+    fields, batched, field_batch = if cpu
+        ([ArrayType(payload.fields[:, :, :, slot]) for slot in 1:nrep], false, nothing)
+    else
+        batch = ArrayType(payload.fields)
+        ([@view batch[:, :, :, slot] for slot in 1:nrep], true, batch)
+    end
+    state = ReplicaExchangeState(
+        fields, FloatType.(payload.masses);
+        umbrella_centers=FloatType.(payload.centers),
+        umbrella_kappas=FloatType.(payload.kappas), batched=batched,
+        field_batch=field_batch, walker_ids=payload.walker_ids,
+        walker_stage=payload.walker_stage, round_trips=payload.round_trips,
+        swap_phase=payload.swap_phase, sweeps=payload.sweeps,
+        hmc_attempts=payload.hmc_attempts, hmc_accepts=payload.hmc_accepts,
+        swap_attempts=payload.swap_attempts, swap_accepts=payload.swap_accepts,
+    )
+    return state, String(payload.init_phase)
+end
+
 function main()
     umbrella_replicas >= 2 ||
         error("thermalize_umbrella.jl requires --umbrella-replicas >= 2")
@@ -48,18 +88,28 @@ function main()
         power=umbrella_power
     )
     masses = fill(m², umbrella_replicas)
-    initial_fields = [
-        initial_field(L, m², init_phase; umbrella_center=center) for center in centers
-    ]
-    state = if cpu
-        ReplicaExchangeState(initial_fields, masses;
-                             umbrella_centers=centers, umbrella_kappas=kappas)
+    resuming = !isnothing(init_arg)
+    state = if resuming
+        loaded, checkpoint_phase = load_umbrella_state(init_arg)
+        checkpoint_phase == init_phase || error("checkpoint initial phase mismatch")
+        loaded.umbrella_centers == centers || error("umbrella centers mismatch")
+        loaded.umbrella_kappas == kappas || error("umbrella kappas mismatch")
+        all(==(m²), loaded.masses) || error("checkpoint mass mismatch")
+        loaded
     else
-        field_batch = cat(initial_fields...; dims=4)
-        fields = [@view field_batch[:, :, :, slot] for slot in eachindex(centers)]
-        ReplicaExchangeState(fields, masses; umbrella_centers=centers,
-                             umbrella_kappas=kappas, batched=true,
-                             field_batch=field_batch)
+        initial_fields = [
+            initial_field(L, m², init_phase; umbrella_center=center) for center in centers
+        ]
+        if cpu
+            ReplicaExchangeState(initial_fields, masses;
+                                 umbrella_centers=centers, umbrella_kappas=kappas)
+        else
+            field_batch = cat(initial_fields...; dims=4)
+            fields = [@view field_batch[:, :, :, slot] for slot in eachindex(centers)]
+            ReplicaExchangeState(fields, masses; umbrella_centers=centers,
+                                 umbrella_kappas=kappas, batched=true,
+                                 field_batch=field_batch)
+        end
     end
     checkpoint = abspath(parsed_args["checkpoint"])
     mkpath(dirname(checkpoint))
@@ -68,7 +118,7 @@ function main()
             first(centers), last(centers), umbrella_kappa)
     flush(stdout)
 
-    if startup_sweeps > 0
+    if !resuming && startup_sweeps > 0
         completed = 0
         while completed < startup_sweeps
             block = min(L^2, startup_sweeps - completed)
@@ -85,24 +135,47 @@ function main()
         reset_replica_diagnostics!(state)
     end
 
-    total_production_sweeps = production_sweeps > 0 ? production_sweeps : L^3
-    checkpoint_block = max(L^2, cld(total_production_sweeps, L))
-    completed = 0
-    while completed < total_production_sweeps
-        block = min(checkpoint_block, total_production_sweeps - completed)
+    minimum_sweeps = production_sweeps > 0 ? production_sweeps : L^3
+    maximum_sweeps = max_production_sweeps > 0 ? max_production_sweeps : minimum_sweeps
+    maximum_sweeps >= minimum_sweeps ||
+        error("--max-production-sweeps must be at least --production-sweeps")
+    checkpoint_block = max(L^2, cld(maximum_sweeps, L))
+    passed = transport_gate_passed(
+        state, minimum_sweeps, min_round_trip_fraction, min_swap_acceptance
+    )
+    @printf("transport_gate minimum_sweeps=%d maximum_sweeps=%d minimum_round_trip_fraction=%.3f minimum_swap_acceptance=%.3f resumed=%s initial_sweeps=%d\n",
+            minimum_sweeps, maximum_sweeps, min_round_trip_fraction,
+            min_swap_acceptance,
+            string(resuming), state.sweeps)
+    flush(stdout)
+    while !passed && state.sweeps < maximum_sweeps
+        block = min(checkpoint_block, maximum_sweeps - state.sweeps)
         replica_exchange!(state, block, Z, ε, n_lf; swap_every=swap_every)
-        completed += block
-        @printf("stage=production sweeps=%d hmc_acceptance=%s swap_acceptance=%s round_trips=%d\n",
+        passed = transport_gate_passed(
+            state, minimum_sweeps, min_round_trip_fraction, min_swap_acceptance
+        )
+        @printf("stage=production sweeps=%d hmc_acceptance=%s swap_acceptance=%s round_trips=%d round_trip_walker_fraction=%.3f gate=%s\n",
                 state.sweeps,
                 join(round.(acceptance_rates(state.hmc_accepts,
                                              state.hmc_attempts); digits=3), ","),
                 join(round.(acceptance_rates(state.swap_accepts,
                                              state.swap_attempts); digits=3), ","),
-                sum(state.round_trips))
+                sum(state.round_trips), round_trip_walker_fraction(state),
+                passed ? "passed" : "pending")
         flush(stdout)
         save_umbrella_checkpoint(checkpoint, state;
-                                 thermalization_complete=(completed == total_production_sweeps))
+                                 thermalization_complete=passed)
     end
+    save_umbrella_checkpoint(checkpoint, state; thermalization_complete=passed)
+    passed || error(
+        "umbrella transport gate failed at $(state.sweeps) sweeps: " *
+        "round-trip walker fraction=$(round_trip_walker_fraction(state)) " *
+        "(required $(min_round_trip_fraction)), minimum swap acceptance=" *
+        "$(minimum(acceptance_rates(state.swap_accepts, state.swap_attempts))) " *
+        "(required $(min_swap_acceptance)); checkpoint is resumable"
+    )
+    @printf("transport_gate=passed sweeps=%d round_trips=%d round_trip_walker_fraction=%.6f\n",
+            state.sweeps, sum(state.round_trips), round_trip_walker_fraction(state))
     @printf("checkpoint=%s\n", checkpoint)
 end
 
