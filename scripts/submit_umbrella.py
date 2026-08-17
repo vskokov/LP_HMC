@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import re
 import shlex
@@ -13,6 +14,7 @@ from pathlib import Path
 
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
 from submit_reweight_array import parse_point, read_points_csv, write_manifest
+from umbrella_profiles import load_profile
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +59,15 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--min-round-trip-fraction", type=float)
     parser.add_argument("--min-swap-acceptance", type=float)
     parser.add_argument("--samples", type=int, default=2000)
+    parser.add_argument("--min-samples", type=int)
+    parser.add_argument("--max-samples", type=int)
+    parser.add_argument("--sample-increment", type=int, default=5000)
+    parser.add_argument("--binder-mcse-target", type=float, default=0.005)
+    parser.add_argument("--collection-shard-samples", type=int, default=500)
+    parser.add_argument("--runtime-budget-minutes", type=float, default=95.0)
+    parser.add_argument("--self-resubmit", action="store_true")
+    parser.add_argument("--max-continuations", type=int, default=20)
+    parser.add_argument("--profile-file", type=Path)
     parser.add_argument("--skip", type=int, default=2)
     parser.add_argument("--warmup", type=int, default=0)
     parser.add_argument("--replicas", type=int, default=1,
@@ -85,7 +96,7 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--gpu-resource", default="gpu:1")
     parser.add_argument("--sbatch", default="sbatch")
     parser.add_argument("--queue", default="short_gpu")
-    parser.add_argument("--walltime", default="240")
+    parser.add_argument("--walltime", default="120")
     parser.add_argument("--mem-gb", type=float, default=24.0,
                         help="LSF memory requested per host, in GB")
     parser.add_argument("--gpu-select", default="h200 || h100 || l40s",
@@ -105,6 +116,18 @@ def validate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
         parser.error("epsilon and umbrella kappa values must be finite and positive")
     if args.startup_sweeps < 0 or args.samples < 1 or args.skip < 1 or args.warmup < 0:
         parser.error("invalid sweep/sample counts")
+    if (args.min_samples < 1 or args.max_samples < args.min_samples or
+            args.sample_increment < 1 or args.collection_shard_samples < 1):
+        parser.error("invalid adaptive collection sample counts")
+    if (args.adaptive_collection and
+            (args.min_samples % args.collection_shard_samples or args.max_samples % args.collection_shard_samples)):
+        parser.error("minimum and maximum samples must be multiples of shard samples")
+    if not (math.isfinite(args.binder_mcse_target) and args.binder_mcse_target > 0):
+        parser.error("--binder-mcse-target must be finite and positive")
+    if not (math.isfinite(args.runtime_budget_minutes) and args.runtime_budget_minutes > 0):
+        parser.error("--runtime-budget-minutes must be finite and positive")
+    if args.max_continuations < 1:
+        parser.error("--max-continuations must be positive")
     if args.thermalization_sweeps < 1:
         parser.error("--thermalization-sweeps must be positive")
     if args.max_thermalization_sweeps < args.thermalization_sweeps:
@@ -154,6 +177,13 @@ def build_rows(args: argparse.Namespace, points: list[tuple[float, float]], run_
                 "min_round_trip_fraction": f"{args.min_round_trip_fraction:.17g}",
                 "min_swap_acceptance": f"{args.min_swap_acceptance:.17g}",
                 "samples": args.samples, "skip": args.skip, "warmup": args.warmup,
+                "min_samples": args.min_samples, "max_samples": args.max_samples,
+                "sample_increment": args.sample_increment,
+                "binder_mcse_target": f"{args.binder_mcse_target:.17g}",
+                "collection_shard_samples": args.collection_shard_samples,
+                "adaptive_collection": str(args.adaptive_collection).lower(),
+                "runtime_budget_minutes": f"{args.runtime_budget_minutes:.17g}",
+                "max_continuations": args.max_continuations,
                 "umbrella_replicas": args.umbrella_windows,
                 "umbrella_min": f"{args.umbrella_min:.17g}",
                 "umbrella_max": f"{args.umbrella_max:.17g}",
@@ -164,6 +194,9 @@ def build_rows(args: argparse.Namespace, points: list[tuple[float, float]], run_
                 "stats_path": str((run_dir / "statistics" / f"{base}.csv").resolve()),
                 "diagnostics_path": str((run_dir / "diagnostics" / f"{base}.csv").resolve()),
                 "completion_marker": str((run_dir / "complete" / f"{base}.complete").resolve()),
+                "progress_marker": str((run_dir / "progress" / f"{base}.json").resolve()),
+                "lock_path": str((run_dir / "locks" / f"{base}.lock").resolve()),
+                "shard_dir": str((run_dir / "shards" / base).resolve()),
             })
             task += 1
     return rows
@@ -171,7 +204,8 @@ def build_rows(args: argparse.Namespace, points: list[tuple[float, float]], run_
 
 def worker_command(args, manifest: Path, task_token: str) -> str:
     values = [args.python, str(WORKER), "--manifest", str(manifest.resolve()),
-              "--task-id", task_token, "--julia", args.julia]
+              "--task-id", task_token, "--julia", args.julia,
+              "--runtime-budget-minutes", str(args.runtime_budget_minutes)]
     if args.resume:
         values.append("--resume")
     return " ".join(task_token if value == task_token else shlex.quote(value) for value in values)
@@ -195,6 +229,15 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
     selections = [f"({args.gpu_select})"]
     selections.extend(f"hname!='{host}'" for host in args.exclude_host)
     resource = f"select[{' && '.join(selections)}] rusage[mem={args.mem_gb:g}]"
+    continuation_command = " ".join([
+        shlex.quote(args.bsub), f'-J "{args.run_name}_t${{TASK_ID}}"',
+        f"-q {shlex.quote(args.queue)}", f"-W {shlex.quote(args.walltime)}",
+        f"-n {args.cpus}", f"-R {shlex.quote(resource)}", f"-gpu {shlex.quote(args.gpu_request)}",
+        f"-o {shlex.quote(str(logs.resolve()) + '/%J.out')}",
+        f"-e {shlex.quote(str(logs.resolve()) + '/%J.err')}",
+        '-env "all,UMBRELLA_TASK_ID=${TASK_ID},UMBRELLA_CONTINUATION=${NEXT}"',
+        'bash "$0"',
+    ])
     lines = ["#!/usr/bin/env bash", f'#BSUB -J "{args.run_name}[1-{count}]"',
              f"#BSUB -q {args.queue}", f"#BSUB -W {args.walltime}",
              f"#BSUB -n {args.cpus}", f'#BSUB -R "{resource}"',
@@ -202,20 +245,63 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
              f"#BSUB -o {logs.resolve()}/%J_%I.out",
              f"#BSUB -e {logs.resolve()}/%J_%I.err", "", "set -euo pipefail",
              "export PYTHONUNBUFFERED=1",
-             'TASK_ID="$((LSB_JOBINDEX - 1))"',
-             worker_command(args, manifest, '"${TASK_ID}"'), ""]
+             'TASK_ID="${UMBRELLA_TASK_ID:-$((LSB_JOBINDEX - 1))}"',
+             'ALLOCATION="${UMBRELLA_CONTINUATION:-0}"',
+             "set +e",
+             worker_command(args, manifest, '"${TASK_ID}"') + ' --resume --allocation "${ALLOCATION}"',
+             "RC=$?", "set -e",
+             'if [[ "$RC" -eq 75 ]]; then']
+    if args.self_resubmit:
+        marker = (manifest.parent / "self_resubmit_preflight.ok").resolve()
+        lines.extend([
+            f'  if [[ ! -f {shlex.quote(str(marker))} ]]; then echo "missing self-resubmit preflight marker" >&2; exit 2; fi',
+            '  NEXT="$((ALLOCATION + 1))"',
+            '  if ' + " ".join([
+                shlex.quote(args.python), shlex.quote(str(REPO_ROOT / "scripts/umbrella_campaign.py")),
+                "claim-continuation", "--manifest", shlex.quote(str(manifest.resolve())),
+                '--task-id "${TASK_ID}"', '--allocation "${ALLOCATION}"']) + '; then',
+            f'    {continuation_command}',
+            '    exit 0',
+            '  fi',
+            '  echo "continuation chain exhausted or already claimed" >&2',
+            '  exit 2',
+        ])
+    else:
+        lines.append('  exit 75')
+    lines.extend(['fi', 'exit "$RC"', ""])
     return "\n".join(lines)
 
 
 def main(scheduler_default: str | None = None) -> int:
     parser = parser_for(scheduler_default)
     args = parser.parse_args()
+    requested_adaptive = args.min_samples is not None or args.max_samples is not None
+    if requested_adaptive and not args.dry_run and args.profile_file is None:
+        parser.error("adaptive production submission requires --profile-file with validated evidence")
     if args.julia is None:
         args.julia = str(LOCAL_JULIA) if args.scheduler == "tsp" and LOCAL_JULIA.is_file() else "julia"
-    profile = UMBRELLA_PROFILES.get(args.L, {
+    selected_profile = load_profile(args.profile_file, args.L) if args.profile_file else None
+    profile = selected_profile or UMBRELLA_PROFILES.get(args.L, {
         "windows": 25, "minimum": 0.0, "maximum": 0.45,
         "kappa": 2500.0, "power": 1.0,
     })
+    if selected_profile:
+        profile = {
+            "windows": selected_profile["umbrella_windows"],
+            "minimum": selected_profile["umbrella_min"],
+            "maximum": selected_profile["umbrella_max"],
+            "kappa": selected_profile["umbrella_kappa"],
+            "power": selected_profile["umbrella_power"],
+            "startup_eps": selected_profile["startup_epsilon"],
+            "startup_n_lf": selected_profile["startup_n_lf"],
+            "startup_sweeps": selected_profile["startup_sweeps"],
+            "production_sweeps": selected_profile["minimum_thermalization_sweeps"],
+            "max_production_sweeps": selected_profile["maximum_thermalization_sweeps"],
+            "min_round_trip_fraction": 0.5,
+            "min_swap_acceptance": selected_profile["transport_gates"]["minimum_edge_swap_acceptance"],
+        }
+        args.eps = selected_profile["epsilon"] if args.eps is None else args.eps
+        args.n_lf = selected_profile["n_lf"] if args.n_lf is None else args.n_lf
     args.umbrella_windows = (profile["windows"] if args.umbrella_windows is None
                              else args.umbrella_windows)
     args.umbrella_min = profile["minimum"] if args.umbrella_min is None else args.umbrella_min
@@ -248,6 +334,11 @@ def main(scheduler_default: str | None = None) -> int:
                                                args.startup_n_lf, args.startup_sweeps)
     except ValueError as error:
         parser.error(str(error))
+    args.adaptive_collection = requested_adaptive
+    args.min_samples = args.samples if args.min_samples is None else args.min_samples
+    args.max_samples = args.samples if args.max_samples is None else args.max_samples
+    if not args.adaptive_collection:
+        args.collection_shard_samples = min(args.collection_shard_samples, args.samples)
     validate(parser, args)
     points = list(args.point)
     for path in args.points_csv:
@@ -258,11 +349,23 @@ def main(scheduler_default: str | None = None) -> int:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", args.run_name):
         parser.error("unsafe run name")
     run_dir = (args.run_root / args.run_name).resolve()
-    for name in ("checkpoints", "statistics", "diagnostics", "complete", "logs"):
+    for name in ("checkpoints", "statistics", "diagnostics", "complete", "progress",
+                 "locks", "shards", "logs"):
         (run_dir / name).mkdir(parents=True, exist_ok=True)
     manifest = run_dir / "manifest.csv"
     rows = build_rows(args, points, run_dir)
     write_manifest(manifest, rows)
+    if args.scheduler == "lsf":
+        submission = {
+            "run_name": args.run_name, "queue": args.queue, "walltime": args.walltime,
+            "cpus": args.cpus, "mem_gb": args.mem_gb, "gpu_select": args.gpu_select,
+            "exclude_host": args.exclude_host, "gpu_request": args.gpu_request,
+            "bsub": args.bsub, "self_resubmit": args.self_resubmit,
+            "max_continuations": args.max_continuations,
+        }
+        (run_dir / "submission.json").write_text(
+            json.dumps(submission, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     print(f"manifest: {manifest}")
     print(f"HMC: eps={args.eps:.11g} n_lf={args.n_lf}")
     print(f"umbrella: windows={args.umbrella_windows} range=[{args.umbrella_min:g},"

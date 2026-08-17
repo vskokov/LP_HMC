@@ -738,3 +738,33 @@ julia --project=. scripts/measure_single.jl 24 \
 julia --project=. scripts/measure_single.jl 24 --mass -2.38587 \
     --init data/thermalized_L_24_id_42.jld2
 ```
+
+# Restartable umbrella production
+
+The all-size umbrella campaign is managed by `scripts/umbrella_campaign.py`.
+It uses 120-minute LSF allocations with a 95-minute compute budget, exclusive
+per-task locks, exit code 75 for checkpointed continuation, atomic collection
+shards, and a maximum of 20 allocations per task.  A normal setup is:
+
+```bash
+python3 scripts/umbrella_campaign.py prepare
+python3 scripts/umbrella_campaign.py preflight \
+  --manifest runs/umbrella_allL_production/L24/manifest.csv
+python3 scripts/umbrella_campaign.py status \
+  --manifest runs/umbrella_allL_production/L24/manifest.csv
+python3 scripts/umbrella_campaign.py repair \
+  --manifest runs/umbrella_allL_production/L24/manifest.csv
+```
+
+`prepare` creates four ladders per size (two ordered and two disordered), the
+per-L manifests, provisional profiles under `configs/umbrella_profiles`, and a
+master `campaign.json`.  Production submission is refused until every selected
+profile is validated and the compute-node child-submit/cancel preflight marker
+exists.  Promote a profile from an evidence JSON report with
+`scripts/validate_umbrella_profile.py`; for L <= 12 that report must also contain
+the two-combined-error canonical agreement check.
+
+L=24 is migrated specially: replicas 0 and 1 reference the validated `w161`,
+`n_lf=48` equilibrium checkpoints read-only, while all new collection shards
+and final outputs live in the new campaign directory.  The earlier 2,000-sample
+files and validation report are never modified.

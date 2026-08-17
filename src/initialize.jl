@@ -89,6 +89,21 @@ function parse_commandline()
         "--diagnostics"
             help = "replica-exchange diagnostics CSV output path"
             arg_type = String
+        "--runtime-seconds"
+            help = "soft compute deadline in seconds (0 disables it)"
+            arg_type = Float64
+            default = 0.0
+        "--task-id"
+            help = "manifest task id used in deterministic block seeds"
+            arg_type = Int
+            default = 0
+        "--block-index"
+            help = "deterministic collection/compute block index"
+            arg_type = Int
+            default = 0
+        "--collection-checkpoint"
+            help = "collection state checkpoint written after a complete shard"
+            arg_type = String
         "--tempering-replicas"
             help = "number of mass-tempering slots (1 disables replica exchange; otherwise odd and >= 3)"
             arg_type = Int
@@ -185,6 +200,9 @@ const umbrella_power = FloatType(parsed_args["umbrella-power"])
 const swap_every = parsed_args["swap-every"]
 const init_phase = parsed_args["init-phase"]
 const phase_threshold = Float64(parsed_args["phase-threshold"])
+const runtime_seconds = Float64(parsed_args["runtime-seconds"])
+const task_id = parsed_args["task-id"]
+const block_index = parsed_args["block-index"]
 
 init_phase in ("hot", "disordered", "ordered", "umbrella") ||
     error("--init-phase must be hot, disordered, ordered, or umbrella")

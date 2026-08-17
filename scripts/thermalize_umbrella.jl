@@ -7,7 +7,8 @@ using Printf
 
 include("../src/modelA.jl")
 
-function save_umbrella_checkpoint(path, state; thermalization_complete=false)
+function save_umbrella_checkpoint(path, state; thermalization_complete=false,
+                                  startup_completed=startup_sweeps)
     temporary = path * ".tmp"
     host_fields = is_batched(state) ? Array(state.batch) :
                   cat((Array(field) for field in state.fields)...; dims=4)
@@ -19,6 +20,7 @@ function save_umbrella_checkpoint(path, state; thermalization_complete=false)
         epsilon=Float64(ε), n_lf=n_lf, seed=seed,
         startup_epsilon=Float64(startup_ε), startup_n_lf=startup_n_lf,
         startup_sweeps=startup_sweeps,
+        startup_completed=startup_completed,
         requested_production_sweeps=production_sweeps,
         maximum_production_sweeps=max_production_sweeps,
         minimum_round_trip_fraction=Float64(min_round_trip_fraction),
@@ -56,6 +58,8 @@ function load_umbrella_state(path)
             sweeps=file["sweeps"], hmc_attempts=file["hmc_attempts"],
             hmc_accepts=file["hmc_accepts"], swap_attempts=file["swap_attempts"],
             swap_accepts=file["swap_accepts"], init_phase=file["init_phase"],
+            startup_completed=(haskey(file, "startup_completed") ?
+                               file["startup_completed"] : startup_sweeps),
         )
     end
     nrep = size(payload.fields, 4)
@@ -75,7 +79,13 @@ function load_umbrella_state(path)
         hmc_attempts=payload.hmc_attempts, hmc_accepts=payload.hmc_accepts,
         swap_attempts=payload.swap_attempts, swap_accepts=payload.swap_accepts,
     )
-    return state, String(payload.init_phase)
+    return state, String(payload.init_phase), Int(payload.startup_completed)
+end
+
+function seed_block!(stage::Int, index::Int)
+    value = mod(Int128(seed) * 1_000_003 + Int128(task_id) * 10_007 +
+                Int128(stage) * 1_009 + Int128(index) * 97, 2_147_483_646) + 1
+    Random.seed!(Int(value)); !cpu && CUDA.seed!(Int(value))
 end
 
 function main()
@@ -89,8 +99,10 @@ function main()
     )
     masses = fill(m², umbrella_replicas)
     resuming = !isnothing(init_arg)
+    resumed_startup = 0
     state = if resuming
-        loaded, checkpoint_phase = load_umbrella_state(init_arg)
+        loaded, checkpoint_phase, loaded_startup = load_umbrella_state(init_arg)
+        resumed_startup = loaded_startup
         checkpoint_phase == init_phase || error("checkpoint initial phase mismatch")
         loaded.umbrella_centers == centers || error("umbrella centers mismatch")
         loaded.umbrella_kappas == kappas || error("umbrella kappas mismatch")
@@ -118,10 +130,13 @@ function main()
             first(centers), last(centers), umbrella_kappa)
     flush(stdout)
 
-    if !resuming && startup_sweeps > 0
-        completed = 0
+    started_at = time()
+    timed_out() = runtime_seconds > 0 && time() - started_at >= runtime_seconds
+    if resumed_startup < startup_sweeps
+        completed = resumed_startup
         while completed < startup_sweeps
-            block = min(L^2, startup_sweeps - completed)
+            block = min(1024, startup_sweeps - completed)
+            seed_block!(1, div(completed, 1024))
             replica_exchange!(state, block, Z, startup_ε, startup_n_lf;
                               swap_every=swap_every)
             completed += block
@@ -131,6 +146,14 @@ function main()
                                                  state.hmc_attempts); digits=3), ","),
                     sum(state.round_trips))
             flush(stdout)
+            if completed % 10_000 < block || timed_out()
+                save_umbrella_checkpoint(checkpoint, state;
+                    thermalization_complete=false, startup_completed=completed)
+            end
+            if timed_out()
+                @printf("runtime_budget_exhausted stage=startup completed=%d\n", completed)
+                exit(75)
+            end
         end
         reset_replica_diagnostics!(state)
     end
@@ -139,7 +162,7 @@ function main()
     maximum_sweeps = max_production_sweeps > 0 ? max_production_sweeps : minimum_sweeps
     maximum_sweeps >= minimum_sweeps ||
         error("--max-production-sweeps must be at least --production-sweeps")
-    checkpoint_block = max(L^2, cld(maximum_sweeps, L))
+    checkpoint_block = 1024
     passed = transport_gate_passed(
         state, minimum_sweeps, min_round_trip_fraction, min_swap_acceptance
     )
@@ -150,6 +173,7 @@ function main()
     flush(stdout)
     while !passed && state.sweeps < maximum_sweeps
         block = min(checkpoint_block, maximum_sweeps - state.sweeps)
+        seed_block!(2, div(state.sweeps, checkpoint_block))
         replica_exchange!(state, block, Z, ε, n_lf; swap_every=swap_every)
         passed = transport_gate_passed(
             state, minimum_sweeps, min_round_trip_fraction, min_swap_acceptance
@@ -165,6 +189,10 @@ function main()
         flush(stdout)
         save_umbrella_checkpoint(checkpoint, state;
                                  thermalization_complete=passed)
+        if !passed && timed_out()
+            @printf("runtime_budget_exhausted stage=production sweeps=%d\n", state.sweeps)
+            exit(75)
+        end
     end
     save_umbrella_checkpoint(checkpoint, state; thermalization_complete=passed)
     passed || error(

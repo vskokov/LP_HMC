@@ -39,6 +39,16 @@ def comma_ints(text: str) -> list[int]:
     return values
 
 
+def comma_floats(text: str) -> list[float]:
+    try:
+        values = [float(value.strip()) for value in text.split(",")]
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("expected comma-separated numbers") from error
+    if not values or any(not math.isfinite(value) or value <= 0 for value in values):
+        raise argparse.ArgumentTypeError("trajectory lengths must be finite and positive")
+    return values
+
+
 def local_checkpoint(run_dir: Path, manifest_value: str) -> Path:
     supplied = Path(manifest_value)
     candidate = run_dir / "checkpoints" / supplied.name
@@ -130,11 +140,12 @@ def summarize(manifest: Path, minimum_acceptance: float,
         acceptances = [float(row["hmc_acceptance"]) for row in group]
         per_lf = [float(row["diffusion_per_lf_step"]) for row in group]
         per_second = [float(row["diffusion_per_second"]) for row in group]
+        edge_swaps = [float(row.get("minimum_edge_swap_acceptance", 1.0)) for row in group]
         complete = len(group) == expected_checkpoints
         in_band = (
             complete and all(value > 0 for value in per_lf) and
             all(minimum_acceptance <= value <= maximum_acceptance
-                for value in acceptances)
+                for value in acceptances) and min(edge_swaps) >= 0.25
         )
         rankings.append({
             "n_lf": n_lf,
@@ -145,6 +156,7 @@ def summarize(manifest: Path, minimum_acceptance: float,
             "expected_checkpoints": expected_checkpoints,
             "minimum_hmc_acceptance": min(acceptances),
             "maximum_hmc_acceptance": max(acceptances),
+            "minimum_edge_swap_acceptance": min(edge_swaps),
             "minimum_diffusion_per_lf_step": min(per_lf),
             "geomean_diffusion_per_lf_step": geometric_mean(per_lf),
             "minimum_diffusion_per_second": min(per_second),
@@ -152,7 +164,8 @@ def summarize(manifest: Path, minimum_acceptance: float,
             "eligible": in_band,
         })
     rankings.sort(key=lambda row: (
-        not bool(row["eligible"]), -float(row["minimum_diffusion_per_lf_step"])
+        not bool(row["eligible"]), -float(row["minimum_diffusion_per_second"]),
+        -float(row["minimum_diffusion_per_lf_step"])
     ))
     for rank, row in enumerate(rankings, 1):
         row["rank"] = rank if row["eligible"] else ""
@@ -174,7 +187,7 @@ def summarize(manifest: Path, minimum_acceptance: float,
         best = eligible[0]
         print(
             "recommended_n_lf=" + str(best["n_lf"]) +
-            " criterion=maximize worst-phase diffusion per leapfrog step"
+            " criterion=maximize worst-phase diffusion per second then per leapfrog step"
         )
         return 0 if not missing else 2
     print("recommended_n_lf=none reason=incomplete_or_acceptance_out_of_band")
@@ -195,7 +208,10 @@ def parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     result.add_argument("--run-dir", type=Path, default=REPO_ROOT / "runs/umbrella_L24_w161")
-    result.add_argument("--n-lfs", type=comma_ints, default=comma_ints("4,8,12,16,20,24,32"))
+    result.add_argument("--n-lfs", type=comma_ints,
+                        help="explicit candidates; otherwise derive them from trajectory lengths")
+    result.add_argument("--trajectory-lengths", type=comma_floats,
+                        default=comma_floats("0.25,0.5,0.75,1,1.25,1.5,2"))
     result.add_argument("--probe-sweeps", type=int, default=5000)
     result.add_argument("--lags", type=comma_ints, default=comma_ints("1,10,100,500,1000"))
     result.add_argument("--scheduler", choices=("tsp", "local"), default="tsp")
@@ -246,6 +262,13 @@ def main() -> int:
     }
     if not source_rows or not required.issubset(source_rows[0]):
         raise SystemExit("source manifest is empty or lacks umbrella fields")
+    if args.n_lfs is None:
+        epsilons = {float(row["eps"]) for row in source_rows}
+        if len(epsilons) != 1:
+            raise SystemExit("trajectory-derived n_lf candidates require one epsilon")
+        epsilon = epsilons.pop()
+        args.n_lfs = sorted({max(1, round(length / epsilon))
+                             for length in args.trajectory_lengths})
 
     tasks: list[dict[str, object]] = []
     commands: list[list[str]] = []

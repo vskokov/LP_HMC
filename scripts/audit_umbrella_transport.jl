@@ -132,6 +132,9 @@ function main()
     diffusion_per_lf_step = diffusion_per_sweep / n_lf
     diffusion_per_second = diffusion_per_sweep * probe_sweeps / elapsed
     swap_acceptance = accepted_swaps / swap_attempts
+    edge_attempts = state.swap_attempts .- swap_attempts_before
+    edge_accepts = state.swap_accepts .- swap_accepts_before
+    minimum_edge_swap_acceptance = minimum(acceptance_rates(edge_accepts, edge_attempts))
     hmc_acceptance = hmc_accepts / hmc_attempts
     directed_pairs = continuations + reversals
     continuation_fraction = iszero(directed_pairs) ? NaN : continuations / directed_pairs
@@ -145,6 +148,7 @@ function main()
     println("sweeps_per_second=", probe_sweeps / elapsed)
     println("accepted_swaps=", accepted_swaps)
     println("swap_acceptance=", swap_acceptance)
+    println("minimum_edge_swap_acceptance=", minimum_edge_swap_acceptance)
     println("hmc_acceptance=", hmc_acceptance)
     println("walker_steps=", walker_steps)
     println("direction_continuations=", continuations)
@@ -170,7 +174,7 @@ function main()
             "checkpoint", "init_phase", "L", "Z", "m2", "epsilon", "n_lf",
             "trajectory_length", "swap_every", "umbrella_replicas", "probe_sweeps",
             "elapsed_seconds", "sweeps_per_second", "hmc_acceptance",
-            "swap_acceptance", "accepted_swaps", "walker_steps",
+            "swap_acceptance", "minimum_edge_swap_acceptance", "accepted_swaps", "walker_steps",
             "continuation_fraction", "new_round_trips", "walkers_visiting_low_endpoint",
             "walkers_visiting_high_endpoint", "median_walker_span",
             "maximum_walker_span", "largest_lag", "diffusion_per_sweep",
@@ -180,6 +184,7 @@ function main()
             abspath(checkpoint), payload.init_phase, L, Float64(Z), Float64(m²),
             Float64(ε), n_lf, Float64(ε) * n_lf, swap_every, nrep, probe_sweeps,
             elapsed, probe_sweeps / elapsed, hmc_acceptance, swap_acceptance,
+            minimum_edge_swap_acceptance,
             accepted_swaps, walker_steps, continuation_fraction, new_round_trips,
             low_walkers, high_walkers, median(spans), maximum(spans), largest_lag,
             diffusion_per_sweep, diffusion_per_lf_step, diffusion_per_second,
