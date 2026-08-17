@@ -94,6 +94,12 @@ class UmbrellaTests(unittest.TestCase):
                  "--task-id=0", "--dry-run"],
                 check=True, text=True, capture_output=True,
             )
+            self.assertIn("umbrella_worker event=started", worker.stdout)
+            self.assertIn("task_id=0", worker.stdout)
+            self.assertIn("checkpoint_exists=False", worker.stdout)
+            self.assertIn("umbrella_worker event=thermalization_started", worker.stdout)
+            self.assertIn("umbrella_worker event=collection_started", worker.stdout)
+            self.assertIn("umbrella_worker event=completed", worker.stdout)
             self.assertIn("--max-production-sweeps=128", worker.stdout)
             self.assertIn("--min-round-trip-fraction=0.25", worker.stdout)
             self.assertIn("--min-swap-acceptance=0.20000000000000001", worker.stdout)
@@ -106,12 +112,17 @@ class UmbrellaTests(unittest.TestCase):
                 "--startup-eps=.02", "--startup-n-lf=4", "--startup-sweeps=4",
                 "--umbrella-windows=5", "--umbrella-max=.4",
                 "--umbrella-kappa=80", "--samples=10", "--mem-gb=24",
+                "--exclude-host=gpu31",
                 f"--run-root={directory}", "--run-name=lsf_memory", "--dry-run",
             ]
             subprocess.run(command, check=True, text=True, capture_output=True)
             script = (Path(directory) / "lsf_memory/lsf_job.sh").read_text()
-            self.assertIn('#BSUB -R "rusage[mem=24]"', script)
+            self.assertIn(
+                '#BSUB -R "select[(h200 || h100 || l40s) && hname!=\'gpu31\'] '
+                'rusage[mem=24]"', script,
+            )
             self.assertNotIn("rusage[mem=24000]", script)
+            self.assertIn("export PYTHONUNBUFFERED=1", script)
 
 
 if __name__ == "__main__":

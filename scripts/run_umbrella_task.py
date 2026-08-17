@@ -5,13 +5,22 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime
 import json
+import os
 import shlex
+import socket
 import subprocess
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def log_event(event: str, **fields: object) -> None:
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    details = " ".join(f"{key}={value}" for key, value in fields.items())
+    print(f"umbrella_worker event={event} time={timestamp} {details}".rstrip(), flush=True)
 
 
 def load_row(path: Path, task_id: int) -> dict[str, str]:
@@ -73,12 +82,18 @@ def main() -> int:
     marker = Path(row["completion_marker"])
     for path in (checkpoint, statistics, diagnostics, marker):
         path.parent.mkdir(parents=True, exist_ok=True)
+    log_event(
+        "started", task_id=args.task_id, host=socket.gethostname(), pid=os.getpid(),
+        phase=row["init_phase"], n_lf=row["n_lf"], resume=args.resume,
+        checkpoint=checkpoint, checkpoint_exists=checkpoint.is_file(),
+    )
 
     checkpoint_valid = False
     checkpoint_resumable = False
     minimum_fraction = row.get("min_round_trip_fraction", "0.5")
     minimum_swap = row.get("min_swap_acceptance", "0.25")
     if args.resume and checkpoint.is_file() and not args.dry_run:
+        log_event("checkpoint_validation_started", task_id=args.task_id)
         validation = [
             args.julia, f"--project={REPO_ROOT}",
             str(REPO_ROOT / "scripts/validate_umbrella_checkpoint.jl"),
@@ -88,18 +103,28 @@ def main() -> int:
             row["umbrella_power"],
             row["production_sweeps"], minimum_fraction, minimum_swap,
         ]
+        print(shlex.join(validation), flush=True)
         validation_result = subprocess.run(validation, cwd=REPO_ROOT)
         checkpoint_valid = validation_result.returncode == 0
         checkpoint_resumable = validation_result.returncode == 10
+        log_event(
+            "checkpoint_validation_finished", task_id=args.task_id,
+            returncode=validation_result.returncode, valid=checkpoint_valid,
+            resumable=checkpoint_resumable,
+        )
         if not checkpoint_valid and not checkpoint_resumable:
             raise subprocess.CalledProcessError(validation_result.returncode, validation)
 
     if (args.resume and checkpoint_valid and marker.is_file() and
             statistics.is_file() and diagnostics.is_file()):
-        print(f"reusing completed gated task {args.task_id}", flush=True)
+        log_event("reusing_completed_task", task_id=args.task_id)
         return 0
 
     if not checkpoint_valid:
+        log_event(
+            "thermalization_started", task_id=args.task_id,
+            resumed_from_checkpoint=checkpoint_resumable,
+        )
         thermalize = [
             args.julia, f"--project={REPO_ROOT}",
             str(REPO_ROOT / "scripts/thermalize_umbrella.jl"),
@@ -108,7 +133,9 @@ def main() -> int:
         if checkpoint_resumable:
             thermalize.append(f"--init={checkpoint}")
         invoke(thermalize, args.launcher, args.dry_run)
+        log_event("thermalization_finished", task_id=args.task_id)
 
+    log_event("collection_started", task_id=args.task_id)
     invoke([
         args.julia, f"--project={REPO_ROOT}",
         str(REPO_ROOT / "scripts/collect_umbrella_stats.jl"),
@@ -117,10 +144,12 @@ def main() -> int:
         f"--warmup={row['warmup']}", f"--output={statistics}",
         f"--diagnostics={diagnostics}",
     ], args.launcher, args.dry_run)
+    log_event("collection_finished", task_id=args.task_id)
 
     if not args.dry_run:
         marker.write_text(json.dumps({"task_id": args.task_id, "complete": True}) + "\n",
                           encoding="utf-8")
+    log_event("completed", task_id=args.task_id, marker=marker)
     return 0
 
 

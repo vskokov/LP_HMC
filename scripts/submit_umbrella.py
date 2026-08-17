@@ -88,6 +88,10 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--walltime", default="240")
     parser.add_argument("--mem-gb", type=float, default=24.0,
                         help="LSF memory requested per host, in GB")
+    parser.add_argument("--gpu-select", default="h200 || h100 || l40s",
+                        help="LSF select expression for eligible GPU families")
+    parser.add_argument("--exclude-host", action="append", default=[],
+                        help="LSF host to exclude; repeat for multiple hosts")
     parser.add_argument("--gpu-request", default="num=1:mode=shared:mps=no")
     parser.add_argument("--bsub", default="bsub")
     return parser
@@ -122,6 +126,9 @@ def validate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
         parser.error("--cpus must be positive")
     if not math.isfinite(args.mem_gb) or args.mem_gb <= 0:
         parser.error("--mem-gb must be finite and positive")
+    for host in args.exclude_host:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", host):
+            parser.error(f"unsafe excluded host name: {host!r}")
 
 
 def build_rows(args: argparse.Namespace, points: list[tuple[float, float]], run_dir: Path):
@@ -185,12 +192,16 @@ def slurm_script(args, manifest: Path, count: int, logs: Path) -> str:
 
 
 def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
+    selections = [f"({args.gpu_select})"]
+    selections.extend(f"hname!='{host}'" for host in args.exclude_host)
+    resource = f"select[{' && '.join(selections)}] rusage[mem={args.mem_gb:g}]"
     lines = ["#!/usr/bin/env bash", f'#BSUB -J "{args.run_name}[1-{count}]"',
              f"#BSUB -q {args.queue}", f"#BSUB -W {args.walltime}",
-             f"#BSUB -n {args.cpus}", f'#BSUB -R "rusage[mem={args.mem_gb:g}]"',
+             f"#BSUB -n {args.cpus}", f'#BSUB -R "{resource}"',
              f'#BSUB -gpu "{args.gpu_request}"',
              f"#BSUB -o {logs.resolve()}/%J_%I.out",
              f"#BSUB -e {logs.resolve()}/%J_%I.err", "", "set -euo pipefail",
+             "export PYTHONUNBUFFERED=1",
              'TASK_ID="$((LSB_JOBINDEX - 1))"',
              worker_command(args, manifest, '"${TASK_ID}"'), ""]
     return "\n".join(lines)
