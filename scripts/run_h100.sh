@@ -7,6 +7,7 @@
 #BSUB -o tmp/out.%J
 #BSUB -e tmp/err.%J
 source /usr/share/Modules/init/bash
-export PATH=/usr/local/usrapps/tmschaef/jkott/julia-1.10.3/bin:$PATH
-export LD_LIBRARY_PATH=;
-module load cuda/12.3
+module load cuda/13.2
+module load julia/1.12.6
+export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"
+export LD_LIBRARY_PATH=

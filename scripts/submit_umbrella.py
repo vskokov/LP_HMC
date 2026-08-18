@@ -13,7 +13,14 @@ import subprocess
 from pathlib import Path
 
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
-from lsf_defaults import resolved_exclude_hosts
+from lsf_defaults import (
+    DEFAULT_CUDA_MODULE,
+    DEFAULT_JULIA_DEPOT_PATH,
+    DEFAULT_JULIA_MODULE,
+    DEFAULT_MODULE_INIT,
+    lsf_environment_shell_lines,
+    resolved_exclude_hosts,
+)
 from reweight_manifest import parse_point, read_points_csv, write_manifest
 from umbrella_profiles import load_profile
 
@@ -102,6 +109,13 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
                         help="LSF host to exclude; repeat to replace the default gpu31 list")
     parser.add_argument("--gpu-request", default="num=1:mode=shared:mps=no")
     parser.add_argument("--bsub", default="bsub")
+    cluster = parser.add_argument_group("cluster environment (LSF)")
+    cluster.add_argument("--module-init", default=DEFAULT_MODULE_INIT)
+    cluster.add_argument("--cuda-module", default=DEFAULT_CUDA_MODULE)
+    cluster.add_argument("--julia-module", default=DEFAULT_JULIA_MODULE)
+    cluster.add_argument("--julia-depot", default=DEFAULT_JULIA_DEPOT_PATH)
+    cluster.add_argument("--module", action="append", default=[],
+                         help="extra environment modules to load after Julia/CUDA")
     return parser
 
 
@@ -228,6 +242,15 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
              f"#BSUB -o {logs.resolve()}/%J_%I.out",
              f"#BSUB -e {logs.resolve()}/%J_%I.err", "", "set -euo pipefail",
              "export PYTHONUNBUFFERED=1",
+             *lsf_environment_shell_lines(
+                 module_init=args.module_init,
+                 cuda_module=args.cuda_module,
+                 julia_module=args.julia_module,
+                 julia_depot_path=args.julia_depot,
+                 extra_modules=args.module,
+             ),
+             'echo "julia=$(command -v julia)"',
+             "julia --version",
              'TASK_ID="${UMBRELLA_TASK_ID:-$((LSB_JOBINDEX - 1))}"',
              'ALLOCATION="${UMBRELLA_CONTINUATION:-0}"',
              "set +e",

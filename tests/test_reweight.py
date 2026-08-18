@@ -455,16 +455,12 @@ class ReweightTests(unittest.TestCase):
             self.assertIn('#BSUB -J "lsf-test[1-4]%2"', script)
             self.assertIn('#BSUB -q short_gpu', script)
             self.assertIn("hname!='gpu16' && hname!='gpu33'", script)
-            self.assertIn("module load cuda/12.3", script)
-            self.assertNotIn("module load julia", script)
+            self.assertIn("module load cuda/13.2", script)
+            self.assertIn("module load julia/1.12.6", script)
+            self.assertNotIn("juliaup", script)
             self.assertIn(
-                "export PATH=/rsstu/users/v/vskokov/gluon/juliaup/bin:", script
-            )
-            self.assertIn(
-                "export JULIA_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/jd", script
-            )
-            self.assertIn(
-                "export JULIAUP_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/.julia", script
+                'export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"',
+                script,
             )
             self.assertIn('echo "julia=$(command -v julia)"', script)
             self.assertIn("julia --version", script)
@@ -479,7 +475,7 @@ class ReweightTests(unittest.TestCase):
     def test_cuda_runtime_is_pinned_before_lsf_precompilation(self):
         preference = (ROOT / "LocalPreferences.toml").read_text()
         self.assertIn("[CUDA_Runtime_jll]", preference)
-        self.assertIn('version = "12.3"', preference)
+        self.assertIn('version = "13.2"', preference)
 
     def test_tempering_summary_reports_phase_blocks(self):
         with tempfile.TemporaryDirectory() as directory:

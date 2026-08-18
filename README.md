@@ -436,21 +436,19 @@ python3 scripts/submit_reweight_bsub.py \
 ```
 
 By default this uses queue `short_gpu`, requests an H200, H100, or L40S, excludes
-`gpu16` and `gpu33`, loads `cuda/12.3`, sets `JULIA_DEPOT_PATH` to
-`/rsstu/users/v/vskokov/gluon/jd`, sets the Juliaup depot to
-`/rsstu/users/v/vskokov/gluon/.julia`, and prepends the private Juliaup launcher at
-`/rsstu/users/v/vskokov/gluon/juliaup/bin` to `PATH`. The generated
-`runs/<run-name>/lsf_array_job.sh` maps `LSB_JOBINDEX=1...N` to manifest task IDs
-`0...N-1`. Remove `--dry-run` to pipe that script to `bsub`; use `--resume` with
-the identical arguments to validate and reuse completed work. All site settings
-have command-line overrides, and repeating `--exclude-host` replaces the default
-host exclusion list.
+`gpu16` and `gpu33`, loads `cuda/13.2` and `julia/1.12.6`, and sets
+`JULIA_DEPOT_PATH` to `/usr/local/usrapps/$GROUP/$USER/julia_depot` (the module
+depot is read-only on Hazel). The generated `runs/<run-name>/lsf_array_job.sh`
+maps `LSB_JOBINDEX=1...N` to manifest task IDs `0...N-1`. Remove `--dry-run` to
+pipe that script to `bsub`; use `--resume` with the identical arguments to
+validate and reuse completed work. All site settings have command-line overrides,
+and repeating `--exclude-host` replaces the default host exclusion list.
 
-`LocalPreferences.toml` pins CUDA.jl's artifact runtime to CUDA 12.3. This is
-required when the Julia environment was precompiled on a GPU-less login node. Each
-LSF element runs a short `CUDA.functional(true)`/`CUDA.versioninfo()` preflight and
-prints the resolved Julia version before starting HMC, so runtime-selection and GPU
-failures appear immediately in the job log.
+`LocalPreferences.toml` pins CUDA.jl's artifact runtime to CUDA 13.2. This is
+required when the Julia environment was precompiled on a GPU-less login node.
+Each LSF element runs a short `CUDA.functional(true)`/`CUDA.versioninfo()`
+preflight and prints the resolved Julia version before starting HMC, so
+runtime-selection and GPU failures appear immediately in the job log.
 
 Analyze one or more manifests and overlay all available lattice sizes:
 
@@ -780,7 +778,18 @@ python3 scripts/umbrella_campaign.py prepare --submit
 ```
 
 Tune profiles on the LSF cluster (H200/H100/L40S, 2-hour resumable jobs under
-`runs/umbrella_tuning_lsf/`):
+`runs/umbrella_tuning_lsf/`).  Generated `lsf_job.sh` scripts load `cuda/13.2`,
+`julia/1.12.6`, and set `JULIA_DEPOT_PATH=/usr/local/usrapps/$GROUP/$USER/julia_depot`
+(the module default depot is read-only).  Instantiate that depot once after
+pulling if CUDA preferences changed:
+
+```bash
+module load cuda/13.2 julia/1.12.6
+export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+```
+
+Campaign workflow:
 
 ```bash
 bash scripts/validate_umbrella_profiles_lsf.sh status

@@ -21,7 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from runtime_preflight import run as run_preflight
-from lsf_defaults import resolved_exclude_hosts
+from lsf_defaults import lsf_environment_shell_lines, resolved_exclude_hosts
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -273,6 +273,9 @@ def lsf_probe_script(args, manifest: Path, count: int, logs: Path,
         "",
         "set -euo pipefail",
         "export PYTHONUNBUFFERED=1",
+        *lsf_environment_shell_lines(),
+        'echo "julia=$(command -v julia)"',
+        "julia --version",
         'PROBE_ID="$((LSB_JOBINDEX - 1))"',
         command,
         "",

@@ -56,12 +56,11 @@ L="${lattice_sizes[$lattice_index]}"
 IFS=',' read -r Z m2_start m2_end label <<< "${scans[$scan_index]}"
 
 source /usr/share/Modules/init/bash
-export JULIA_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/jd
-export JULIAUP_DEPOT_PATH=/rsstu/users/v/vskokov/gluon/.julia
-export PATH=/rsstu/users/v/vskokov/gluon/juliaup/bin:"$PATH"
+module load cuda/13.2
+module load julia/1.12.6
+export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"
 export MPLBACKEND=Agg
 export PYTHONUNBUFFERED=1
-module load cuda/12.3
 
 project_dir="${LS_SUBCWD:-$PWD}"
 cd "$project_dir"

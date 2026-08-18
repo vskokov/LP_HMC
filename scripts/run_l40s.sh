@@ -7,5 +7,6 @@
 #BSUB -o tmp/out.%J
 #BSUB -e tmp/err.%J
 source /usr/share/Modules/init/bash
-module load julia/1.8.0
-module load cuda/12.0
+module load cuda/13.2
+module load julia/1.12.6
+export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"

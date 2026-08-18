@@ -10,10 +10,15 @@ CAMPAIGN_DIR="$ROOT/runs/umbrella_tuning_lsf"
 ALL_SIZES=(6 8 12 16 18 20 24 32)
 TUNE_SIZES=("${ALL_SIZES[@]}")
 
-JULIA="${JULIA:-$HOME/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/bin/julia}"
-if [[ ! -x "$JULIA" ]]; then
-  JULIA="${JULIA_FALLBACK:-julia}"
-fi
+JULIA="${JULIA:-julia}"
+
+cluster_env() {
+  source /usr/share/Modules/init/bash
+  module load cuda/13.2
+  module load julia/1.12.6
+  export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"
+  JULIA="${JULIA:-julia}"
+}
 
 FORCE="${FORCE:-0}"
 DRY_RUN="${DRY_RUN:-0}"
@@ -135,6 +140,7 @@ campaign_args() {
 run_campaign() {
   local subcommand="$1"
   shift
+  cluster_env
   local -a cmd=(python3 "$ROOT/scripts/umbrella_tuning_campaign.py" "$subcommand")
   local arg
   while IFS= read -r arg; do

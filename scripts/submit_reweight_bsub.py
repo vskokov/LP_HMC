@@ -15,6 +15,13 @@ from hmc_defaults import (
     resolve_hmc_parameters, resolve_startup_hmc_parameters,
     resolve_tempering_parameters,
 )
+from lsf_defaults import (
+    DEFAULT_CUDA_MODULE,
+    DEFAULT_JULIA_DEPOT_PATH,
+    DEFAULT_JULIA_MODULE,
+    DEFAULT_MODULE_INIT,
+    lsf_environment_shell_lines,
+)
 from runtime_preflight import shell_command as preflight_shell_command
 from reweight_manifest import (
     REPO_ROOT,
@@ -25,9 +32,6 @@ from reweight_manifest import (
 )
 
 
-DEFAULT_DEPOT = "/rsstu/users/v/vskokov/gluon/jd"
-DEFAULT_JULIAUP_DEPOT = "/rsstu/users/v/vskokov/gluon/.julia"
-DEFAULT_JULIA_BIN_DIR = "/rsstu/users/v/vskokov/gluon/juliaup/bin"
 DEFAULT_EXCLUDED_HOSTS = ("gpu16", "gpu33")
 
 
@@ -135,13 +139,14 @@ def lsf_script(
     body = [
         "",
         "set -euo pipefail",
-        f"source {shlex.quote(args.module_init)}",
-        f"export JULIA_DEPOT_PATH={shlex.quote(args.julia_depot)}",
-        f"export JULIAUP_DEPOT_PATH={shlex.quote(args.juliaup_depot)}",
-        f"export PATH={shlex.quote(args.julia_bin_dir)}:\"$PATH\"",
-        f"module load {shlex.quote(args.cuda_module)}",
+        *lsf_environment_shell_lines(
+            module_init=args.module_init,
+            cuda_module=args.cuda_module,
+            julia_module=args.julia_module,
+            julia_depot_path=args.julia_depot,
+            extra_modules=args.module,
+        ),
     ]
-    body.extend(f"module load {shlex.quote(module)}" for module in args.module)
     body.extend([
         "",
         'echo "julia=$(command -v julia)"',
@@ -203,12 +208,11 @@ def main() -> int:
     lsf.add_argument("--project-code", help="optional LSF project/account passed with -P")
 
     environment = parser.add_argument_group("cluster environment")
-    environment.add_argument("--module-init", default="/usr/share/Modules/init/bash")
-    environment.add_argument("--cuda-module", default="cuda/12.3")
+    environment.add_argument("--module-init", default=DEFAULT_MODULE_INIT)
+    environment.add_argument("--cuda-module", default=DEFAULT_CUDA_MODULE)
+    environment.add_argument("--julia-module", default=DEFAULT_JULIA_MODULE)
     environment.add_argument("--module", action="append", default=[])
-    environment.add_argument("--julia-depot", default=DEFAULT_DEPOT)
-    environment.add_argument("--juliaup-depot", default=DEFAULT_JULIAUP_DEPOT)
-    environment.add_argument("--julia-bin-dir", default=DEFAULT_JULIA_BIN_DIR)
+    environment.add_argument("--julia-depot", default=DEFAULT_JULIA_DEPOT_PATH)
     environment.add_argument("--julia", default="julia")
     environment.add_argument("--python", default="python3")
     environment.add_argument("--bsub", default="bsub")

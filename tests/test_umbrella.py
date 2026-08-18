@@ -135,6 +135,12 @@ class UmbrellaTests(unittest.TestCase):
             )
             self.assertNotIn("rusage[mem=24000]", script)
             self.assertIn("export PYTHONUNBUFFERED=1", script)
+            self.assertIn("module load cuda/13.2", script)
+            self.assertIn("module load julia/1.12.6", script)
+            self.assertIn(
+                'export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"',
+                script,
+            )
 
 
 if __name__ == "__main__":

@@ -46,9 +46,9 @@ TMP_DIR     = REPO_ROOT / "tmp"
 # ---------------------------------------------------------------------------
 # HPC environment
 # ---------------------------------------------------------------------------
-JULIA_DEPOT_PATH = "/rsstu/users/v/vskokov/gluon/jd"
-JULIA_BIN        = "/rsstu/users/v/vskokov/gluon/julia-1.10.3/bin"
-CUDA_MODULE      = "cuda/12.3"
+JULIA_DEPOT_PATH = '/usr/local/usrapps/$GROUP/$USER/julia_depot'
+CUDA_MODULE      = "cuda/13.2"
+JULIA_MODULE     = "julia/1.12.6"
 
 DEFAULT_WALLTIME = 120
 DEFAULT_QUEUE    = "short_gpu"
@@ -124,9 +124,9 @@ def _bsub_header(walltime: int, queue: str, job_name: str) -> str:
 #BSUB -e {TMP_DIR}/err.%J
 
 source /usr/share/Modules/init/bash
-export JULIA_DEPOT_PATH={JULIA_DEPOT_PATH}
-export PATH={JULIA_BIN}:$PATH
 module load {CUDA_MODULE}
+module load {JULIA_MODULE}
+export JULIA_DEPOT_PATH="{JULIA_DEPOT_PATH}"
 
 """
 
