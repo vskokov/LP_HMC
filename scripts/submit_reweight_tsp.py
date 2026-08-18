@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from submit_reweight_array import (
+from reweight_manifest import (
     build_rows,
     parse_point,
     read_points_csv,

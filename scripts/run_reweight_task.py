@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute one row of a reweighting Slurm manifest."""
+"""Execute one row of a reweighting manifest."""
 
 from __future__ import annotations
 

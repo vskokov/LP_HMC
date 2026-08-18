@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and submit TSP, Slurm, or LSF M²-umbrella exchange jobs."""
+"""Create and submit TSP or LSF M²-umbrella exchange jobs."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
-from submit_reweight_array import parse_point, read_points_csv, write_manifest
+from reweight_manifest import parse_point, read_points_csv, write_manifest
 from umbrella_profiles import load_profile
 
 
@@ -44,7 +44,7 @@ UMBRELLA_PROFILES = {
 
 def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scheduler", choices=("tsp", "slurm", "lsf"),
+    parser.add_argument("--scheduler", choices=("tsp", "lsf"),
                         default=scheduler_default, required=scheduler_default is None)
     parser.add_argument("--L", type=int, required=True)
     parser.add_argument("--point", action="append", type=parse_point, default=[])
@@ -87,15 +87,11 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument("--python", default="python3")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--prepare-only", action="store_true",
+                        help="write manifest and exit without submitting jobs")
     parser.add_argument("--tsp", default="tsp")
-    parser.add_argument("--partition", default="gpu")
-    parser.add_argument("--account")
-    parser.add_argument("--time", default="04:00:00")
-    parser.add_argument("--mem", default="24G")
-    parser.add_argument("--cpus", type=int, default=1)
-    parser.add_argument("--gpu-resource", default="gpu:1")
-    parser.add_argument("--sbatch", default="sbatch")
     parser.add_argument("--queue", default="short_gpu")
+    parser.add_argument("--cpus", type=int, default=1)
     parser.add_argument("--walltime", default="120")
     parser.add_argument("--mem-gb", type=float, default=24.0,
                         help="LSF memory requested per host, in GB")
@@ -209,20 +205,6 @@ def worker_command(args, manifest: Path, task_token: str) -> str:
     if args.resume:
         values.append("--resume")
     return " ".join(task_token if value == task_token else shlex.quote(value) for value in values)
-
-
-def slurm_script(args, manifest: Path, count: int, logs: Path) -> str:
-    lines = ["#!/usr/bin/env bash", f"#SBATCH --job-name={args.run_name}",
-             f"#SBATCH --array=0-{count - 1}", f"#SBATCH --partition={args.partition}",
-             f"#SBATCH --time={args.time}", f"#SBATCH --mem={args.mem}",
-             f"#SBATCH --cpus-per-task={args.cpus}", f"#SBATCH --gres={args.gpu_resource}",
-             f"#SBATCH --output={logs.resolve()}/%x_%A_%a.out",
-             f"#SBATCH --error={logs.resolve()}/%x_%A_%a.err"]
-    if args.account:
-        lines.append(f"#SBATCH --account={args.account}")
-    lines.extend(["", "set -euo pipefail", worker_command(args, manifest,
-                                                           '"${SLURM_ARRAY_TASK_ID}"'), ""])
-    return "\n".join(lines)
 
 
 def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
@@ -381,20 +363,19 @@ def main(scheduler_default: str | None = None) -> int:
         commands = [worker_command(args, manifest, str(index)) for index in range(len(rows))]
         for command in commands:
             print(command)
+            if args.prepare_only:
+                continue
             if not args.dry_run:
                 subprocess.run([args.tsp, "bash", "-lc", command], check=True)
         return 0
-    script = (slurm_script(args, manifest, len(rows), run_dir / "logs")
-              if args.scheduler == "slurm" else
-              lsf_script(args, manifest, len(rows), run_dir / "logs"))
-    script_path = run_dir / ("array_job.sh" if args.scheduler == "slurm" else "lsf_job.sh")
+    script = lsf_script(args, manifest, len(rows), run_dir / "logs")
+    script_path = run_dir / "lsf_job.sh"
     script_path.write_text(script, encoding="utf-8")
     print(script)
+    if args.prepare_only:
+        return 0
     if not args.dry_run:
-        if args.scheduler == "slurm":
-            subprocess.run([args.sbatch, str(script_path)], check=True)
-        else:
-            subprocess.run([args.bsub], input=script, text=True, check=True)
+        subprocess.run([args.bsub], input=script, text=True, check=True)
     return 0
 
 

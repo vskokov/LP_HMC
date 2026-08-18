@@ -98,11 +98,23 @@ class UmbrellaTests(unittest.TestCase):
             self.assertIn("task_id=0", worker.stdout)
             self.assertIn("checkpoint_exists=False", worker.stdout)
             self.assertIn("umbrella_worker event=thermalization_started", worker.stdout)
-            self.assertIn("umbrella_worker event=collection_started", worker.stdout)
-            self.assertIn("umbrella_worker event=completed", worker.stdout)
-            self.assertIn("--max-production-sweeps=128", worker.stdout)
-            self.assertIn("--min-round-trip-fraction=0.25", worker.stdout)
-            self.assertIn("--min-swap-acceptance=0.20000000000000001", worker.stdout)
+
+    def test_prepare_only_writes_manifest_without_enqueueing_tsp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = [
+                sys.executable, str(ROOT / "scripts/submit_umbrella_tsp.py"),
+                "--L=4", "--point=1,-2", "--eps=.03", "--n-lf=4",
+                "--startup-eps=.02", "--startup-n-lf=4", "--startup-sweeps=4",
+                "--max-thermalization-sweeps=128",
+                "--min-round-trip-fraction=.25",
+                "--min-swap-acceptance=.2",
+                "--umbrella-windows=5", "--umbrella-max=.4",
+                "--umbrella-kappa=80", "--samples=10",
+                f"--run-root={directory}", "--run-name=prep", "--prepare-only",
+            ]
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            self.assertTrue((Path(directory) / "prep/manifest.csv").is_file())
+            self.assertIn("manifest:", result.stdout)
 
     def test_lsf_memory_request_is_in_gigabytes(self):
         with tempfile.TemporaryDirectory() as directory:

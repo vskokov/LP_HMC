@@ -202,8 +202,8 @@ python3 scripts/submit_umbrella_tsp.py \
   --run-name umbrella_L24
 ```
 
-`submit_umbrella_array.py` and `submit_umbrella_bsub.py` materialize equivalent
-Slurm and LSF arrays for HPC systems. Add `--dry-run` to any submitter to inspect the
+`submit_umbrella_bsub.py` and `submit_umbrella_tsp.py` materialize equivalent
+LSF and local task-spooler jobs. Add `--dry-run` to any submitter to inspect the
 manifest and commands without submitting work. The per-task workflow first writes a
 schema-3 checkpoint with `thermalize_umbrella.jl`, then an all-window statistics CSV
 with `collect_umbrella_stats.jl`.
@@ -369,21 +369,19 @@ for computing means and uncertainties from measurement files.
 
 ### 6. Two-parameter Binder-cumulant reweighting
 
-Create a Slurm array for one lattice size from repeated points and/or a two-column
+Create an LSF job array for one lattice size from repeated points and/or a two-column
 `Z,m2` CSV. Omit `--eps` and `--n-lf` to use the measured per-L defaults above:
 
 ```bash
-python3 scripts/submit_reweight_array.py \
+python3 scripts/submit_reweight_bsub.py \
     --L 24 --point=0.1,-2.30 --point=0.2,-2.25 \
     --points-csv scan_points.csv --replicas 4 \
     --eps 0.02 --n-lf 15 --samples 2000 --skip 12 \
-    --partition gpu --gpu-resource gpu:h100:1 \
-    --time 08:00:00 --mem 24G --cpus 4 \
-    --module cuda/12.3 --run-name binder_L24 --dry-run
+    --max-concurrent 4 --run-name binder_L24 --dry-run
 ```
 
-The dry run writes `runs/<run-name>/manifest.csv` and `array_job.sh`, then prints
-every command without calling `sbatch`. Remove `--dry-run` to submit. Add `--resume`
+The dry run writes `runs/<run-name>/manifest.csv` and `lsf_array_job.sh`, then prints
+every command without calling `bsub`. Remove `--dry-run` to submit. Add `--resume`
 to validate and reuse matching checkpoints and completed statistics files. Every
 retained configuration records `M`, `M2`, `M4`, `Q=sum(phi^2)`, `G=sum(grad(phi)^2)`,
 and interval acceptance in a metadata-prefixed CSV.
@@ -560,8 +558,8 @@ nvidia-smi pmon -s um -d 1
 ```
 
 Use samples taken after Julia compilation and warmup when comparing SM utilization.
-The job log must show `replica_execution=batched`; after completion, use the site's
-Slurm GPU-efficiency report as the authoritative H200 measurement.
+The job log must show `replica_execution=batched`; after completion, inspect the
+cluster GPU-efficiency report for the authoritative measurement.
 
 #### Replica-exchange HMC near a first-order transition
 
@@ -571,18 +569,16 @@ source mass is the exact central slot. `--replicas` continues to mean independen
 chains:
 
 ```bash
-python3 scripts/submit_reweight_array.py \
+python3 scripts/submit_reweight_bsub.py \
     --L 24 --points-csv three_source_points.csv --replicas 12 \
     --tempering-replicas 9 --mass-span 0.12 --swap-every 1 \
     --init-schedule split --phase-threshold 0.25 \
     --eps 0.02 --n-lf 15 --samples 2000 --skip 12 \
-    --partition gpu --gpu-resource gpu:h100:1 \
-    --time 08:00:00 --mem 24G --cpus 4 \
-    --module cuda/12.3 --run-name binder_tempered_L24 --dry-run
+    --max-concurrent 6 --run-name binder_tempered_L24 --dry-run
 ```
 
 The ladder endpoints are `m2 - mass_span/2` and `m2 + mass_span/2`; adjacent even and
-odd pairs alternate after complete HMC sweeps. On CUDA, one Slurm task stores the
+odd pairs alternate after complete HMC sweeps. On CUDA, one LSF task stores the
 whole ladder as one contiguous `(L,L,L,nreplicas)` array. Every HMC kernel advances
 all mass slots in one launch, which exposes enough independent lattice sites to use
 large GPUs efficiently. Accepted exchanges copy the two corresponding device slices;
@@ -628,7 +624,7 @@ autocorrelation estimates and orphan `.tmp.*` files without deleting them.
 Production critical ladders are fail-closed. `--tempering-profile critical` reads a
 CSV emitted by `scripts/select_tempering_profile.py`; omitted exchange settings come
 only from a unique row marked `validated=true`, while explicit flags override the
-profile. Slurm, LSF, and TSP share the resolver and materialize the same physics:
+profile. LSF and TSP share the resolver and materialize the same physics:
 
 ```bash
 python3 scripts/submit_reweight_tsp.py \
@@ -638,7 +634,7 @@ python3 scripts/submit_reweight_tsp.py \
     --init-schedule split --run-name critical_L24
 ```
 
-All three launch paths run a Julia 1.12+ and functional-CUDA preflight. On this
+All launch paths run a Julia 1.12+ and functional-CUDA preflight. On this
 workstation, pass the installed Julia 1.12.6 executable with `--julia`; the current
 default Julia 1.11 environment is incompatible with the pinned JLD2 dependency.
 
@@ -761,10 +757,50 @@ per-L manifests, provisional profiles under `configs/umbrella_profiles`, and a
 master `campaign.json`.  Production submission is refused until every selected
 profile is validated and the compute-node child-submit/cancel preflight marker
 exists.  Promote a profile from an evidence JSON report with
-`scripts/validate_umbrella_profile.py`; for L <= 12 that report must also contain
-the two-combined-error canonical agreement check.
+`scripts/validate_umbrella_profile.py`; every promoted profile must pass transport
+gates and ordered/disordered Binder agreement (`canonical_combined_z <= 2`).
 
-L=24 is migrated specially: replicas 0 and 1 reference the validated `w161`,
-`n_lf=48` equilibrium checkpoints read-only, while all new collection shards
-and final outputs live in the new campaign directory.  The earlier 2,000-sample
-files and validation report are never modified.
+Tune one lattice size on the local A6000 before promoting its profile:
+
+```bash
+bash scripts/validate_umbrella_profiles_local.sh status
+bash scripts/validate_umbrella_profiles_local.sh tune 12
+python3 scripts/tune_umbrella_profile.py --L 6 --stage=all --scheduler=local
+```
+
+Batch local tuning (skips validated profiles, size-dependent runtime budgets) and
+campaign preparation:
+
+```bash
+bash scripts/validate_umbrella_profiles_local.sh tune-all
+bash scripts/validate_umbrella_profiles_local.sh prepare-campaign
+# or the legacy wrapper:
+bash scripts/run_all_umbrella_tuning.sh
+python3 scripts/umbrella_campaign.py prepare --submit
+```
+
+Tune profiles on the LSF cluster (H100, 2-hour resumable jobs under
+`runs/umbrella_tuning_lsf/`):
+
+```bash
+bash scripts/validate_umbrella_profiles_lsf.sh status
+bash scripts/validate_umbrella_profiles_lsf.sh tune 16 18 20 24
+# periodically advance incomplete pilot/confirm jobs and summarize nlf:
+bash scripts/validate_umbrella_profiles_lsf.sh repair
+bash scripts/validate_umbrella_profiles_lsf.sh status
+```
+
+`prepare` writes per-L manifests and `lsf_job.sh` scripts; `preflight` runs the
+compute-node self-resubmit check required before pilot/confirm jobs can chain on
+exit code 75.  `repair` resubmits incomplete tasks, summarizes completed nlf
+probe arrays on the login node, escalates confirm sample counts when the
+canonical Binder gate fails, and promotes validated profiles.
+
+After production completes, aggregate Binder results with:
+
+```bash
+python3 scripts/analyze_umbrella.py runs/umbrella_allL_production/L6/statistics/*.csv \
+  --bootstrap 500 --output reports/umbrella_L6_binder.json
+python3 scripts/aggregate_umbrella_binder.py reports/umbrella_L*_binder.json \
+  --output reports/umbrella_binder_all_L.csv
+```

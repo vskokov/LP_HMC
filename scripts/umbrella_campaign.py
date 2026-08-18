@@ -18,13 +18,13 @@ import numpy as np
 
 from analyze_umbrella import block_bootstrap, estimate, read_umbrella
 from run_umbrella_task import merge_shards
+from hmc_defaults import resolve_hmc_parameters
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
 from umbrella_runtime import atomic_json, claim_continuation
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE_DIR = REPO_ROOT / "configs/umbrella_profiles"
-ANCHOR_RUN = REPO_ROOT / "runs/umbrella_L24_w161_nlf48_lsf"
 
 
 def parse_sizes(text: str) -> list[int]:
@@ -52,11 +52,14 @@ def prepare(args: argparse.Namespace) -> int:
     for L in args.sizes:
         profile_path = write_profile_if_missing(args.profile_dir, L)
         profile = load_profile(profile_path, L, require_validated=False)
+        epsilon, n_lf, _ = resolve_hmc_parameters(
+            L, float(profile["epsilon"]), profile.get("n_lf")
+        )
         run_dir = args.campaign_dir / f"L{L}"
         command = [
             sys.executable, str(REPO_ROOT / "scripts/submit_umbrella_bsub.py"), f"--L={L}",
-            "--point=-0.6,-1.86421", f"--eps={profile['epsilon']}",
-            f"--n-lf={profile['n_lf'] or max(1, round(0.5 / float(profile['epsilon'])))}",
+            "--point=-0.6,-1.86421", f"--eps={epsilon}",
+            f"--n-lf={n_lf}",
             f"--startup-eps={profile['startup_epsilon']}",
             f"--startup-n-lf={profile['startup_n_lf']}", f"--startup-sweeps={profile['startup_sweeps']}",
             f"--thermalization-sweeps={profile['minimum_thermalization_sweeps']}",
@@ -74,8 +77,6 @@ def prepare(args: argparse.Namespace) -> int:
         ]
         print("+", shlex.join(command))
         subprocess.run(command, cwd=REPO_ROOT, check=True)
-        if L == 24:
-            migrate_l24(run_dir)
         state = "validated" if profile.get("validated") is True else "tuning_required"
         if state != "validated":
             blocked.append(L)
@@ -97,37 +98,6 @@ def prepare(args: argparse.Namespace) -> int:
             script = Path(item["manifest"]).parent / "lsf_job.sh"
             subprocess.run(["bsub"], input=script.read_text(encoding="utf-8"), text=True, check=True)
     return 0
-
-
-def migrate_l24(run_dir: Path) -> None:
-    manifest = run_dir / "manifest.csv"
-    with manifest.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    phases = ("disordered", "ordered", "disordered", "ordered")
-    for index, (row, phase) in enumerate(zip(rows, phases)):
-        row["init_phase"] = phase
-        base = f"L24_Z-0.6_m2-1.86421_r{index}_{phase}"
-        row["stats_path"] = str((run_dir / "statistics" / f"{base}.csv").resolve())
-        row["diagnostics_path"] = str((run_dir / "diagnostics" / f"{base}.csv").resolve())
-        row["completion_marker"] = str((run_dir / "complete" / f"{base}.complete").resolve())
-        row["progress_marker"] = str((run_dir / "progress" / f"{base}.json").resolve())
-        row["lock_path"] = str((run_dir / "locks" / f"{base}.lock").resolve())
-        row["shard_dir"] = str((run_dir / "shards" / base).resolve())
-        if index < 2:
-            source = ANCHOR_RUN / "checkpoints" / f"L24_Z-0.6_m2-1.86421_r{index}_{phase}.jld2"
-            if not source.is_file():
-                raise FileNotFoundError(f"missing validated L=24 anchor: {source}")
-            row["checkpoint_path"] = str(source.resolve())
-        else:
-            row["checkpoint_path"] = str((run_dir / "checkpoints" / f"{base}.jld2").resolve())
-    temporary = manifest.with_suffix(".csv.tmp")
-    with temporary.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
-    os.replace(temporary, manifest)
-    atomic_json(run_dir / "L24_migration.json", {
-        "source": str(ANCHOR_RUN.resolve()), "reused_checkpoint_replicas": [0, 1],
-        "preserved_old_collection": True,
-        "note": "adaptive collection starts in this separate campaign directory"})
 
 
 def load_rows(manifest: Path) -> list[dict[str, str]]:

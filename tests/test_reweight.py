@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+SUBMITTER = ROOT / "scripts" / "submit_reweight_bsub.py"
 sys.path.insert(0, str(ROOT))
 
 from reweight_binder import (  # noqa: E402
@@ -198,13 +199,13 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(run.mass_span, 0.4)
             self.assertEqual(run.swap_every, 1)
 
-    def test_slurm_dry_run_manifest_mapping_and_space_paths(self):
+    def test_lsf_dry_run_manifest_mapping_and_space_paths(self):
         with tempfile.TemporaryDirectory(prefix="reweight test ") as directory:
             run_root = Path(directory) / "runs with spaces"
             points_csv = Path(directory) / "points.csv"
             points_csv.write_text("Z,m2\n0.5,-1.5\n")
             command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "8", "--point=1.000,-2.00", "--points-csv", str(points_csv),
                 "--eps", "0.1", "--n-lf", "5", "--samples", "4",
                 "--replicas", "2", "--run-root", str(run_root),
@@ -218,15 +219,15 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual([row["replica"] for row in rows], ["0", "1", "0", "1"])
             self.assertEqual(rows[0]["Z"], "1")
             self.assertTrue(all(int(row["seed"]) != 0 for row in rows))
-            self.assertIn("set -euo pipefail", (run_root / "unit" / "array_job.sh").read_text())
-            self.assertIn("dry-run: sbatch was not invoked", result.stdout)
+            self.assertIn("set -euo pipefail", (run_root / "unit" / "lsf_array_job.sh").read_text())
+            self.assertIn("dry-run: bsub was not invoked", result.stdout)
             self.assertIn("runs with spaces/unit/manifest.csv'", result.stdout)
 
     def test_replica_exchange_manifest_and_commands(self):
         with tempfile.TemporaryDirectory() as directory:
             run_root = Path(directory) / "runs"
             command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
                 "--samples", "3", "--tempering-replicas", "5", "--mass-span", "0.4",
                 "--swap-every", "1", "--run-root", str(run_root), "--run-name", "tempered",
@@ -243,20 +244,26 @@ class ReweightTests(unittest.TestCase):
             self.assertEqual(row["startup_n_lf"], "7")
             self.assertEqual(row["startup_sweeps"], "216")
             self.assertIn("diagnostics/task_000000.csv", row["diagnostics_path"])
-            self.assertIn("thermalize_replicas.jl", result.stdout)
-            self.assertIn("collect_reweight_stats_replicas.jl", result.stdout)
-            self.assertIn("--tempering-replicas=5", result.stdout)
-            self.assertIn("--init-phase=hot", result.stdout)
-            self.assertIn("--phase-threshold=0.25", result.stdout)
-            self.assertIn("--startup-eps=0.035", result.stdout)
-            self.assertIn("--startup-n-lf=7", result.stdout)
-            self.assertIn("--startup-sweeps=216", result.stdout)
+            worker = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/run_reweight_task.py"),
+                 "--manifest", str(run_root / "tempered" / "manifest.csv"),
+                 "--task-id", "0", "--dry-run"],
+                check=True, text=True, capture_output=True,
+            )
+            self.assertIn("thermalize_replicas.jl", worker.stdout)
+            self.assertIn("collect_reweight_stats_replicas.jl", worker.stdout)
+            self.assertIn("--tempering-replicas=5", worker.stdout)
+            self.assertIn("--init-phase=hot", worker.stdout)
+            self.assertIn("--phase-threshold=0.25", worker.stdout)
+            self.assertIn("--startup-eps=0.035", worker.stdout)
+            self.assertIn("--startup-n-lf=7", worker.stdout)
+            self.assertIn("--startup-sweeps=216", worker.stdout)
 
     def test_split_phase_initialization_schedule(self):
         with tempfile.TemporaryDirectory() as directory:
             run_root = Path(directory) / "runs"
             command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
                 "--samples", "3", "--replicas", "4", "--tempering-replicas", "5",
                 "--mass-span", "0.4", "--init-schedule", "split",
@@ -274,7 +281,7 @@ class ReweightTests(unittest.TestCase):
 
     def test_split_phase_schedule_requires_even_independent_jobs(self):
         command = [
-            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            sys.executable, str(SUBMITTER),
             "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
             "--replicas", "3", "--tempering-replicas", "5", "--mass-span", "0.4",
             "--init-schedule", "split", "--dry-run",
@@ -285,7 +292,7 @@ class ReweightTests(unittest.TestCase):
 
     def test_phase_schedule_requires_replica_exchange(self):
         command = [
-            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            sys.executable, str(SUBMITTER),
             "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
             "--replicas", "4", "--init-schedule", "split", "--dry-run",
         ]
@@ -328,7 +335,7 @@ class ReweightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run_root = Path(directory) / "runs"
             array_command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "24", "--point=-0.6,-1.85764", "--samples", "3",
                 "--run-root", str(run_root), "--run-name", "array-default",
                 "--dry-run",
@@ -361,7 +368,7 @@ class ReweightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run_root = Path(directory) / "runs"
             command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "24", "--point=-0.6,-1.85764", "--eps", "0.01",
                 "--n-lf", "9", "--samples", "3", "--run-root", str(run_root),
                 "--run-name", "explicit", "--dry-run",
@@ -384,7 +391,7 @@ class ReweightTests(unittest.TestCase):
             )
             run_root = root / "runs"
             command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "24", "--point=-0.6,-1.86", "--samples", "3",
                 "--tempering-profile", "critical", "--tempering-profile-file", str(profile),
                 "--swap-every", "2", "--run-root", str(run_root),
@@ -402,7 +409,7 @@ class ReweightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run_root = Path(directory) / "runs"
             command = [
-                sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+                sys.executable, str(SUBMITTER),
                 "--L", "8", "--point=-0.6,-1.85764", "--samples", "3",
                 "--startup-eps", "0.01", "--startup-n-lf", "20",
                 "--startup-sweeps", "123", "--run-root", str(run_root),
@@ -419,7 +426,7 @@ class ReweightTests(unittest.TestCase):
 
     def test_untuned_lattice_requires_explicit_hmc_parameters(self):
         command = [
-            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            sys.executable, str(SUBMITTER),
             "--L", "10", "--point=-0.6,-1.85764", "--dry-run",
         ]
         result = subprocess.run(command, text=True, capture_output=True)
@@ -541,10 +548,8 @@ class ReweightTests(unittest.TestCase):
                 "--tempering-profile", "critical", "--tempering-profile-file", str(profile),
                 "--run-name", "same-physics",
             ]
-            roots = {name: root / name for name in ("slurm", "lsf", "tsp")}
+            roots = {name: root / name for name in ("lsf", "tsp")}
             commands = [
-                [sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
-                 *common, "--run-root", str(roots["slurm"]), "--dry-run"],
                 [sys.executable, str(ROOT / "scripts/submit_reweight_bsub.py"),
                  *common, "--run-root", str(roots["lsf"]), "--dry-run"],
                 [sys.executable, str(ROOT / "scripts/submit_reweight_tsp.py"),
@@ -554,7 +559,7 @@ class ReweightTests(unittest.TestCase):
             for command in commands:
                 subprocess.run(command, check=True, text=True, capture_output=True)
             manifests = []
-            for name in ("slurm", "lsf", "tsp"):
+            for name in ("lsf", "tsp"):
                 path = roots[name] / "same-physics" / "manifest.csv"
                 with path.open(newline="") as handle:
                     manifests.append(list(csv.DictReader(handle)))
@@ -567,7 +572,6 @@ class ReweightTests(unittest.TestCase):
             normalized = [[tuple(row[key] for key in physics) for row in rows]
                           for rows in manifests]
             self.assertEqual(normalized[0], normalized[1])
-            self.assertEqual(normalized[0], normalized[2])
 
     def test_tempering_pilot_grid_dry_run_is_complete_and_non_mutating(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -618,7 +622,7 @@ class ReweightTests(unittest.TestCase):
 
     def test_even_tempering_count_is_rejected(self):
         command = [
-            sys.executable, str(ROOT / "scripts/submit_reweight_array.py"),
+            sys.executable, str(SUBMITTER),
             "--L", "6", "--point=1,-2.25", "--eps", "0.02", "--n-lf", "4",
             "--tempering-replicas", "4", "--mass-span", "0.2", "--dry-run",
         ]

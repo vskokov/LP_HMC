@@ -28,8 +28,7 @@ class UmbrellaCampaignTests(unittest.TestCase):
         profiles = [proposed_profile(L) for L in (6, 8, 12, 16, 18, 20, 24, 32)]
         self.assertEqual([p["umbrella_windows"] for p in profiles],
                          [21, 32, 58, 88, 105, 123, 161, 247])
-        self.assertTrue(profiles[6]["validated"])
-        self.assertFalse(profiles[5]["validated"])
+        self.assertFalse(any(p["validated"] for p in profiles))
         self.assertGreater(profiles[5]["epsilon"], profiles[6]["epsilon"])
         self.assertLess(profiles[5]["epsilon"], profiles[4]["epsilon"])
 
@@ -82,14 +81,14 @@ class UmbrellaCampaignTests(unittest.TestCase):
             self.assertEqual(sum(not line.startswith("#") for line in text.splitlines()), 3)
             self.assertEqual(len((root / "diag.csv").read_text().splitlines()), 3)
 
-    def test_all_l_dry_run_and_l24_migration(self):
+    def test_all_l_dry_run_prepares_every_lattice_size(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             result = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/umbrella_campaign.py"), "prepare",
                  "--campaign-dir", str(root), "--profile-dir", str(root / "profiles")],
                 text=True, capture_output=True, check=True)
-            self.assertIn("production_blocked_unvalidated_L=6,8,12,16,18,20,32", result.stdout)
+            self.assertIn("production_blocked_unvalidated_L=6,8,12,16,18,20,24,32", result.stdout)
             index = json.loads((root / "campaign.json").read_text())
             self.assertEqual(len(index["sizes"]), 8)
             for item in index["sizes"]:
@@ -99,9 +98,10 @@ class UmbrellaCampaignTests(unittest.TestCase):
             with (root / "L24/manifest.csv").open(newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual([r["init_phase"] for r in rows],
-                             ["disordered", "ordered", "disordered", "ordered"])
-            self.assertIn("umbrella_L24_w161_nlf48_lsf", rows[0]["checkpoint_path"])
-            self.assertTrue((root / "L24/L24_migration.json").is_file())
+                             ["disordered", "disordered", "ordered", "ordered"])
+            self.assertIn("/L24/checkpoints/", rows[0]["checkpoint_path"])
+            self.assertNotIn("umbrella_L24_w161_nlf48_lsf", rows[0]["checkpoint_path"])
+            self.assertFalse((root / "L24/L24_migration.json").is_file())
             script = (root / "L24/lsf_job.sh").read_text()
             self.assertIn("#BSUB -W 120", script)
             self.assertIn("hname!='gpu31'", script)

@@ -195,13 +195,14 @@ function main()
         end
     end
     save_umbrella_checkpoint(checkpoint, state; thermalization_complete=passed)
-    passed || error(
-        "umbrella transport gate failed at $(state.sweeps) sweeps: " *
-        "round-trip walker fraction=$(round_trip_walker_fraction(state)) " *
-        "(required $(min_round_trip_fraction)), minimum swap acceptance=" *
-        "$(minimum(acceptance_rates(state.swap_accepts, state.swap_attempts))) " *
-        "(required $(min_swap_acceptance)); checkpoint is resumable"
-    )
+    passed || begin
+        @printf(
+            "transport_gate_failed sweeps=%d round_trip_walker_fraction=%.6f minimum_swap_acceptance=%.6f checkpoint_resumable=true\n",
+            state.sweeps, round_trip_walker_fraction(state),
+            minimum(acceptance_rates(state.swap_accepts, state.swap_attempts)),
+        )
+        exit(75)
+    end
     @printf("transport_gate=passed sweeps=%d round_trips=%d round_trip_walker_fraction=%.6f\n",
             state.sweeps, sum(state.round_trips), round_trip_walker_fraction(state))
     @printf("checkpoint=%s\n", checkpoint)

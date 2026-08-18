@@ -2,13 +2,13 @@
   "L": 24,
   "epsilon": 0.02318953874,
   "kind": "umbrella_transport_profile",
-  "maximum_thermalization_sweeps": 600000,
-  "minimum_thermalization_sweeps": 120000,
-  "n_lf": 48,
+  "maximum_thermalization_sweeps": 640000,
+  "minimum_thermalization_sweeps": 128000,
+  "n_lf": 43,
   "schema_version": 1,
-  "startup_epsilon": 0.002,
+  "startup_epsilon": 0.0095,
   "startup_n_lf": 25,
-  "startup_sweeps": 1024,
+  "startup_sweeps": 13824,
   "swap_every": 1,
   "transport_gates": {
     "both_endpoints_visited": true,
@@ -25,7 +25,21 @@
   "umbrella_windows": 161,
   "validated": true,
   "validation": {
-    "note": "Existing 2000-sample outputs are preserved; new adaptive collection starts from the gated checkpoints.",
-    "provenance": "runs/umbrella_L24_w161_nlf48_lsf/checkpoints"
+    "L": 24,
+    "Z": -0.6,
+    "binder_estimates": [
+      0.37656952370494734,
+      0.16868909316578462
+    ],
+    "both_endpoints_visited": true,
+    "confirmed_candidates": 2,
+    "epsilon": 0.02318953874,
+    "m2": -1.86421,
+    "minimum_edge_swap_acceptance": 0.3870752243622063,
+    "minimum_histogram_overlap": 0.495,
+    "n_lf": 43,
+    "provenance": "/home/vskokov/Binder/LP_HMC/runs/tuning/tune_L24_confirm_nlf43",
+    "stable_diffusion_both_phases": true,
+    "worst_phase_hmc_acceptance": 0.75
   }
 }

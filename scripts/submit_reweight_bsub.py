@@ -16,7 +16,7 @@ from hmc_defaults import (
     resolve_tempering_parameters,
 )
 from runtime_preflight import shell_command as preflight_shell_command
-from submit_reweight_array import (
+from reweight_manifest import (
     REPO_ROOT,
     build_rows,
     parse_point,

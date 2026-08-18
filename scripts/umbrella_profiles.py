@@ -11,6 +11,40 @@ from hmc_defaults import HMC_DEFAULTS, STARTUP_HMC_DEFAULTS
 
 SUPPORTED_SIZES = (6, 8, 12, 16, 18, 20, 24, 32)
 ANCHOR_L = 24
+CANONICAL_Z_MAX = 2.0
+CANONICAL_BINDER_TOLERANCE = 0.01
+
+
+def binder_canonical_combined_z(binders: list[float]) -> float:
+    if len(binders) < 2:
+        raise ValueError("canonical agreement requires two binder estimates")
+    return abs(binders[0] - binders[1]) / CANONICAL_BINDER_TOLERANCE
+
+
+def validate_profile_evidence(L: int, validation: dict[str, object]) -> None:
+    required = (
+        "worst_phase_hmc_acceptance", "minimum_edge_swap_acceptance",
+        "minimum_histogram_overlap", "both_endpoints_visited",
+        "stable_diffusion_both_phases", "confirmed_candidates",
+        "canonical_combined_z",
+    )
+    if any(field not in validation for field in required):
+        raise ValueError(f"L={L}: validated profile lacks required transport/canonical evidence")
+    if not 0.65 <= float(validation["worst_phase_hmc_acceptance"]) <= 0.90:
+        raise ValueError(f"L={L}: HMC acceptance is outside the validation band")
+    if float(validation["minimum_edge_swap_acceptance"]) < 0.25:
+        raise ValueError(f"L={L}: edge swap acceptance is below 0.25")
+    if float(validation["minimum_histogram_overlap"]) < 0.30:
+        raise ValueError(f"L={L}: histogram overlap is below 0.30")
+    if not validation["both_endpoints_visited"] or not validation["stable_diffusion_both_phases"]:
+        raise ValueError(f"L={L}: endpoint/diffusion validation did not pass")
+    if int(validation["confirmed_candidates"]) < 2:
+        raise ValueError(f"L={L}: the best two candidates were not confirmed")
+    if abs(float(validation["canonical_combined_z"])) > CANONICAL_Z_MAX:
+        raise ValueError(
+            f"L={L}: ordered/disordered Binder agreement is worse than "
+            f"{CANONICAL_Z_MAX:g} sigma"
+        )
 
 
 def proposed_profile(L: int) -> dict[str, object]:
@@ -30,14 +64,14 @@ def proposed_profile(L: int) -> dict[str, object]:
     )
     return {
         "schema_version": 1, "kind": "umbrella_transport_profile", "L": L,
-        "validated": L == 24, "epsilon": epsilon,
-        "n_lf": 48 if L == 24 else None,
-        "umbrella_windows": 161 if L == 24 else windows,
+        "validated": False, "epsilon": epsilon,
+        "n_lf": None,
+        "umbrella_windows": windows,
         "umbrella_min": 0.0, "umbrella_max": 0.4,
         "umbrella_kappa": 160_000 * (L / ANCHOR_L) ** 3,
         "umbrella_power": 1.3, "swap_every": 1,
-        "startup_epsilon": 0.002 if L == 24 else startup_eps,
-        "startup_n_lf": startup_n_lf, "startup_sweeps": 1024 if L == 24 else L**3,
+        "startup_epsilon": startup_eps,
+        "startup_n_lf": startup_n_lf, "startup_sweeps": L**3,
         "minimum_thermalization_sweeps": minimum,
         "maximum_thermalization_sweeps": 5 * minimum,
         "transport_gates": {
@@ -46,17 +80,14 @@ def proposed_profile(L: int) -> dict[str, object]:
             "minimum_histogram_overlap": 0.30,
             "both_endpoints_visited": True, "both_phases_stable": True,
         },
-        "validation": ({
-            "provenance": "runs/umbrella_L24_w161_nlf48_lsf checkpoints",
-            "note": "validated scaling anchor; existing collection outputs are not resumable",
-        } if L == 24 else {
+        "validation": {
             "provenance": "scaling proposal from validated L=24 anchor",
             "required_tuning": {
                 "trajectory_lengths": [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
                 "epsilon_factors_if_needed": [0.9, 1.0, 1.1],
                 "confirmation_candidates": 2,
             },
-        }),
+        },
     }
 
 
@@ -77,22 +108,5 @@ def load_profile(path: Path, L: int, require_validated: bool = True) -> dict[str
         validation = profile.get("validation", {})
         if not isinstance(validation, dict) or not validation.get("provenance"):
             raise ValueError(f"{path}: validated profile needs validation provenance")
-        if L != ANCHOR_L:
-            required = ("worst_phase_hmc_acceptance", "minimum_edge_swap_acceptance",
-                        "minimum_histogram_overlap", "both_endpoints_visited",
-                        "stable_diffusion_both_phases", "confirmed_candidates")
-            if any(field not in validation for field in required):
-                raise ValueError(f"{path}: validated profile lacks required transport evidence")
-            if not 0.65 <= float(validation["worst_phase_hmc_acceptance"]) <= 0.90:
-                raise ValueError(f"{path}: HMC acceptance is outside the validation band")
-            if float(validation["minimum_edge_swap_acceptance"]) < 0.25:
-                raise ValueError(f"{path}: edge swap acceptance is below 0.25")
-            if float(validation["minimum_histogram_overlap"]) < 0.30:
-                raise ValueError(f"{path}: histogram overlap is below 0.30")
-            if not validation["both_endpoints_visited"] or not validation["stable_diffusion_both_phases"]:
-                raise ValueError(f"{path}: endpoint/diffusion validation did not pass")
-            if int(validation["confirmed_candidates"]) < 2:
-                raise ValueError(f"{path}: the best two candidates were not confirmed")
-            if L <= 12 and abs(float(validation.get("canonical_combined_z", float("inf")))) > 2:
-                raise ValueError(f"{path}: WHAM/canonical agreement is worse than two sigma")
+        validate_profile_evidence(L, validation)
     return profile

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
 from runtime_preflight import run as run_preflight
-from submit_reweight_array import REPO_ROOT, parse_point
+from reweight_manifest import REPO_ROOT, parse_point
 
 
 BENCHMARK = REPO_ROOT / "scripts/benchmark_hmc_startup.jl"

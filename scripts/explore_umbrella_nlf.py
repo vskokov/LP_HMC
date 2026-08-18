@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import shlex
 import shutil
@@ -199,8 +200,75 @@ def write_sweep_manifest(path: Path, tasks: list[dict[str, object]]) -> None:
     with temporary.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(tasks[0]))
         writer.writeheader()
-        writer.writerows(tasks)
+        for task in tasks:
+            row = dict(task)
+            for key in ("checkpoint", "output"):
+                if key in row:
+                    row[key] = str(row[key])
+            writer.writerows([row])
     temporary.replace(path)
+
+
+def read_sweep_manifest(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def run_single_probe(args, manifest: Path, probe_id: int) -> int:
+    tasks = read_sweep_manifest(manifest)
+    if probe_id < 0 or probe_id >= len(tasks):
+        raise SystemExit(f"probe_id out of range: {probe_id}")
+    task = tasks[probe_id]
+    output = Path(task["output"])
+    if output.is_file() and not args.force:
+        print(f"probe {probe_id} already complete: {output}")
+        return 0
+    source_manifest = args.run_dir / "manifest.csv"
+    with source_manifest.open(newline="", encoding="utf-8") as handle:
+        source_rows = {row["task_id"]: row for row in csv.DictReader(handle)}
+    source = source_rows[task["source_task_id"]]
+    checkpoint = Path(task["checkpoint"])
+    command = probe_command(args, source, checkpoint, output, int(task["n_lf"]))
+    print("+", shlex.join(command))
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
+    return 0
+
+
+def lsf_probe_script(args, manifest: Path, count: int, logs: Path,
+                     run_name: str) -> str:
+    runner = Path(__file__).resolve()
+    base = [
+        shlex.quote(sys.executable),
+        shlex.quote(str(runner)),
+        f"--run-probe-id=$PROBE_ID",
+        f"--sweep-manifest={shlex.quote(str(manifest.resolve()))}",
+        f"--run-dir={shlex.quote(str(args.run_dir.resolve()))}",
+        f"--julia={shlex.quote(args.julia)}",
+    ]
+    if args.fp64:
+        base.append("--fp64")
+    if args.cpu:
+        base.append("--cpu")
+    if args.force:
+        base.append("--force")
+    command = " ".join(base)
+    lines = [
+        "#!/usr/bin/env bash",
+        f'#BSUB -J "{run_name}[1-{count}]"',
+        f"#BSUB -q {args.queue}",
+        f"#BSUB -W {args.walltime}",
+        f"#BSUB -n {args.cpus}",
+        f'#BSUB -gpu "{args.gpu_request}"',
+        f"#BSUB -o {logs.resolve()}/%J_%I.out",
+        f"#BSUB -e {logs.resolve()}/%J_%I.err",
+        "",
+        "set -euo pipefail",
+        "export PYTHONUNBUFFERED=1",
+        'PROBE_ID="$((LSB_JOBINDEX - 1))"',
+        command,
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -214,9 +282,17 @@ def parser() -> argparse.ArgumentParser:
                         default=comma_floats("0.25,0.5,0.75,1,1.25,1.5,2"))
     result.add_argument("--probe-sweeps", type=int, default=5000)
     result.add_argument("--lags", type=comma_ints, default=comma_ints("1,10,100,500,1000"))
-    result.add_argument("--scheduler", choices=("tsp", "local"), default="tsp")
+    result.add_argument("--scheduler", choices=("tsp", "local", "lsf"), default="tsp")
     result.add_argument("--slots", type=int, default=1,
                         help="TSP concurrency; use 1 for one GPU")
+    result.add_argument("--prepare-only", action="store_true",
+                        help="write sweep manifest and LSF script without submitting")
+    result.add_argument("--queue", default="short_gpu")
+    result.add_argument("--walltime", default="120")
+    result.add_argument("--cpus", type=int, default=1)
+    result.add_argument("--gpu-request", default="num=1:mode=shared:mps=no")
+    result.add_argument("--run-probe-id", type=int, help=argparse.SUPPRESS)
+    result.add_argument("--sweep-manifest", type=Path, help=argparse.SUPPRESS)
     result.add_argument("--output-dir", type=Path)
     result.add_argument("--julia")
     result.add_argument("--tsp", default="tsp")
@@ -236,10 +312,20 @@ def main() -> int:
     if args.summarize_manifest:
         return summarize(args.summarize_manifest.resolve(), args.minimum_acceptance,
                          args.maximum_acceptance)
+    if args.run_probe_id is not None:
+        if args.sweep_manifest is None:
+            raise SystemExit("--run-probe-id requires --sweep-manifest")
+        args.sweep_manifest = args.sweep_manifest.resolve()
+        args.run_dir = args.run_dir.resolve()
+        if args.julia is None:
+            args.julia = str(LOCAL_JULIA) if LOCAL_JULIA.is_file() else "julia"
+        return run_single_probe(args, args.sweep_manifest, args.run_probe_id)
     if args.probe_sweeps < 1 or args.slots < 1:
         raise SystemExit("--probe-sweeps and --slots must be positive")
     if args.scheduler == "tsp" and args.slots != 1:
         raise SystemExit("use --slots=1 so the summary task waits for every one-GPU probe")
+    if args.scheduler == "lsf" and args.slots != 1:
+        raise SystemExit("LSF nlf probes use one GPU per array task; keep --slots=1")
     if max(args.lags) > args.probe_sweeps:
         raise SystemExit("all --lags must be no larger than --probe-sweeps")
     if not 0 <= args.minimum_acceptance < args.maximum_acceptance <= 1:
@@ -306,7 +392,8 @@ def main() -> int:
     for command in commands:
         prefix = [args.tsp] if args.scheduler == "tsp" else []
         print("+", shlex.join([*prefix, *command]))
-    print("+", shlex.join(([args.tsp] if args.scheduler == "tsp" else []) + summary_command))
+    if args.scheduler == "tsp":
+        print("+", shlex.join(([args.tsp] if args.scheduler == "tsp" else []) + summary_command))
     if args.dry_run:
         print("dry-run: no files were written and no tasks were enqueued")
         return 0
@@ -324,6 +411,29 @@ def main() -> int:
             subprocess.run(command, cwd=REPO_ROOT, check=True)
         return summarize(sweep_manifest, args.minimum_acceptance,
                          args.maximum_acceptance)
+
+    if args.scheduler == "lsf":
+        run_name = f"nlf_{args.run_dir.name}"
+        logs = args.output_dir / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        script = lsf_probe_script(args, sweep_manifest, len(tasks), logs, run_name)
+        script_path = args.output_dir / "lsf_job.sh"
+        script_path.write_text(script, encoding="utf-8")
+        submission = {
+            "run_name": run_name, "queue": args.queue, "walltime": args.walltime,
+            "cpus": args.cpus, "gpu_request": args.gpu_request, "task_count": len(tasks),
+            "pending_probes": len(commands),
+        }
+        (args.output_dir / "submission.json").write_text(
+            json.dumps(submission, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(script)
+        print(f"lsf_script: {script_path}")
+        if args.prepare_only:
+            return 0
+        subprocess.run(["bsub"], input=script, text=True, check=True)
+        print(f"enqueued {len(tasks)} nlf probe array tasks")
+        return 0
 
     subprocess.run([args.tsp, "-S", str(args.slots)], check=True)
     for command in commands:
