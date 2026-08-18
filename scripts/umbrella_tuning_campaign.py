@@ -586,7 +586,7 @@ def parser() -> argparse.ArgumentParser:
                           action=argparse.BooleanOptionalAction, default=True)
         item.add_argument("--walltime", default="120")
         item.add_argument("--max-continuations", type=int, default=20)
-        item.add_argument("--gpu-select", default="h100")
+        item.add_argument("--gpu-select", default="h200 || h100 || l40s")
         item.add_argument("--queue", default="short_gpu")
         item.add_argument("--exclude-host", action="append", default=[])
         item.add_argument("--bjobs", default="bjobs")

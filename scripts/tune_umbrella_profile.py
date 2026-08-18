@@ -545,7 +545,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--slots", type=int, default=1)
     result.add_argument("--walltime", default="120")
     result.add_argument("--max-continuations", type=int, default=20)
-    result.add_argument("--gpu-select", default="h100")
+    result.add_argument("--gpu-select", default="h200 || h100 || l40s")
     result.add_argument("--queue", default="short_gpu")
     result.add_argument("--exclude-host", action="append", default=[])
     result.add_argument("--fp64", action="store_true")

@@ -26,7 +26,7 @@ CONFIRM_ATTEMPTS="${CONFIRM_ATTEMPTS:-}"
 PILOT_SAMPLES="${PILOT_SAMPLES:-}"
 NLF="${NLF:-}"
 QUEUE="${QUEUE:-short_gpu}"
-GPU_SELECT="${GPU_SELECT:-h100}"
+GPU_SELECT="${GPU_SELECT:-h200 || h100 || l40s}"
 
 usage() {
   cat <<'EOF'

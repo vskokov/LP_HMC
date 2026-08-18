@@ -779,7 +779,7 @@ bash scripts/run_all_umbrella_tuning.sh
 python3 scripts/umbrella_campaign.py prepare --submit
 ```
 
-Tune profiles on the LSF cluster (H100, 2-hour resumable jobs under
+Tune profiles on the LSF cluster (H200/H100/L40S, 2-hour resumable jobs under
 `runs/umbrella_tuning_lsf/`):
 
 ```bash
