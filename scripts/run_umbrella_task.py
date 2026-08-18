@@ -152,7 +152,11 @@ def execute(args: argparse.Namespace, row: dict[str, str]) -> int:
             log_event("continuation_required", stage="thermalization")
             return RETRYABLE_EXIT
         if code:
-            log_event("permanent_thermalization_failure", returncode=code)
+            log_event(
+                "permanent_thermalization_failure",
+                returncode=code,
+                hint="inspect the job .err file for the Julia stack trace",
+            )
             return PERMANENT_EXIT
         log_event("thermalization_finished")
 

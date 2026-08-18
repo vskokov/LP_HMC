@@ -126,5 +126,27 @@ class TuneUmbrellaProfileTests(unittest.TestCase):
             self.assertNotIn("submit_umbrella_tsp.py", result.stdout)
 
 
+    def test_pilot_stage_uses_measured_n_lf_not_validated_profile_n_lf(self):
+        from umbrella_profiles import proposed_profile
+
+        with tempfile.TemporaryDirectory() as directory:
+            profile_dir = Path(directory) / "profiles"
+            profile_dir.mkdir()
+            profile = proposed_profile(6)
+            profile["n_lf"] = 8
+            profile["validated"] = True
+            (profile_dir / "L6.json").write_text(
+                json.dumps(profile, indent=2) + "\n", encoding="utf-8"
+            )
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/tune_umbrella_profile.py"),
+                 "--L=6", "--stage=pilot", "--dry-run",
+                 f"--profile-dir={profile_dir}", f"--run-root={directory}/runs"],
+                check=True, text=True, capture_output=True,
+            )
+            self.assertIn("--n-lf=32", result.stdout)
+            self.assertIn("--thermalization-sweeps=5000", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

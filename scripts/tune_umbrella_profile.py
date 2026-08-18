@@ -224,13 +224,14 @@ def lsf_submit_flags(args: argparse.Namespace) -> list[str]:
 def pilot_command(args: argparse.Namespace, profile: dict[str, object]) -> list[str]:
     z_value, m2_value = CANONICAL_POINT
     epsilon, equilibrium_n_lf, _ = resolve_hmc_parameters(
-        args.L, float(profile["epsilon"]), profile.get("n_lf")
+        args.L, float(profile["epsilon"]), None,
     )
     n_lf = resolve_pilot_n_lf(profile, equilibrium_n_lf)
     minimum = int(profile["minimum_thermalization_sweeps"])
     maximum = pilot_maximum_thermalization_sweeps(
         profile, args.pilot_max_thermalization_sweeps
     )
+    pilot_minimum_sweeps = min(args.pilot_thermalization_sweeps, maximum)
     run_name = f"tune_L{args.L}_pilot"
     command = [
         sys.executable, str(submit_script(args)),
@@ -240,7 +241,7 @@ def pilot_command(args: argparse.Namespace, profile: dict[str, object]) -> list[
         f"--startup-eps={profile['startup_epsilon']}",
         f"--startup-n-lf={profile['startup_n_lf']}",
         f"--startup-sweeps={profile['startup_sweeps']}",
-        f"--thermalization-sweeps={min(args.pilot_thermalization_sweeps, minimum)}",
+        f"--thermalization-sweeps={pilot_minimum_sweeps}",
         f"--max-thermalization-sweeps={maximum}",
         f"--umbrella-windows={profile['umbrella_windows']}",
         f"--umbrella-min={profile['umbrella_min']}",
