@@ -74,7 +74,6 @@ PY
 
 campaign_args() {
   local -a args=(
-    python3 "$ROOT/scripts/umbrella_tuning_campaign.py"
     --campaign-dir "$CAMPAIGN_DIR"
     --profile-dir "$PROFILE_DIR"
     --report-dir "$REPORT_DIR"
@@ -103,14 +102,17 @@ campaign_args() {
   if [[ "$DRY_RUN" == "1" ]]; then
     args+=(--dry-run)
   fi
-  printf '%s\0' "${args[@]}"
+  printf '%s\n' "${args[@]}"
 }
 
 run_campaign() {
-  local -a cmd=()
-  local IFS=$'\0'
-  readarray -d '' cmd < <(campaign_args)
-  IFS=$' \t\n'
+  local subcommand="$1"
+  shift
+  local -a cmd=(python3 "$ROOT/scripts/umbrella_tuning_campaign.py" "$subcommand")
+  local arg
+  while IFS= read -r arg; do
+    cmd+=("$arg")
+  done < <(campaign_args)
   "${cmd[@]}" "$@"
 }
 
