@@ -39,15 +39,30 @@ def lsf_environment_shell_lines(
     return lines
 
 
+def bsub_command_for_script(script_path: Path, *, bsub: str = "bsub") -> list[str]:
+    """Build a bsub argv that runs the script from shared storage via bash."""
+    resolved = script_path.resolve()
+    command = [bsub]
+    for line in resolved.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#BSUB"):
+            command.extend(shlex.split(stripped[len("#BSUB") :].strip()))
+            continue
+        if stripped.startswith("#!") or not stripped:
+            continue
+        break
+    command.extend(["bash", str(resolved)])
+    return command
+
+
 def submit_bsub_script(
     script_path: Path,
     *,
     bsub: str = "bsub",
     dry_run: bool = False,
 ) -> None:
-    """Submit a #BSUB script from shared storage instead of ~/.lsbatch."""
-    resolved = script_path.resolve()
-    command = [bsub, "-Zs", str(resolved)]
+    """Submit a #BSUB script by passing directives to bsub and running bash on GPFS."""
+    command = bsub_command_for_script(script_path, bsub=bsub)
     print("+", shlex.join(command))
     if not dry_run:
         subprocess.run(command, check=True)
