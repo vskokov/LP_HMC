@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -40,6 +41,30 @@ def lsf_environment_shell_lines(
     return lines
 
 
+def lsf_runtime_home(script_path: Path) -> Path:
+    """GPFS directory used as HOME so LSF job files are not written under /home."""
+    home = script_path.resolve().parent / "lsf_home"
+    (home / ".lsbatch").mkdir(parents=True, exist_ok=True)
+    return home
+
+
+def lsf_submit_environment(script_path: Path) -> dict[str, str]:
+    home = lsf_runtime_home(script_path)
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["LSB_JOB_SPOOLDIR"] = str(home / ".lsbatch")
+    return env
+
+
+def lsf_job_env_spec(script_path: Path, extra: str = "") -> str:
+    home = lsf_runtime_home(script_path)
+    spec = f"all,HOME={home},LSB_JOB_SPOOLDIR={home / '.lsbatch'}"
+    extra = extra.strip().removeprefix("all,").strip(",")
+    if extra:
+        spec = f"{spec},{extra}"
+    return spec
+
+
 def bsub_command_for_script(
     script_path: Path,
     *,
@@ -75,6 +100,8 @@ def submit_bsub_script(
 ) -> None:
     """Submit a #BSUB script by passing directives to bsub and running bash on GPFS."""
     command = bsub_command_for_script(script_path, bsub=bsub, job_name=job_name)
-    print("+", shlex.join(command))
+    command[1:1] = ["-env", lsf_job_env_spec(script_path)]
+    env = lsf_submit_environment(script_path)
+    print("+", f"HOME={env['HOME']}", shlex.join(command))
     if not dry_run:
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, env=env)

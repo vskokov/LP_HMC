@@ -19,6 +19,7 @@ from lsf_defaults import (
     DEFAULT_JULIA_MODULE,
     DEFAULT_MODULE_INIT,
     lsf_environment_shell_lines,
+    lsf_runtime_home,
     resolved_exclude_hosts,
     submit_bsub_script,
 )
@@ -229,13 +230,20 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
     selections.extend(f"hname!='{host}'" for host in args.exclude_host)
     resource = f"select[{' && '.join(selections)}] rusage[mem={args.mem_gb:g}]"
     script_path = (manifest.parent / "lsf_job.sh").resolve()
+    runtime_home = lsf_runtime_home(script_path)
+    env_spec = (
+        f'all,HOME={runtime_home},LSB_JOB_SPOOLDIR={runtime_home / ".lsbatch"},'
+        'UMBRELLA_TASK_ID=${TASK_ID},UMBRELLA_CONTINUATION=${NEXT}'
+    )
     continuation_command = " ".join([
+        f"HOME={shlex.quote(str(runtime_home))}",
+        f"LSB_JOB_SPOOLDIR={shlex.quote(str(runtime_home / '.lsbatch'))}",
         shlex.quote(args.bsub), f'-J "{args.run_name}_t${{TASK_ID}}"',
         f"-q {shlex.quote(args.queue)}", f"-W {shlex.quote(args.walltime)}",
         f"-n {args.cpus}", f"-R {shlex.quote(resource)}", f"-gpu {shlex.quote(args.gpu_request)}",
         f"-o {shlex.quote(str(logs.resolve()) + '/%J.out')}",
         f"-e {shlex.quote(str(logs.resolve()) + '/%J.err')}",
-        '-env "all,UMBRELLA_TASK_ID=${TASK_ID},UMBRELLA_CONTINUATION=${NEXT}"',
+        f'-env "{env_spec}"',
         "bash", shlex.quote(str(script_path)),
     ])
     lines = ["#!/usr/bin/env bash", f'#BSUB -J "{args.run_name}[1-{count}]"',

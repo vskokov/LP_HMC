@@ -54,9 +54,19 @@ echo hello
             )
             with patch("lsf_defaults.subprocess.run") as run:
                 submit_bsub_script(script, dry_run=False)
-            run.assert_called_once_with(
-                bsub_command_for_script(script), check=True
-            )
+            self.assertEqual(run.call_count, 1)
+            called = run.call_args
+            self.assertEqual(called.kwargs.get("check"), True)
+            env = called.kwargs["env"]
+            self.assertTrue(env["HOME"].endswith("lsf_home"))
+            self.assertEqual(env["LSB_JOB_SPOOLDIR"], str(Path(env["HOME"]) / ".lsbatch"))
+            command = called.args[0]
+            self.assertEqual(command[0], "bsub")
+            self.assertEqual(command[1], "-env")
+            self.assertIn("HOME=", command[2])
+            self.assertIn("LSB_JOB_SPOOLDIR=", command[2])
+            self.assertEqual(command[-2:], ["bash", str(script.resolve())])
+            self.assertTrue((Path(env["HOME"]) / ".lsbatch").is_dir())
 
     def test_submit_bsub_script_dry_run_does_not_invoke_bsub(self):
         with tempfile.TemporaryDirectory() as directory:

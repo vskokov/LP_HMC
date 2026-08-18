@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from analyze_umbrella import block_bootstrap, estimate, read_umbrella
-from lsf_defaults import submit_bsub_script
+from lsf_defaults import lsf_job_env_spec, lsf_submit_environment, submit_bsub_script
 from run_umbrella_task import merge_shards
 from hmc_defaults import resolve_hmc_parameters
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
@@ -200,29 +200,38 @@ def evaluate_cohort(rows: list[dict[str, str]], evaluation_json: Path | None) ->
 
 def scalar_submit(manifest: Path, task: int, allocation: int, dry_run: bool) -> None:
     config = json.loads((manifest.parent / "submission.json").read_text())
+    script = (manifest.parent / "lsf_job.sh").resolve()
     selections = [f"({config['gpu_select']})", *[f"hname!='{h}'" for h in config["exclude_host"]]]
     resource = f"select[{' && '.join(selections)}] rusage[mem={config['mem_gb']:g}]"
+    env_spec = lsf_job_env_spec(
+        script, extra=f"UMBRELLA_TASK_ID={task},UMBRELLA_CONTINUATION={allocation}"
+    )
     command = [config["bsub"], "-J", f"{config['run_name']}_t{task}", "-q", config["queue"],
                "-W", config["walltime"], "-n", str(config["cpus"]), "-R", resource,
-               "-gpu", config["gpu_request"], "-env", f"all,UMBRELLA_TASK_ID={task},UMBRELLA_CONTINUATION={allocation}",
-               "bash", str((manifest.parent / "lsf_job.sh").resolve())]
-    print("+", shlex.join(command))
+               "-gpu", config["gpu_request"], "-env", env_spec,
+               "bash", str(script)]
+    env = lsf_submit_environment(script)
+    print("+", f"HOME={env['HOME']}", shlex.join(command))
     if not dry_run:
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, env=env)
 
 
 def preflight(args: argparse.Namespace) -> int:
     config = json.loads((args.manifest.parent / "submission.json").read_text())
+    script = (args.manifest.parent / "lsf_job.sh").resolve()
     selections = [f"({config['gpu_select']})", *[f"hname!='{h}'" for h in config["exclude_host"]]]
     resource = f"select[{' && '.join(selections)}] rusage[mem={config['mem_gb']:g}]"
     marker = (args.manifest.parent / "self_resubmit_preflight.ok").resolve()
     payload = [sys.executable, str(REPO_ROOT / "scripts/lsf_self_resubmit_preflight.py"),
-               "--marker", str(marker), "--bsub", config["bsub"], "--queue", config["queue"]]
+               "--marker", str(marker), "--bsub", config["bsub"], "--queue", config["queue"],
+               "--runtime-home", str(lsf_submit_environment(script)["HOME"])]
     command = [config["bsub"], "-J", f"{config['run_name']}_preflight", "-q", config["queue"],
-               "-W", "10", "-n", "1", "-R", resource, "-gpu", config["gpu_request"], *payload]
-    print("+", shlex.join(command))
+               "-W", "10", "-n", "1", "-R", resource, "-gpu", config["gpu_request"],
+               "-env", lsf_job_env_spec(script), *payload]
+    env = lsf_submit_environment(script)
+    print("+", f"HOME={env['HOME']}", shlex.join(command))
     if not args.dry_run:
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, env=env)
     return 0
 
 
