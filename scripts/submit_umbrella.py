@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
+from lsf_defaults import resolved_exclude_hosts
 from reweight_manifest import parse_point, read_points_csv, write_manifest
 from umbrella_profiles import load_profile
 
@@ -97,8 +98,8 @@ def parser_for(scheduler_default: str | None = None) -> argparse.ArgumentParser:
                         help="LSF memory requested per host, in GB")
     parser.add_argument("--gpu-select", default="h200 || h100 || l40s",
                         help="LSF select expression for eligible GPU families")
-    parser.add_argument("--exclude-host", action="append", default=[],
-                        help="LSF host to exclude; repeat for multiple hosts")
+    parser.add_argument("--exclude-host", action="append", default=None,
+                        help="LSF host to exclude; repeat to replace the default gpu31 list")
     parser.add_argument("--gpu-request", default="num=1:mode=shared:mps=no")
     parser.add_argument("--bsub", default="bsub")
     return parser
@@ -257,6 +258,7 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
 def main(scheduler_default: str | None = None) -> int:
     parser = parser_for(scheduler_default)
     args = parser.parse_args()
+    args.exclude_host = resolved_exclude_hosts(args.exclude_host)
     requested_adaptive = args.min_samples is not None or args.max_samples is not None
     if requested_adaptive and not args.dry_run and args.profile_file is None:
         parser.error("adaptive production submission requires --profile-file with validated evidence")

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from analyze_umbrella import estimate, read_umbrella
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
+from lsf_defaults import resolved_exclude_hosts
 from umbrella_profiles import (
     CANONICAL_Z_MAX,
     SUPPORTED_SIZES,
@@ -548,7 +549,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--max-continuations", type=int, default=20)
     result.add_argument("--gpu-select", default="h200 || h100 || l40s")
     result.add_argument("--queue", default="short_gpu")
-    result.add_argument("--exclude-host", action="append", default=[])
+    result.add_argument("--exclude-host", action="append", default=None)
     result.add_argument("--fp64", action="store_true")
     result.add_argument("--dry-run", action="store_true")
     result.add_argument("--fresh-pilot", action="store_true",
@@ -581,6 +582,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = parser().parse_args()
+    args.exclude_host = resolved_exclude_hosts(args.exclude_host)
     if args.L not in SUPPORTED_SIZES:
         raise SystemExit(f"unsupported L={args.L}; choose from {SUPPORTED_SIZES}")
     args.run_root.mkdir(parents=True, exist_ok=True)

@@ -123,6 +123,7 @@ class TuneUmbrellaProfileTests(unittest.TestCase):
             self.assertIn("submit_umbrella_bsub.py", result.stdout)
             self.assertIn("--self-resubmit", result.stdout)
             self.assertIn("--runtime-budget-minutes=60.0", result.stdout)
+            self.assertIn("--exclude-host=gpu31", result.stdout)
             self.assertNotIn("submit_umbrella_tsp.py", result.stdout)
 
 

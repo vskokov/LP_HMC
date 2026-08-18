@@ -21,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from runtime_preflight import run as run_preflight
+from lsf_defaults import resolved_exclude_hosts
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -234,6 +235,12 @@ def run_single_probe(args, manifest: Path, probe_id: int) -> int:
     return 0
 
 
+def lsf_resource_select(args) -> str:
+    selections = [f"({args.gpu_select})"]
+    selections.extend(f"hname!='{host}'" for host in args.exclude_host)
+    return f"select[{' && '.join(selections)}]"
+
+
 def lsf_probe_script(args, manifest: Path, count: int, logs: Path,
                      run_name: str) -> str:
     runner = Path(__file__).resolve()
@@ -252,12 +259,14 @@ def lsf_probe_script(args, manifest: Path, count: int, logs: Path,
     if args.force:
         base.append("--force")
     command = " ".join(base)
+    resource = lsf_resource_select(args)
     lines = [
         "#!/usr/bin/env bash",
         f'#BSUB -J "{run_name}[1-{count}]"',
         f"#BSUB -q {args.queue}",
         f"#BSUB -W {args.walltime}",
         f"#BSUB -n {args.cpus}",
+        f'#BSUB -R "{resource}"',
         f'#BSUB -gpu "{args.gpu_request}"',
         f"#BSUB -o {logs.resolve()}/%J_%I.out",
         f"#BSUB -e {logs.resolve()}/%J_%I.err",
@@ -290,6 +299,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--queue", default="short_gpu")
     result.add_argument("--walltime", default="120")
     result.add_argument("--cpus", type=int, default=1)
+    result.add_argument("--gpu-select", default="h200 || h100 || l40s")
+    result.add_argument("--exclude-host", action="append", default=None)
     result.add_argument("--gpu-request", default="num=1:mode=shared:mps=no")
     result.add_argument("--run-probe-id", type=int, help=argparse.SUPPRESS)
     result.add_argument("--sweep-manifest", type=Path, help=argparse.SUPPRESS)
@@ -312,6 +323,7 @@ def main() -> int:
     if args.summarize_manifest:
         return summarize(args.summarize_manifest.resolve(), args.minimum_acceptance,
                          args.maximum_acceptance)
+    args.exclude_host = resolved_exclude_hosts(args.exclude_host)
     if args.run_probe_id is not None:
         if args.sweep_manifest is None:
             raise SystemExit("--run-probe-id requires --sweep-manifest")

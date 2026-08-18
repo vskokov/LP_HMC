@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from lsf_defaults import resolved_exclude_hosts
 from umbrella_campaign import active_lsf_tasks, claim, load_rows, preflight, repair_manifest
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
 from umbrella_runtime import atomic_json
@@ -175,6 +176,8 @@ def nlf_prepare_command(tune_args: argparse.Namespace, pilot_dir: Path,
         f"--output-dir={output_dir}",
         f"--queue={tune_args.queue}",
         f"--walltime={tune_args.walltime}",
+        f"--gpu-select={tune_args.gpu_select}",
+        *[f"--exclude-host={host}" for host in tune_args.exclude_host],
     ]
 
 
@@ -588,7 +591,7 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--max-continuations", type=int, default=20)
         item.add_argument("--gpu-select", default="h200 || h100 || l40s")
         item.add_argument("--queue", default="short_gpu")
-        item.add_argument("--exclude-host", action="append", default=[])
+        item.add_argument("--exclude-host", action="append", default=None)
         item.add_argument("--bjobs", default="bjobs")
 
     prep = sub.add_parser("prepare")
@@ -614,6 +617,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = parser().parse_args()
+    args.exclude_host = resolved_exclude_hosts(args.exclude_host)
     handlers = {
         "prepare": prepare,
         "status": status,

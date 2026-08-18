@@ -27,6 +27,7 @@ PILOT_SAMPLES="${PILOT_SAMPLES:-}"
 NLF="${NLF:-}"
 QUEUE="${QUEUE:-short_gpu}"
 GPU_SELECT="${GPU_SELECT:-h200 || h100 || l40s}"
+EXCLUDE_HOSTS="${EXCLUDE_HOSTS:-gpu31}"
 
 usage() {
   cat <<'EOF'
@@ -65,6 +66,7 @@ Commands:
 Environment:
   Same options are available via FORCE, DRY_RUN, CONFIRM_SAMPLES,
   CONFIRM_SAMPLE_SCHEDULE, CONFIRM_ATTEMPTS, PILOT_SAMPLES, NLF, QUEUE, GPU_SELECT
+  EXCLUDE_HOSTS (default: gpu31)
   (export the variable or pass the matching --flag).
 
 Examples:
@@ -96,6 +98,13 @@ campaign_args() {
     --queue "$QUEUE"
     --gpu-select "$GPU_SELECT"
   )
+  local host
+  IFS=',' read -ra _exclude_hosts <<< "$EXCLUDE_HOSTS"
+  for host in "${_exclude_hosts[@]}"; do
+    host="${host#"${host%%[![:space:]]*}"}"
+    host="${host%"${host##*[![:space:]]}"}"
+    [[ -n "$host" ]] && args+=(--exclude-host="$host")
+  done
   if [[ "$FRESH_PILOT" == "1" ]]; then
     args+=(--fresh-pilot)
   fi
