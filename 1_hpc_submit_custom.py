@@ -29,6 +29,7 @@ import argparse
 import csv
 import os
 import stat
+import sys
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -42,6 +43,9 @@ REPO_ROOT   = Path(__file__).parent.resolve()
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 DATA_DIR    = REPO_ROOT / "data"
 TMP_DIR     = REPO_ROOT / "tmp"
+
+sys.path.insert(0, str(SCRIPTS_DIR))
+from runtime_preflight import lsf_julia_launch_lines
 
 # ---------------------------------------------------------------------------
 # HPC environment
@@ -110,6 +114,7 @@ def _data_path(L: int, Z: float, m2: float, seed: int) -> Path:
 # ---------------------------------------------------------------------------
 
 def _bsub_header(walltime: int, queue: str, job_name: str) -> str:
+    preflight = "\n".join(lsf_julia_launch_lines("julia", REPO_ROOT))
     return f"""\
 #!/usr/bin/env bash
 #BSUB -J {job_name}
@@ -127,6 +132,8 @@ source /usr/share/Modules/init/bash
 module load {CUDA_MODULE}
 module load {JULIA_MODULE}
 export JULIA_DEPOT_PATH="{JULIA_DEPOT_PATH}"
+
+{preflight}
 
 """
 

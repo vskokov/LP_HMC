@@ -13,10 +13,13 @@ TUNE_SIZES=("${ALL_SIZES[@]}")
 JULIA="${JULIA:-julia}"
 
 cluster_env() {
-  source /usr/share/Modules/init/bash
-  module load cuda/13.2
-  module load julia/1.12.6
-  export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"
+  if [[ -f /usr/share/Modules/init/bash ]]; then
+    # shellcheck source=/dev/null
+    source /usr/share/Modules/init/bash
+    module load cuda/13.2
+    module load julia/1.12.6
+    export JULIA_DEPOT_PATH="/usr/local/usrapps/${GROUP:?GROUP must be set on LSF}/${USER}/julia_depot"
+  fi
   JULIA="${JULIA:-julia}"
 }
 

@@ -22,7 +22,7 @@ from lsf_defaults import (
     DEFAULT_MODULE_INIT,
     lsf_environment_shell_lines,
 )
-from runtime_preflight import shell_command as preflight_shell_command
+from runtime_preflight import lsf_julia_launch_lines
 from reweight_manifest import (
     REPO_ROOT,
     build_rows,
@@ -134,8 +134,6 @@ def lsf_script(
     command_text = " ".join(
         item if item == '"${TASK_ID}"' else shlex.quote(item) for item in command
     )
-    cuda_check = preflight_shell_command(args.julia, REPO_ROOT)
-
     body = [
         "",
         "set -euo pipefail",
@@ -146,17 +144,12 @@ def lsf_script(
             julia_depot_path=args.julia_depot,
             extra_modules=args.module,
         ),
-    ]
-    body.extend([
         "",
-        'echo "julia=$(command -v julia)"',
-        "julia --version",
-        'echo "checking CUDA runtime and device"',
-        cuda_check,
+        *lsf_julia_launch_lines(args.julia, REPO_ROOT),
         'TASK_ID="$((LSB_JOBINDEX - 1))"',
         command_text,
         "",
-    ])
+    ]
     return "\n".join(directives + body)
 
 

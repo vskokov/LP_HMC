@@ -24,6 +24,15 @@ def shell_command(julia: str, project: Path) -> str:
     return shlex.join(command(julia, project))
 
 
+def lsf_julia_launch_lines(julia: str, project: Path) -> list[str]:
+    return [
+        'echo "julia=$(command -v julia)"',
+        "julia --version",
+        'echo "checking CUDA runtime and device"',
+        shell_command(julia, project),
+    ]
+
+
 def run(julia: str, project: Path) -> None:
     try:
         subprocess.run(command(julia, project), check=True)

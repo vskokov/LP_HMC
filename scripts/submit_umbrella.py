@@ -22,6 +22,7 @@ from lsf_defaults import (
     resolved_exclude_hosts,
 )
 from reweight_manifest import parse_point, read_points_csv, write_manifest
+from runtime_preflight import lsf_julia_launch_lines
 from umbrella_profiles import load_profile
 
 
@@ -249,8 +250,7 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
                  julia_depot_path=args.julia_depot,
                  extra_modules=args.module,
              ),
-             'echo "julia=$(command -v julia)"',
-             "julia --version",
+             *lsf_julia_launch_lines("julia", REPO_ROOT),
              'TASK_ID="${UMBRELLA_TASK_ID:-$((LSB_JOBINDEX - 1))}"',
              'ALLOCATION="${UMBRELLA_CONTINUATION:-0}"',
              "set +e",

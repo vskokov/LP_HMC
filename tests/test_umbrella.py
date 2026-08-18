@@ -141,6 +141,8 @@ class UmbrellaTests(unittest.TestCase):
                 'export JULIA_DEPOT_PATH="/usr/local/usrapps/$GROUP/$USER/julia_depot"',
                 script,
             )
+            self.assertIn('echo "checking CUDA runtime and device"', script)
+            self.assertIn("CUDA.functional(true)", script)
 
 
 if __name__ == "__main__":

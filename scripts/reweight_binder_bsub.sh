@@ -79,8 +79,9 @@ echo "task_index=$task_index/$task_count L=$L Z=$Z m2_start=$m2_start m2_end=$m2
 echo "manifest=$manifest output=$output"
 echo "julia=$(command -v julia)"
 julia --version
+echo "checking CUDA runtime and device"
 julia --project=. --startup-file=no -e \
-    'using CUDA; CUDA.functional(true) || error("CUDA is not functional"); CUDA.versioninfo()'
+    'VERSION >= v"1.12" || error("Julia 1.12 or newer is required; got $(VERSION)"); using CUDA; CUDA.functional(true) || error("CUDA is not functional"); println("preflight Julia=", VERSION, " GPU=", CUDA.name(CUDA.device())); CUDA.versioninfo()'
 
 python3 reweight_binder.py \
     --manifest "$manifest" \
