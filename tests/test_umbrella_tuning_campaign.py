@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from umbrella_tuning_campaign import (  # noqa: E402
     initial_state,
     nlf_all_probes_done,
+    nlf_pending_probe_ids,
     pilot_is_complete,
     ranked_nlf_candidates,
 )
@@ -100,9 +101,9 @@ class UmbrellaTuningCampaignTests(unittest.TestCase):
                     json.dumps({"complete": True}), encoding="utf-8"
                 )
             self.assertTrue(pilot_is_complete(pilot_dir))
-            subprocess.run(
+            result = subprocess.run(
                 [sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
-                 "repair", "--campaign-dir", str(campaign),
+                 "repair", "--dry-run", "--campaign-dir", str(campaign),
                  "--profile-dir", str(root / "profiles"),
                  "--report-dir", str(reports), "--L", "6"],
                 check=True, capture_output=True, text=True,
@@ -112,6 +113,39 @@ class UmbrellaTuningCampaignTests(unittest.TestCase):
             nlf_dir = reports / "L6_nlf"
             self.assertTrue((nlf_dir / "sweep_manifest.csv").is_file())
             self.assertTrue((nlf_dir / "lsf_job.sh").is_file())
+            self.assertIn("rusage[mem=", (nlf_dir / "lsf_job.sh").read_text())
+            self.assertIn("bsub", result.stdout)
+
+    def test_status_discovers_sizes_missing_from_campaign_index(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            campaign = root / "campaign"
+            subprocess.run(
+                [sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+                 "prepare", "--sizes", "6",
+                 "--campaign-dir", str(campaign),
+                 "--profile-dir", str(root / "profiles"),
+                 "--report-dir", str(root / "reports")],
+                check=True, capture_output=True, text=True,
+            )
+            orphan = campaign / "L8"
+            orphan.mkdir()
+            (orphan / "state.json").write_text(
+                json.dumps(initial_state(8), indent=2) + "\n", encoding="utf-8"
+            )
+            index_path = campaign / "campaign.json"
+            index = json.loads(index_path.read_text())
+            index["sizes"] = [item for item in index["sizes"] if int(item["L"]) == 6]
+            index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+                 "status", "--campaign-dir", str(campaign),
+                 "--profile-dir", str(root / "profiles"),
+                 "--report-dir", str(root / "reports")],
+                check=True, capture_output=True, text=True,
+            )
+            payload = json.loads(result.stdout)
+            self.assertEqual(sorted(item["L"] for item in payload["sizes"]), [6, 8])
 
     def test_ranked_nlf_candidates_reads_eligible_rows(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -137,6 +171,7 @@ class UmbrellaTuningCampaignTests(unittest.TestCase):
             self.assertFalse(nlf_all_probes_done(output_dir))
             (raw / "b.csv").write_text("x\n")
             self.assertTrue(nlf_all_probes_done(output_dir))
+            self.assertEqual(nlf_pending_probe_ids(output_dir), [])
 
 
 if __name__ == "__main__":

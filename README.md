@@ -802,9 +802,11 @@ bash scripts/validate_umbrella_profiles_lsf.sh status
 
 `prepare` writes per-L manifests and `lsf_job.sh` scripts; `preflight` runs the
 compute-node self-resubmit check required before pilot/confirm jobs can chain on
-exit code 75.  `repair` resubmits incomplete tasks, summarizes completed nlf
-probe arrays on the login node, escalates confirm sample counts when the
-canonical Binder gate fails, and promotes validated profiles.
+exit code 75.  `repair` discovers every `L*/state.json` even if `campaign.json`
+is stale, resubmits incomplete pilot/confirm tasks, submits pending nlf probes,
+summarizes completed nlf arrays, submits confirm, and promotes validated
+profiles.  Pilot directories are not deleted unless you pass `--force` or
+`FRESH_PILOT=1`.
 
 After production completes, aggregate Binder results with:
 

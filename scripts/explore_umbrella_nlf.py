@@ -21,7 +21,12 @@ from collections import defaultdict
 from pathlib import Path
 
 from runtime_preflight import lsf_julia_launch_lines, run as run_preflight
-from lsf_defaults import lsf_environment_shell_lines, resolved_exclude_hosts, submit_bsub_script
+from lsf_defaults import (
+    DEFAULT_MEM_GB,
+    lsf_environment_shell_lines,
+    resolved_exclude_hosts,
+    submit_bsub_script,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -238,7 +243,10 @@ def run_single_probe(args, manifest: Path, probe_id: int) -> int:
 def lsf_resource_select(args) -> str:
     selections = [f"({args.gpu_select})"]
     selections.extend(f"hname!='{host}'" for host in args.exclude_host)
-    return f"select[{' && '.join(selections)}]"
+    return (
+        f"select[{' && '.join(selections)}] "
+        f"rusage[mem={float(getattr(args, 'mem_gb', DEFAULT_MEM_GB)):g}]"
+    )
 
 
 def lsf_probe_script(args, manifest: Path, count: int, logs: Path,
@@ -275,7 +283,9 @@ def lsf_probe_script(args, manifest: Path, count: int, logs: Path,
         "export PYTHONUNBUFFERED=1",
         *lsf_environment_shell_lines(),
         *lsf_julia_launch_lines("julia", REPO_ROOT),
-        'PROBE_ID="$((LSB_JOBINDEX - 1))"',
+        'if [[ -z "${PROBE_ID:-}" ]]; then',
+        '  PROBE_ID="$((LSB_JOBINDEX - 1))"',
+        "fi",
         command,
         "",
     ]
@@ -304,6 +314,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--gpu-select", default="h200 || h100 || l40s")
     result.add_argument("--exclude-host", action="append", default=None)
     result.add_argument("--gpu-request", default="num=1:mode=shared:mps=no")
+    result.add_argument("--mem-gb", type=float, default=DEFAULT_MEM_GB,
+                        help="LSF memory requested per host, in GB")
     result.add_argument("--run-probe-id", type=int, help=argparse.SUPPRESS)
     result.add_argument("--sweep-manifest", type=Path, help=argparse.SUPPRESS)
     result.add_argument("--output-dir", type=Path)
@@ -414,10 +426,13 @@ def main() -> int:
 
     if args.scheduler == "tsp" and shutil.which(args.tsp) is None:
         raise SystemExit(f"task-spooler executable not found: {args.tsp}")
-    try:
-        run_preflight(args.julia, REPO_ROOT)
-    except RuntimeError as error:
-        raise SystemExit(str(error)) from error
+    # LSF jobs check CUDA on the compute node. Login-node prepare/submit
+    # must not require a GPU.
+    if args.scheduler != "lsf":
+        try:
+            run_preflight(args.julia, REPO_ROOT)
+        except RuntimeError as error:
+            raise SystemExit(str(error)) from error
     (args.output_dir / "raw").mkdir(parents=True, exist_ok=True)
     write_sweep_manifest(sweep_manifest, tasks)
     if args.scheduler == "local":

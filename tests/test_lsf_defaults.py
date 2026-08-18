@@ -36,6 +36,16 @@ echo hello
             self.assertEqual(command[command.index("-q") + 1], "short_gpu")
             self.assertEqual(command[-2:], ["bash", str(script.resolve())])
 
+    def test_bsub_command_can_override_job_name_for_sparse_array(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "lsf_job.sh"
+            script.write_text(
+                "#!/usr/bin/env bash\n#BSUB -J \"nlf_run[1-8]\"\ntrue\n",
+                encoding="utf-8",
+            )
+            command = bsub_command_for_script(script, job_name="nlf_run[2,5]")
+            self.assertEqual(command[command.index("-J") + 1], "nlf_run[2,5]")
+
     def test_submit_bsub_script_invokes_parsed_command(self):
         with tempfile.TemporaryDirectory() as directory:
             script = Path(directory) / "lsf_job.sh"

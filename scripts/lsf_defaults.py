@@ -12,6 +12,7 @@ DEFAULT_MODULE_INIT = "/usr/share/Modules/init/bash"
 DEFAULT_CUDA_MODULE = "cuda/13.2"
 DEFAULT_JULIA_MODULE = "julia/1.12.6"
 DEFAULT_JULIA_DEPOT_PATH = "/usr/local/usrapps/$GROUP/$USER/julia_depot"
+DEFAULT_MEM_GB = 24.0
 
 
 def resolved_exclude_hosts(hosts: list[str] | None) -> list[str]:
@@ -39,7 +40,12 @@ def lsf_environment_shell_lines(
     return lines
 
 
-def bsub_command_for_script(script_path: Path, *, bsub: str = "bsub") -> list[str]:
+def bsub_command_for_script(
+    script_path: Path,
+    *,
+    bsub: str = "bsub",
+    job_name: str | None = None,
+) -> list[str]:
     """Build a bsub argv that runs the script from shared storage via bash."""
     resolved = script_path.resolve()
     command = [bsub]
@@ -51,6 +57,11 @@ def bsub_command_for_script(script_path: Path, *, bsub: str = "bsub") -> list[st
         if stripped.startswith("#!") or not stripped:
             continue
         break
+    if job_name is not None:
+        if "-J" in command:
+            command[command.index("-J") + 1] = job_name
+        else:
+            command[1:1] = ["-J", job_name]
     command.extend(["bash", str(resolved)])
     return command
 
@@ -60,9 +71,10 @@ def submit_bsub_script(
     *,
     bsub: str = "bsub",
     dry_run: bool = False,
+    job_name: str | None = None,
 ) -> None:
     """Submit a #BSUB script by passing directives to bsub and running bash on GPFS."""
-    command = bsub_command_for_script(script_path, bsub=bsub)
+    command = bsub_command_for_script(script_path, bsub=bsub, job_name=job_name)
     print("+", shlex.join(command))
     if not dry_run:
         subprocess.run(command, check=True)

@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lsf_defaults import resolved_exclude_hosts, submit_bsub_script
+from lsf_defaults import DEFAULT_MEM_GB, resolved_exclude_hosts, submit_bsub_script
 from umbrella_campaign import active_lsf_tasks, claim, load_rows, preflight, repair_manifest
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
 from umbrella_runtime import atomic_json
@@ -109,6 +109,7 @@ def tune_args_from_namespace(args: argparse.Namespace, L: int) -> argparse.Names
         gpu_select=args.gpu_select,
         queue=args.queue,
         exclude_host=args.exclude_host,
+        mem_gb=getattr(args, "mem_gb", DEFAULT_MEM_GB),
         stage="all",
     )
 
@@ -129,6 +130,18 @@ def write_profile_if_missing(directory: Path, L: int) -> Path:
 
 def manifest_complete(manifest: Path) -> bool:
     return confirm_is_complete(manifest.parent)
+
+
+def nlf_pending_probe_ids(output_dir: Path) -> list[int]:
+    manifest = output_dir / "sweep_manifest.csv"
+    if not manifest.is_file():
+        return []
+    pending: list[int] = []
+    with manifest.open(newline="", encoding="utf-8") as handle:
+        for task in csv.DictReader(handle):
+            if not Path(task["output"]).is_file():
+                pending.append(int(task["probe_id"]))
+    return pending
 
 
 def nlf_all_probes_done(output_dir: Path) -> bool:
@@ -178,6 +191,7 @@ def nlf_prepare_command(tune_args: argparse.Namespace, pilot_dir: Path,
         f"--walltime={tune_args.walltime}",
         f"--gpu-select={tune_args.gpu_select}",
         *[f"--exclude-host={host}" for host in tune_args.exclude_host],
+        f"--mem-gb={getattr(tune_args, 'mem_gb', DEFAULT_MEM_GB):g}",
     ]
 
 
@@ -207,8 +221,52 @@ def selected_nlf_from_recommendations(output_dir: Path) -> int | None:
     return None
 
 
-def bsub_script(script_path: Path, *, dry_run: bool) -> None:
-    submit_bsub_script(script_path, dry_run=dry_run)
+def campaign_item_from_state(L: int, state: dict[str, object], path: Path) -> dict[str, object]:
+    return {
+        "L": L,
+        "stage": state.get("stage"),
+        "state_path": str(path.resolve()),
+        "pilot_manifest": state.get("pilot_manifest"),
+        "nlf_output_dir": state.get("nlf_output_dir"),
+        "confirm_manifest": state.get("confirm_manifest"),
+    }
+
+
+def discover_state_files(campaign_dir: Path) -> list[tuple[int, Path, dict[str, object]]]:
+    found: list[tuple[int, Path, dict[str, object]]] = []
+    for path in sorted(campaign_dir.glob("L*/state.json")):
+        state = load_state(path)
+        try:
+            L = int(state.get("L", path.parent.name[1:]))
+        except (TypeError, ValueError):
+            continue
+        found.append((L, path, state))
+    return found
+
+
+def sync_campaign_index(args: argparse.Namespace) -> Path:
+    args.campaign_dir.mkdir(parents=True, exist_ok=True)
+    index_path = args.campaign_dir / "campaign.json"
+    if index_path.is_file():
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    else:
+        index = {
+            "schema_version": 1,
+            "campaign": "umbrella_tuning_lsf",
+            "Z": CANONICAL_POINT[0],
+            "m2": CANONICAL_POINT[1],
+            "sizes": [],
+        }
+    by_lattice = {int(item["L"]): item for item in index.get("sizes", [])}
+    for L, path, state in discover_state_files(args.campaign_dir):
+        by_lattice[L] = campaign_item_from_state(L, state, path)
+    index["sizes"] = [by_lattice[L] for L in sorted(by_lattice)]
+    atomic_json(index_path, index)
+    return index_path
+
+
+def bsub_script(script_path: Path, *, dry_run: bool, job_name: str | None = None) -> None:
+    submit_bsub_script(script_path, dry_run=dry_run, job_name=job_name)
 
 
 def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
@@ -229,9 +287,9 @@ def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
         return {"L": L, "stage": "validated", "state_path": str(path.resolve())}
 
     tune_args = tune_args_from_namespace(args, L)
+    campaign_dry_run = bool(args.dry_run)
     tune_args.dry_run = False
-    if args.force_revalidate:
-        tune_args.fresh_pilot = True
+    tune_args.fresh_pilot = bool(args.force_revalidate or args.fresh_pilot) and not campaign_dry_run
     stage = str(state["stage"])
     if stage == "pilot":
         pilot_dir = stage_pilot_lsf(tune_args)
@@ -248,20 +306,29 @@ def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
         selected = state.get("selected_n_lf")
         if selected is None:
             raise SystemExit(f"L={L} confirm stage without selected_n_lf")
-        attempts = confirmation_attempts(tune_args)
-        index = int(state.get("confirm_attempt_index", 0))
-        if index >= len(attempts):
-            raise SystemExit(f"L={L} confirm attempts exhausted")
-        samples, multiplier = attempts[index]
-        confirm_dir = stage_confirm_lsf(
-            tune_args, int(selected),
-            confirm_samples=samples,
-            thermalization_multiplier=multiplier,
-        )
-        state["confirm_manifest"] = str((confirm_dir / "manifest.csv").resolve())
-        state["confirm_dir"] = str(confirm_dir.resolve())
-        state["confirm_samples"] = samples
-        state["confirm_thermalization_multiplier"] = multiplier
+        existing = Path(str(state["confirm_dir"])) if state.get("confirm_dir") else None
+        if (
+            existing is not None
+            and (existing / "manifest.csv").is_file()
+            and not args.force_revalidate
+        ):
+            state["confirm_manifest"] = str((existing / "manifest.csv").resolve())
+            state["confirm_dir"] = str(existing.resolve())
+        else:
+            attempts = confirmation_attempts(tune_args)
+            index = int(state.get("confirm_attempt_index", 0))
+            if index >= len(attempts):
+                raise SystemExit(f"L={L} confirm attempts exhausted")
+            samples, multiplier = attempts[index]
+            confirm_dir = stage_confirm_lsf(
+                tune_args, int(selected),
+                confirm_samples=samples,
+                thermalization_multiplier=multiplier,
+            )
+            state["confirm_manifest"] = str((confirm_dir / "manifest.csv").resolve())
+            state["confirm_dir"] = str(confirm_dir.resolve())
+            state["confirm_samples"] = samples
+            state["confirm_thermalization_multiplier"] = multiplier
     save_state(path, state)
     return {"L": L, "stage": state["stage"], "state_path": str(path.resolve())}
 
@@ -281,14 +348,18 @@ def prepare(args: argparse.Namespace) -> int:
             "sizes": [],
         }
     by_lattice = {int(item["L"]): item for item in index.get("sizes", [])}
+    for L, path, state in discover_state_files(args.campaign_dir):
+        by_lattice[L] = campaign_item_from_state(L, state, path)
     for L in args.sizes:
         item = prepare_size(args, L)
         path = state_file(args.campaign_dir, L)
         state = load_state(path)
-        item["pilot_manifest"] = state.get("pilot_manifest")
-        item["nlf_output_dir"] = state.get("nlf_output_dir")
-        item["confirm_manifest"] = state.get("confirm_manifest")
-        by_lattice[L] = item
+        by_lattice[L] = campaign_item_from_state(L, state, path)
+        by_lattice[L].update({
+            "pilot_manifest": state.get("pilot_manifest"),
+            "nlf_output_dir": state.get("nlf_output_dir"),
+            "confirm_manifest": state.get("confirm_manifest"),
+        })
     index["sizes"] = [by_lattice[L] for L in sorted(by_lattice)]
     atomic_json(index_path, index)
     print(f"campaign_index={index_path}")
@@ -301,14 +372,18 @@ def selected_states(args: argparse.Namespace) -> list[tuple[int, dict[str, objec
         if not path.is_file():
             raise SystemExit(f"missing state for L={args.L}: {path}")
         return [(args.L, load_state(path))]
-    campaign = json.loads((args.campaign_dir / "campaign.json").read_text(encoding="utf-8"))
-    result = []
-    for item in campaign["sizes"]:
-        L = int(item["L"])
-        path = state_file(args.campaign_dir, L)
-        if path.is_file():
-            result.append((L, load_state(path)))
-    return result
+    sync_campaign_index(args)
+    by_lattice: dict[int, dict[str, object]] = {}
+    for L, _path, state in discover_state_files(args.campaign_dir):
+        by_lattice[L] = state
+    if not by_lattice:
+        campaign = json.loads((args.campaign_dir / "campaign.json").read_text(encoding="utf-8"))
+        for item in campaign.get("sizes", []):
+            L = int(item["L"])
+            path = state_file(args.campaign_dir, L)
+            if path.is_file():
+                by_lattice[L] = load_state(path)
+    return [(L, by_lattice[L]) for L in sorted(by_lattice)]
 
 
 def status(args: argparse.Namespace) -> int:
@@ -348,6 +423,33 @@ def preflight_cmd(args: argparse.Namespace) -> int:
     return preflight(preflight_args)
 
 
+def submit_nlf_jobs(output_dir: Path, *, dry_run: bool, bjobs: str) -> None:
+    pending = nlf_pending_probe_ids(output_dir)
+    script = output_dir / "lsf_job.sh"
+    if not pending:
+        print(f"L nlf probes already complete: {output_dir}")
+        return
+    if not script.is_file():
+        raise SystemExit(f"missing nlf LSF script: {script}")
+    submission_path = output_dir / "submission.json"
+    run_name = (
+        json.loads(submission_path.read_text(encoding="utf-8"))["run_name"]
+        if submission_path.is_file() else output_dir.name
+    )
+    active = active_lsf_tasks(run_name, bjobs)
+    pending = [probe for probe in pending if probe not in active]
+    if not pending:
+        print(f"pending nlf probes already queued: {run_name}")
+        return
+    with (output_dir / "sweep_manifest.csv").open(newline="", encoding="utf-8") as handle:
+        n_tasks = sum(1 for _ in csv.DictReader(handle))
+    if len(pending) == n_tasks:
+        bsub_script(script, dry_run=dry_run)
+        return
+    spec = ",".join(str(probe + 1) for probe in pending)
+    bsub_script(script, dry_run=dry_run, job_name=f"{run_name}[{spec}]")
+
+
 def submit_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> None:
     stage = str(state.get("stage"))
     if stage == "validated":
@@ -369,10 +471,7 @@ def submit_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> N
         if nlf_all_probes_done(output_dir):
             print(f"L={L} nlf probes complete; run repair to summarize")
             return
-        script = output_dir / "lsf_job.sh"
-        if not script.is_file():
-            raise SystemExit(f"missing nlf LSF script for L={L}: {script}")
-        bsub_script(script, dry_run=args.dry_run)
+        submit_nlf_jobs(output_dir, dry_run=args.dry_run, bjobs=args.bjobs)
         return
     if stage == "confirm":
         manifest = Path(str(state["confirm_manifest"]))
@@ -539,20 +638,30 @@ def repair_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> N
         return
     stage = str(state.get("stage"))
     if stage == "pilot":
-        advance_pilot(args, L, state)
-    elif stage == "nlf":
-        advance_nlf(args, L, state)
-    elif stage == "confirm":
-        advance_confirm(args, L, state)
-    elif stage == "promote":
+        if advance_pilot(args, L, state):
+            submit_size(args, L, state)
+        return
+    if stage == "nlf":
+        output_dir = Path(str(state["nlf_output_dir"]))
+        if nlf_all_probes_done(output_dir):
+            if advance_nlf(args, L, state):
+                submit_size(args, L, state)
+            return
+        submit_nlf_jobs(output_dir, dry_run=args.dry_run, bjobs=args.bjobs)
+        return
+    if stage == "confirm":
+        if advance_confirm(args, L, state) and state.get("stage") == "confirm":
+            submit_size(args, L, state)
+        return
+    if stage == "promote":
         advance_promote(args, L, state)
 
 
 def repair(args: argparse.Namespace) -> int:
-    if not (args.campaign_dir / "campaign.json").is_file():
-        prepare(args)
+    sync_campaign_index(args)
     for L, state in selected_states(args):
         repair_size(args, L, state)
+    sync_campaign_index(args)
     return 0
 
 
@@ -596,6 +705,7 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--queue", default="short_gpu")
         item.add_argument("--exclude-host", action="append", default=None)
         item.add_argument("--bjobs", default="bjobs")
+        item.add_argument("--mem-gb", type=float, default=DEFAULT_MEM_GB)
 
     prep = sub.add_parser("prepare")
     add_common(prep)

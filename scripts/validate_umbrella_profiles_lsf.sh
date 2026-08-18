@@ -18,14 +18,18 @@ cluster_env() {
     source /usr/share/Modules/init/bash
     module load cuda/13.2
     module load julia/1.12.6
-    export JULIA_DEPOT_PATH="/usr/local/usrapps/${GROUP:?GROUP must be set on LSF}/${USER}/julia_depot"
+    if [[ -z "${GROUP:-}" ]]; then
+      GROUP="$(id -gn 2>/dev/null || printf '%s' "$USER")"
+    fi
+    export GROUP
+    export JULIA_DEPOT_PATH="/usr/local/usrapps/${GROUP}/${USER}/julia_depot"
   fi
   JULIA="${JULIA:-julia}"
 }
 
 FORCE="${FORCE:-0}"
 DRY_RUN="${DRY_RUN:-0}"
-FRESH_PILOT="${FRESH_PILOT:-1}"
+FRESH_PILOT="${FRESH_PILOT:-0}"
 CONTINUE_ON_ERROR="${CONTINUE_ON_ERROR:-1}"
 STAGE="${STAGE:-}"
 CONFIRM_SAMPLES="${CONFIRM_SAMPLES:-}"
@@ -66,7 +70,7 @@ Commands:
   prepare        Create campaign tree, manifests, and state files.
   preflight      Run self-resubmit preflight for L's active pilot/confirm stage.
   submit         bsub initial jobs for listed L (or all pending).
-  repair         Advance state: resubmit incomplete jobs, summarize nlf, promote.
+  repair         Advance state, submit next-stage jobs, resubmit incomplete tasks.
   tune           prepare + preflight + submit for listed sizes.
   tune-all       Tune every unvalidated profile.
   reset-tuning   Clear runs/umbrella_tuning_lsf and reset profiles.
@@ -74,8 +78,7 @@ Commands:
 Environment:
   Same options are available via FORCE, DRY_RUN, CONFIRM_SAMPLES,
   CONFIRM_SAMPLE_SCHEDULE, CONFIRM_ATTEMPTS, PILOT_SAMPLES, NLF, QUEUE, GPU_SELECT
-  EXCLUDE_HOSTS (default: gpu31)
-  (export the variable or pass the matching --flag).
+  FRESH_PILOT=1           Delete stale pilot runs (default: off; --force also resets)
 
 Examples:
   bash scripts/validate_umbrella_profiles_lsf.sh --force \
@@ -113,7 +116,7 @@ campaign_args() {
     host="${host%"${host##*[![:space:]]}"}"
     [[ -n "$host" ]] && args+=(--exclude-host="$host")
   done
-  if [[ "$FRESH_PILOT" == "1" ]]; then
+  if [[ "$FORCE" == "1" || "$FRESH_PILOT" == "1" ]]; then
     args+=(--fresh-pilot)
   fi
   if [[ -n "${CONFIRM_SAMPLES:-}" ]]; then
