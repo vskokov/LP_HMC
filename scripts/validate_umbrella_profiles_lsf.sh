@@ -33,13 +33,13 @@ usage() {
 LSF umbrella profile validation on H100 (2-hour resumable jobs).
 
 Usage:
-  validate_umbrella_profiles_lsf.sh status
-  validate_umbrella_profiles_lsf.sh prepare [--sizes 16,18,20,24]
+  validate_umbrella_profiles_lsf.sh [--force] [--dry-run] status
+  validate_umbrella_profiles_lsf.sh [--force] prepare [--sizes 16,18,20,24]
   validate_umbrella_profiles_lsf.sh preflight <L>
   validate_umbrella_profiles_lsf.sh submit [<L> ...]
   validate_umbrella_profiles_lsf.sh repair
-  validate_umbrella_profiles_lsf.sh tune <L> [<L> ...]
-  validate_umbrella_profiles_lsf.sh tune-all
+  validate_umbrella_profiles_lsf.sh [--force] tune <L> [<L> ...]
+  validate_umbrella_profiles_lsf.sh [--force] tune-all
   validate_umbrella_profiles_lsf.sh reset-tuning
 
 Commands:
@@ -53,7 +53,8 @@ Commands:
   reset-tuning   Clear runs/umbrella_tuning_lsf and reset profiles.
 
 Environment:
-  JULIA, FORCE=1, DRY_RUN=1, FRESH_PILOT=1, CONTINUE_ON_ERROR=1
+  FORCE=1, --force         Re-tune even when a profile is already validated
+  DRY_RUN=1, --dry-run     Print commands only
   CONFIRM_SAMPLES, CONFIRM_SAMPLE_SCHEDULE, CONFIRM_ATTEMPTS
   PILOT_SAMPLES, NLF, QUEUE, GPU_SELECT
 
@@ -101,6 +102,9 @@ campaign_args() {
   fi
   if [[ "$DRY_RUN" == "1" ]]; then
     args+=(--dry-run)
+  fi
+  if [[ "$FORCE" == "1" ]]; then
+    args+=(--force-revalidate)
   fi
   printf '%s\n' "${args[@]}"
 }
@@ -170,7 +174,7 @@ cmd_tune() {
   local L
   for L in "$@"; do
     if [[ "$FORCE" != "1" ]] && profile_is_validated "$L"; then
-      echo "=== L=$L already validated; skipping (set FORCE=1 to re-tune) ==="
+      echo "=== L=$L already validated; skipping (use --force or FORCE=1 bash ... to re-tune) ==="
       continue
     fi
     echo "=== LSF tuning L=$L ==="
@@ -229,7 +233,37 @@ for L in SUPPORTED_SIZES:
 PY
 }
 
+parse_global_opts() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force)
+        FORCE=1
+        shift
+        ;;
+      --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+      -h|--help|help)
+        usage
+        exit 0
+        ;;
+      -*)
+        echo "unknown option: $1" >&2
+        usage >&2
+        exit 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+  GLOBAL_REMAINING=("$@")
+}
+
 main() {
+  parse_global_opts "$@"
+  set -- "${GLOBAL_REMAINING[@]}"
   local cmd="${1:-status}"
   shift || true
   case "$cmd" in

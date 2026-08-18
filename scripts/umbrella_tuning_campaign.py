@@ -216,11 +216,13 @@ def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
     L_dir = run_root_for(args.campaign_dir, L)
     L_dir.mkdir(parents=True, exist_ok=True)
     path = state_file(args.campaign_dir, L)
-    if path.is_file():
+    if args.force_revalidate:
+        state = initial_state(L)
+    elif path.is_file():
         state = load_state(path)
     else:
         state = initial_state(L)
-    if profile_validated(args.profile_dir, L):
+    if profile_validated(args.profile_dir, L) and not args.force_revalidate:
         state["stage"] = "validated"
         state["validated"] = True
         save_state(path, state)
@@ -228,6 +230,8 @@ def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
 
     tune_args = tune_args_from_namespace(args, L)
     tune_args.dry_run = False
+    if args.force_revalidate:
+        tune_args.fresh_pilot = True
     stage = str(state["stage"])
     if stage == "pilot":
         pilot_dir = stage_pilot_lsf(tune_args)
@@ -561,6 +565,8 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--julia", default=str(LOCAL_JULIA) if LOCAL_JULIA.is_file() else "julia")
         item.add_argument("--tsp", default="tsp")
         item.add_argument("--dry-run", action="store_true")
+        item.add_argument("--force-revalidate", action="store_true",
+                          help="restart tuning for a profile even if already validated")
         item.add_argument("--fresh-pilot", action="store_true")
         item.add_argument("--pilot-thermalization-sweeps", type=int, default=5000)
         item.add_argument("--pilot-max-thermalization-sweeps", type=int, default=0)
