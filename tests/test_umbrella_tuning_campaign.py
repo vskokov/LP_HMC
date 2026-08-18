@@ -49,6 +49,25 @@ class UmbrellaTuningCampaignTests(unittest.TestCase):
                 self.assertTrue(manifest.is_file())
                 self.assertTrue((manifest.parent / "lsf_job.sh").is_file())
 
+    def test_prepare_merges_sizes_into_existing_campaign_index(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            common = [
+                sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+            ]
+            subprocess.run([*common, "prepare", "--sizes", "6",
+                            "--campaign-dir", str(root / "campaign"),
+                            "--profile-dir", str(root / "profiles"),
+                            "--report-dir", str(root / "reports")],
+                           check=True, capture_output=True, text=True)
+            subprocess.run([*common, "prepare", "--sizes", "12",
+                            "--campaign-dir", str(root / "campaign"),
+                            "--profile-dir", str(root / "profiles"),
+                            "--report-dir", str(root / "reports")],
+                           check=True, capture_output=True, text=True)
+            index = json.loads((root / "campaign" / "campaign.json").read_text())
+            self.assertEqual([int(item["L"]) for item in index["sizes"]], [6, 12])
+
     def test_repair_advances_completed_pilot_to_nlf_dry_run(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

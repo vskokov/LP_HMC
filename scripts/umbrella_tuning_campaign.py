@@ -269,13 +269,18 @@ def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
 def prepare(args: argparse.Namespace) -> int:
     args.campaign_dir.mkdir(parents=True, exist_ok=True)
     args.report_dir.mkdir(parents=True, exist_ok=True)
-    index = {
-        "schema_version": 1,
-        "campaign": "umbrella_tuning_lsf",
-        "Z": CANONICAL_POINT[0],
-        "m2": CANONICAL_POINT[1],
-        "sizes": [],
-    }
+    index_path = args.campaign_dir / "campaign.json"
+    if index_path.is_file():
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    else:
+        index = {
+            "schema_version": 1,
+            "campaign": "umbrella_tuning_lsf",
+            "Z": CANONICAL_POINT[0],
+            "m2": CANONICAL_POINT[1],
+            "sizes": [],
+        }
+    by_lattice = {int(item["L"]): item for item in index.get("sizes", [])}
     for L in args.sizes:
         item = prepare_size(args, L)
         path = state_file(args.campaign_dir, L)
@@ -283,9 +288,10 @@ def prepare(args: argparse.Namespace) -> int:
         item["pilot_manifest"] = state.get("pilot_manifest")
         item["nlf_output_dir"] = state.get("nlf_output_dir")
         item["confirm_manifest"] = state.get("confirm_manifest")
-        index["sizes"].append(item)
-    atomic_json(args.campaign_dir / "campaign.json", index)
-    print(f"campaign_index={args.campaign_dir / 'campaign.json'}")
+        by_lattice[L] = item
+    index["sizes"] = [by_lattice[L] for L in sorted(by_lattice)]
+    atomic_json(index_path, index)
+    print(f"campaign_index={index_path}")
     return 0
 
 

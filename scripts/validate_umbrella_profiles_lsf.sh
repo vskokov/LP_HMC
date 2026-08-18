@@ -203,19 +203,25 @@ cmd_tune() {
     return 2
   fi
   local rc=0
+  local -a pending=()
   local L
   for L in "$@"; do
     if [[ "$FORCE" != "1" ]] && profile_is_validated "$L"; then
       echo "=== L=$L already validated; skipping (use --force or FORCE=1 bash ... to re-tune) ==="
       continue
     fi
+    pending+=("$L")
+  done
+  if ((${#pending[@]} == 0)); then
+    return 0
+  fi
+  local sizes
+  sizes="$(IFS=,; echo "${pending[*]}")"
+  if ! run_campaign prepare --sizes "$sizes"; then
+    return 1
+  fi
+  for L in "${pending[@]}"; do
     echo "=== LSF tuning L=$L ==="
-    local sizes="$L"
-    if ! run_campaign prepare --sizes "$sizes"; then
-      rc=1
-      [[ "$CONTINUE_ON_ERROR" == "1" ]] || return "$rc"
-      continue
-    fi
     if ! run_campaign preflight --L "$L"; then
       rc=1
       [[ "$CONTINUE_ON_ERROR" == "1" ]] || return "$rc"
