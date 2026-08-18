@@ -10,7 +10,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from lsf_defaults import bsub_command_for_script, submit_bsub_script  # noqa: E402
+from lsf_defaults import (  # noqa: E402
+    bsub_command_for_script,
+    expand_lsf_index_spec,
+    submit_bsub_script,
+)
 
 
 class LsfDefaultsTests(unittest.TestCase):
@@ -45,6 +49,30 @@ echo hello
             )
             command = bsub_command_for_script(script, job_name="nlf_run[2,5]")
             self.assertEqual(command[command.index("-J") + 1], "nlf_run[2,5]")
+
+    def test_expand_lsf_index_spec_handles_ranges_and_lists(self):
+        self.assertEqual(expand_lsf_index_spec("1-2"), [1, 2])
+        self.assertEqual(expand_lsf_index_spec("1,4,7"), [1, 4, 7])
+        self.assertEqual(expand_lsf_index_spec("1-2%4"), [1, 2])
+
+    def test_submit_bsub_script_expands_array_into_scalar_jobs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "lsf_job.sh"
+            script.write_text(
+                "#!/usr/bin/env bash\n#BSUB -J \"pilot[1-2]\"\ntrue\n",
+                encoding="utf-8",
+            )
+            with patch("lsf_defaults.subprocess.run") as run:
+                submit_bsub_script(script, dry_run=False)
+            self.assertEqual(run.call_count, 2)
+            names = [call.args[0][call.args[0].index("-J") + 1] for call in run.call_args_list]
+            self.assertEqual(names, ["pilot_t0", "pilot_t1"])
+            for call in run.call_args_list:
+                job_name = call.args[0][call.args[0].index("-J") + 1]
+                self.assertNotIn("[", job_name)
+                env_spec = call.args[0][call.args[0].index("-env") + 1]
+                self.assertIn("UMBRELLA_TASK_ID=", env_spec)
+                self.assertIn("PROBE_ID=", env_spec)
 
     def test_submit_bsub_script_invokes_parsed_command(self):
         with tempfile.TemporaryDirectory() as directory:

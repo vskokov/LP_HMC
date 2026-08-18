@@ -265,8 +265,9 @@ def sync_campaign_index(args: argparse.Namespace) -> Path:
     return index_path
 
 
-def bsub_script(script_path: Path, *, dry_run: bool, job_name: str | None = None) -> None:
-    submit_bsub_script(script_path, dry_run=dry_run, job_name=job_name)
+def bsub_script(script_path: Path, *, dry_run: bool, job_name: str | None = None,
+               task_ids: list[int] | None = None) -> None:
+    submit_bsub_script(script_path, dry_run=dry_run, job_name=job_name, task_ids=task_ids)
 
 
 def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
@@ -441,13 +442,7 @@ def submit_nlf_jobs(output_dir: Path, *, dry_run: bool, bjobs: str) -> None:
     if not pending:
         print(f"pending nlf probes already queued: {run_name}")
         return
-    with (output_dir / "sweep_manifest.csv").open(newline="", encoding="utf-8") as handle:
-        n_tasks = sum(1 for _ in csv.DictReader(handle))
-    if len(pending) == n_tasks:
-        bsub_script(script, dry_run=dry_run)
-        return
-    spec = ",".join(str(probe + 1) for probe in pending)
-    bsub_script(script, dry_run=dry_run, job_name=f"{run_name}[{spec}]")
+    bsub_script(script, dry_run=dry_run, task_ids=pending)
 
 
 def submit_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> None:

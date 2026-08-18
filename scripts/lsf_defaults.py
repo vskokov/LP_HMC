@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -65,6 +66,38 @@ def lsf_job_env_spec(script_path: Path, extra: str = "") -> str:
     return spec
 
 
+ARRAY_JOB_NAME = re.compile(r"^(?P<base>.+)\[(?P<spec>[^\]]+)\]$")
+
+
+def expand_lsf_index_spec(spec: str) -> list[int]:
+    """Expand an LSF array index list such as ``1-2``, ``1,4,7``, or ``1-2%4``."""
+    spec = spec.split("%", 1)[0]
+    indices: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_text, end_text = part.split("-", 1)
+            start = int(start_text)
+            end = int(end_text)
+            if end < start:
+                raise ValueError(f"invalid LSF array range: {part!r}")
+            indices.extend(range(start, end + 1))
+        else:
+            indices.append(int(part))
+    if not indices or any(index < 1 for index in indices):
+        raise ValueError(f"invalid LSF array spec: {spec!r}")
+    return indices
+
+
+def _set_option(command: list[str], flag: str, value: str) -> None:
+    if flag in command:
+        command[command.index(flag) + 1] = value
+    else:
+        command[1:1] = [flag, value]
+
+
 def bsub_command_for_script(
     script_path: Path,
     *,
@@ -97,11 +130,39 @@ def submit_bsub_script(
     bsub: str = "bsub",
     dry_run: bool = False,
     job_name: str | None = None,
+    task_ids: list[int] | None = None,
 ) -> None:
-    """Submit a #BSUB script by passing directives to bsub and running bash on GPFS."""
+    """Submit one scalar LSF job per task. Array ``-J name[1-N]`` specs are expanded.
+
+    Hazel GPU nodes cannot open ``~/.lsbatch/*.JOBID.INDEX`` array wrappers, so
+    we never submit ``bsub -J 'name[1-N]'``.
+    """
     command = bsub_command_for_script(script_path, bsub=bsub, job_name=job_name)
-    command[1:1] = ["-env", lsf_job_env_spec(script_path)]
+    name = job_name
+    if name is None and "-J" in command:
+        name = command[command.index("-J") + 1]
+    name = name or "job"
+    match = ARRAY_JOB_NAME.match(name)
+    base = match.group("base") if match else name
+    if task_ids is not None:
+        jobs = list(task_ids)
+    elif match:
+        jobs = [index - 1 for index in expand_lsf_index_spec(match.group("spec"))]
+    else:
+        jobs = [None]
     env = lsf_submit_environment(script_path)
-    print("+", f"HOME={env['HOME']}", shlex.join(command))
-    if not dry_run:
-        subprocess.run(command, check=True, env=env)
+    for task_id in jobs:
+        cmd = list(command)
+        extra = ""
+        scalar_name = name
+        if task_id is not None:
+            scalar_name = f"{base}_t{task_id}"
+            extra = (
+                f"UMBRELLA_TASK_ID={task_id},UMBRELLA_CONTINUATION=0,"
+                f"PROBE_ID={task_id}"
+            )
+        _set_option(cmd, "-J", scalar_name)
+        _set_option(cmd, "-env", lsf_job_env_spec(script_path, extra=extra))
+        print("+", f"HOME={env['HOME']}", shlex.join(cmd))
+        if not dry_run:
+            subprocess.run(cmd, check=True, env=env)
