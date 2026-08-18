@@ -784,7 +784,8 @@ Tune profiles on the LSF cluster (H100, 2-hour resumable jobs under
 
 ```bash
 bash scripts/validate_umbrella_profiles_lsf.sh status
-bash scripts/validate_umbrella_profiles_lsf.sh tune 16 18 20 24
+bash scripts/validate_umbrella_profiles_lsf.sh --force \
+  --confirm-sample-schedule=1000,3000,6000 tune 16 18 20 24
 # periodically advance incomplete pilot/confirm jobs and summarize nlf:
 bash scripts/validate_umbrella_profiles_lsf.sh repair
 bash scripts/validate_umbrella_profiles_lsf.sh status

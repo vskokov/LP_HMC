@@ -33,14 +33,24 @@ usage() {
 LSF umbrella profile validation on H100 (2-hour resumable jobs).
 
 Usage:
-  validate_umbrella_profiles_lsf.sh [--force] [--dry-run] status
-  validate_umbrella_profiles_lsf.sh [--force] prepare [--sizes 16,18,20,24]
+  validate_umbrella_profiles_lsf.sh [options] status
+  validate_umbrella_profiles_lsf.sh [options] prepare [--sizes 16,18,20,24]
   validate_umbrella_profiles_lsf.sh preflight <L>
-  validate_umbrella_profiles_lsf.sh submit [<L> ...]
-  validate_umbrella_profiles_lsf.sh repair
-  validate_umbrella_profiles_lsf.sh [--force] tune <L> [<L> ...]
-  validate_umbrella_profiles_lsf.sh [--force] tune-all
+  validate_umbrella_profiles_lsf.sh [options] submit [<L> ...]
+  validate_umbrella_profiles_lsf.sh [options] repair
+  validate_umbrella_profiles_lsf.sh [options] tune <L> [<L> ...]
+  validate_umbrella_profiles_lsf.sh [options] tune-all
   validate_umbrella_profiles_lsf.sh reset-tuning
+
+Options:
+  --force                   Re-tune even when a profile is already validated
+  --dry-run                 Print commands only
+  --confirm-samples N       Confirmation samples per window (first attempt)
+  --confirm-sample-schedule LIST
+                            Comma-separated confirm sample counts, e.g. 1000,3000,6000
+  --confirm-attempts N      Escalating confirm attempts if canonical gate fails
+  --pilot-samples N         Pilot collection samples per window
+  --n-lf N                  Override selected n_lf for confirm/promote
 
 Commands:
   status         Show per-L stage and validated flag.
@@ -53,10 +63,14 @@ Commands:
   reset-tuning   Clear runs/umbrella_tuning_lsf and reset profiles.
 
 Environment:
-  FORCE=1, --force         Re-tune even when a profile is already validated
-  DRY_RUN=1, --dry-run     Print commands only
-  CONFIRM_SAMPLES, CONFIRM_SAMPLE_SCHEDULE, CONFIRM_ATTEMPTS
-  PILOT_SAMPLES, NLF, QUEUE, GPU_SELECT
+  Same options are available via FORCE, DRY_RUN, CONFIRM_SAMPLES,
+  CONFIRM_SAMPLE_SCHEDULE, CONFIRM_ATTEMPTS, PILOT_SAMPLES, NLF, QUEUE, GPU_SELECT
+  (export the variable or pass the matching --flag).
+
+Examples:
+  bash scripts/validate_umbrella_profiles_lsf.sh --force \
+    --confirm-sample-schedule=1000,3000,6000 tune 16 18 20 24
+  bash scripts/validate_umbrella_profiles_lsf.sh --confirm-samples=3000 tune 32
 
 Operational loop:
   bash scripts/validate_umbrella_profiles_lsf.sh tune 16 18 20 24
@@ -242,6 +256,46 @@ parse_global_opts() {
         ;;
       --dry-run)
         DRY_RUN=1
+        shift
+        ;;
+      --confirm-samples)
+        CONFIRM_SAMPLES="${2:?--confirm-samples requires a value}"
+        shift 2
+        ;;
+      --confirm-samples=*)
+        CONFIRM_SAMPLES="${1#*=}"
+        shift
+        ;;
+      --confirm-sample-schedule)
+        CONFIRM_SAMPLE_SCHEDULE="${2:?--confirm-sample-schedule requires a value}"
+        shift 2
+        ;;
+      --confirm-sample-schedule=*)
+        CONFIRM_SAMPLE_SCHEDULE="${1#*=}"
+        shift
+        ;;
+      --confirm-attempts)
+        CONFIRM_ATTEMPTS="${2:?--confirm-attempts requires a value}"
+        shift 2
+        ;;
+      --confirm-attempts=*)
+        CONFIRM_ATTEMPTS="${1#*=}"
+        shift
+        ;;
+      --pilot-samples)
+        PILOT_SAMPLES="${2:?--pilot-samples requires a value}"
+        shift 2
+        ;;
+      --pilot-samples=*)
+        PILOT_SAMPLES="${1#*=}"
+        shift
+        ;;
+      --n-lf)
+        NLF="${2:?--n-lf requires a value}"
+        shift 2
+        ;;
+      --n-lf=*)
+        NLF="${1#*=}"
         shift
         ;;
       -h|--help|help)
