@@ -21,7 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from runtime_preflight import lsf_julia_launch_lines, run as run_preflight
-from lsf_defaults import lsf_environment_shell_lines, resolved_exclude_hosts
+from lsf_defaults import lsf_environment_shell_lines, resolved_exclude_hosts, submit_bsub_script
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -445,7 +445,7 @@ def main() -> int:
         print(f"lsf_script: {script_path}")
         if args.prepare_only:
             return 0
-        subprocess.run(["bsub"], input=script, text=True, check=True)
+        submit_bsub_script(script_path)
         print(f"enqueued {len(tasks)} nlf probe array tasks")
         return 0
 

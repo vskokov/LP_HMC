@@ -20,6 +20,7 @@ from lsf_defaults import (
     DEFAULT_MODULE_INIT,
     lsf_environment_shell_lines,
     resolved_exclude_hosts,
+    submit_bsub_script,
 )
 from reweight_manifest import parse_point, read_points_csv, write_manifest
 from runtime_preflight import lsf_julia_launch_lines
@@ -227,6 +228,7 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
     selections = [f"({args.gpu_select})"]
     selections.extend(f"hname!='{host}'" for host in args.exclude_host)
     resource = f"select[{' && '.join(selections)}] rusage[mem={args.mem_gb:g}]"
+    script_path = (manifest.parent / "lsf_job.sh").resolve()
     continuation_command = " ".join([
         shlex.quote(args.bsub), f'-J "{args.run_name}_t${{TASK_ID}}"',
         f"-q {shlex.quote(args.queue)}", f"-W {shlex.quote(args.walltime)}",
@@ -234,7 +236,7 @@ def lsf_script(args, manifest: Path, count: int, logs: Path) -> str:
         f"-o {shlex.quote(str(logs.resolve()) + '/%J.out')}",
         f"-e {shlex.quote(str(logs.resolve()) + '/%J.err')}",
         '-env "all,UMBRELLA_TASK_ID=${TASK_ID},UMBRELLA_CONTINUATION=${NEXT}"',
-        'bash "$0"',
+        "bash", shlex.quote(str(script_path)),
     ])
     lines = ["#!/usr/bin/env bash", f'#BSUB -J "{args.run_name}[1-{count}]"',
              f"#BSUB -q {args.queue}", f"#BSUB -W {args.walltime}",
@@ -400,7 +402,7 @@ def main(scheduler_default: str | None = None) -> int:
     if args.prepare_only:
         return 0
     if not args.dry_run:
-        subprocess.run([args.bsub], input=script, text=True, check=True)
+        submit_bsub_script(script_path, bsub=args.bsub)
     return 0
 
 

@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lsf_defaults import resolved_exclude_hosts
+from lsf_defaults import resolved_exclude_hosts, submit_bsub_script
 from umbrella_campaign import active_lsf_tasks, claim, load_rows, preflight, repair_manifest
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
 from umbrella_runtime import atomic_json
@@ -208,10 +208,7 @@ def selected_nlf_from_recommendations(output_dir: Path) -> int | None:
 
 
 def bsub_script(script_path: Path, *, dry_run: bool) -> None:
-    print("+", shlex.join(["bsub"]), f"< {script_path}")
-    if not dry_run:
-        subprocess.run(["bsub"], input=script_path.read_text(encoding="utf-8"),
-                        text=True, check=True)
+    submit_bsub_script(script_path, dry_run=dry_run)
 
 
 def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:

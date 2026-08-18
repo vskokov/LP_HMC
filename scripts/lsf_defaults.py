@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import shlex
+import subprocess
+from pathlib import Path
 
 
 DEFAULT_EXCLUDED_HOSTS = ("gpu31",)
@@ -35,3 +37,17 @@ def lsf_environment_shell_lines(
     if extra_modules:
         lines.extend(f"module load {shlex.quote(module)}" for module in extra_modules)
     return lines
+
+
+def submit_bsub_script(
+    script_path: Path,
+    *,
+    bsub: str = "bsub",
+    dry_run: bool = False,
+) -> None:
+    """Submit a #BSUB script from shared storage instead of ~/.lsbatch."""
+    resolved = script_path.resolve()
+    command = [bsub, "-Zs", str(resolved)]
+    print("+", shlex.join(command))
+    if not dry_run:
+        subprocess.run(command, check=True)

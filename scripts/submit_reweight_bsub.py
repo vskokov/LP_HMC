@@ -8,7 +8,6 @@ import csv
 import math
 import re
 import shlex
-import subprocess
 from pathlib import Path
 
 from hmc_defaults import (
@@ -21,6 +20,7 @@ from lsf_defaults import (
     DEFAULT_JULIA_MODULE,
     DEFAULT_MODULE_INIT,
     lsf_environment_shell_lines,
+    submit_bsub_script,
 )
 from runtime_preflight import lsf_julia_launch_lines
 from reweight_manifest import (
@@ -298,8 +298,7 @@ def main() -> int:
         print("dry-run: bsub was not invoked")
         return 0
 
-    with script_path.open("rb") as handle:
-        subprocess.run([args.bsub], stdin=handle, check=True)
+    submit_bsub_script(script_path, bsub=args.bsub)
     return 0
 
 

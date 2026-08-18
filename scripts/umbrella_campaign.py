@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from analyze_umbrella import block_bootstrap, estimate, read_umbrella
+from lsf_defaults import submit_bsub_script
 from run_umbrella_task import merge_shards
 from hmc_defaults import resolve_hmc_parameters
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
@@ -96,7 +97,7 @@ def prepare(args: argparse.Namespace) -> int:
                              "self-resubmission preflight for every requested L")
         for item in index["sizes"]:
             script = Path(item["manifest"]).parent / "lsf_job.sh"
-            subprocess.run(["bsub"], input=script.read_text(encoding="utf-8"), text=True, check=True)
+            submit_bsub_script(script)
     return 0
 
 
