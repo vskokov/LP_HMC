@@ -5,3 +5,13 @@ plots/
 tmp/
 *.pyc
 __pycache__/
+
+# Bulky derived per-task census/snapshot CSVs (regenerable from runs/)
+reports/structure_factor_cpu/*census/**/task_*.csv
+reports/structure_factor_cpu/rank_snapshots/snapshots/
+reports/structure_factor_cpu/*preparation/census_summary.csv
+*.aux
+*.fls
+*.fdb_latexmk
+*.out
+*.synctex.gz

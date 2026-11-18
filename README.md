@@ -528,6 +528,38 @@ the table, or repeat `--level VALUE` to request different levels. Rows whose
 `warning_status` is not `ok` cannot bracket a crossing by default. The explicit
 `--include-warnings` escape hatch is intended for diagnosis, not publication.
 
+For the fixed-`Z` umbrella campaigns, compute the physical mass derivative of
+the Binder cumulant and its adjacent-size effective exponent on CPU with:
+
+```bash
+env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  python3 scripts/analyze_binder_slopes.py \
+  --bootstrap 200 --jobs 2 --bins 128 \
+  --output-dir reports/binder_slope_fss/exploratory
+```
+
+The collector already retains `Q=sum(phi^2)`, so no new simulation data are
+needed. The analysis reconstructs canonical mixed moments and uses
+`d<moment>/dm2 = -Cov(moment,Q)/(2T)`. It reports both the existing linearly
+interpolated crossings and primary crossings solved by local mass reweighting,
+with both lattice slopes evaluated at the same mass. Bootstrap resampling keeps
+all umbrella slots at a trajectory synchronized and re-solves WHAM in every
+draw. Incomplete campaigns are recorded in `campaign_status.csv` and excluded
+from physics output. Use the production bin fallback and 500 draws for final
+results:
+
+```bash
+env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  python3 scripts/analyze_binder_slopes.py \
+  --bootstrap 500 --jobs 2 --bins 0 \
+  --output-dir reports/binder_slope_fss/final
+```
+
+The output directory contains signed slope curves, joint bootstrap draws,
+crossing/exponent intervals, diagnostic warnings, summary figures, and a concise
+interpretation. Reference exponents are comparison guides only; the tool does
+not automatically assign a universality class or transition order.
+
 Validate the full critical window and emit the next source coordinates in the same
 two-column format accepted by every submitter:
 
@@ -815,4 +847,45 @@ python3 scripts/analyze_umbrella.py runs/umbrella_allL_production/L6/statistics/
   --bootstrap 500 --output reports/umbrella_L6_binder.json
 python3 scripts/aggregate_umbrella_binder.py reports/umbrella_L*_binder.json \
   --output reports/umbrella_binder_all_L.csv
+```
+
+## CPU structure-factor campaign
+
+The finite-wavevector analysis reuses equilibrated umbrella checkpoints without
+modifying them.  A full-Brillouin-zone census first determines the measured
+dominant lattice shell for each `(Z,L)`; the mean-field value `q=-Z/2` is only a
+reference.  The selected shell is then frozen before production measurements,
+which prevents mass-by-mass peak selection from biasing the scan.
+
+```bash
+# Read-only FFT census (32 independent, single-threaded CPU workers)
+python3 scripts/structure_factor_campaign.py census --workers 32 --resume
+
+# Freeze one shell per (Z,L) and select masses around its onset
+python3 scripts/structure_factor_campaign.py prepare
+
+# Collect the first restartable stage, then analyze it
+python3 scripts/structure_factor_campaign.py run --workers 32 --target-samples 200
+python3 scripts/structure_factor_campaign.py analyze --bootstrap 200
+
+# Extend only tasks that fail the precision/source-agreement gates
+python3 scripts/structure_factor_campaign.py run --workers 32 \
+  --target-samples 400 \
+  --only-flagged reports/structure_factor_cpu/analysis/precision_status.csv
+```
+
+Repeat the last two commands with targets 600, 800, and 1000 as necessary.
+Production records `Q=sum(phi^2)` and the gradient invariant `G`, so the analysis
+can make a local two-dimensional `(m2,Z)` reweighting map.  Reweighted points
+below the effective-sample-size gate are written as new-simulation suggestions,
+not interpreted as measurements.  Outputs include shell spectra, finite-q
+susceptibility and Binder ratios, orientation diagnostics, blocked-bootstrap
+uncertainties, energy/order-parameter bimodality tests, equal-weight candidates,
+and free-energy-barrier estimates.
+
+Validate the shell algebra independently with:
+
+```bash
+julia --project=. scripts/test_structure_factor.jl
+python3 -m unittest tests.test_structure_factor
 ```
