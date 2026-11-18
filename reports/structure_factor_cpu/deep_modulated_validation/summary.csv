@@ -1,0 +1,2 @@
+L,Z,m2,q_mean_field,q_selected,q_synthetic_peak,q_hmc_peak,mode,amplitude,warmup_acceptance,measurement_acceptance,synthetic_orientation_max,hmc_orientation_max,hmc_orientation_participation,synthetic_rank_effective_dimension,hmc_rank_lambda1,hmc_rank_lambda2,hmc_rank_lambda3,hmc_rank_effective_dimension,hmc_rank_raw_excess_power
+16,-4,-1,2,2,2,2,4,1.29099444874,0.925,0.955,1,0.999867956046,1.00026415507,1,0.999941212334,5.04452047757e-05,8.34246139895e-06,1.00011759836,1.09559034033

@@ -1,0 +1,22 @@
+{
+  "L": 16,
+  "Z": -0.6,
+  "binder_estimates": [
+    0.5558538417728778,
+    0.5657115600937914
+  ],
+  "both_endpoints_visited": true,
+  "canonical_combined_z": 0.9857718320913644,
+  "confirm_samples": 4000,
+  "confirm_thermalization_multiplier": 1.5,
+  "confirm_thermalization_sweeps": 56767,
+  "confirmed_candidates": 2,
+  "epsilon": 0.03143117051,
+  "m2": -1.86421,
+  "minimum_edge_swap_acceptance": 0.3851003917727718,
+  "minimum_histogram_overlap": 0.5385,
+  "n_lf": 40,
+  "provenance": "/home/vskokov/Binder/LP_HMC/runs/umbrella_tuning_tsp/L16/tune_L16_confirm_nlf40",
+  "stable_diffusion_both_phases": true,
+  "worst_phase_hmc_acceptance": 0.75
+}

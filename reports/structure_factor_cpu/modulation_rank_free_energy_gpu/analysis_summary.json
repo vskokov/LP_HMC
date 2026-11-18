@@ -1,0 +1,20 @@
+{
+  "tasks": 20,
+  "raw_rows": 2780,
+  "anchor_groups": 20,
+  "anchors_all_unmodulated_by_peak_threshold": 20,
+  "minimum_sample_acceptance": 0.936666666667,
+  "preferred_counts": {
+    "rank1": 130,
+    "rank2": 17,
+    "rank3": 3,
+    "unresolved": 128
+  },
+  "physical_morphology_counts": {
+    "rank1": 143,
+    "rank2": 0,
+    "rank3": 0,
+    "unresolved": 128,
+    "not_modulated_or_not_reproducible": 7
+  }
+}

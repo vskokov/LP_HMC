@@ -1,0 +1,10 @@
+Z,status,details
+-0.5,ready,L12=42/42 L16=42/42 L20=42/42 L24=42/42 binder_csv=present
+-0.25,ready,L12=38/38 L16=38/38 L20=38/38 L24=38/38 binder_csv=present
+0.0,ready,L12=42/42 L16=42/42 L20=42/42 L24=42/42 binder_csv=present
+0.5,ready,L12=40/40 L16=40/40 L20=40/40 L24=40/40 binder_csv=present
+1.0,ready,L12=36/36 L16=36/36 L20=36/36 L24=36/36 binder_csv=present
+1.25,ready,L12=38/38 L16=38/38 L20=38/38 L24=38/38 binder_csv=present
+2.0,ready,L12=40/40 L16=40/40 L20=40/40 L24=40/40 binder_csv=present
+-0.75,skipped,L12=30/30 L16=30/30 L20=28/30 L24=28/30 binder_csv=will_generate
+-1.0,skipped,L12=28/30 L16=27/30 L20=12/30 L24=0/30 binder_csv=will_generate

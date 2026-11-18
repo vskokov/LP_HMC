@@ -1,0 +1,12 @@
+{
+  "points": 42,
+  "classifications": {
+    "mixed/undetermined": 33,
+    "rank1_metastable": 9
+  },
+  "evidence": {
+    "metastable_phase_disagreement": 9,
+    "mixed_rank_start_dependence": 33
+  },
+  "minimum_sample_acceptance": 0.93
+}
