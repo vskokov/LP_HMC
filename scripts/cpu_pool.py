@@ -170,7 +170,11 @@ def _is_done(task: dict) -> bool:
 
 # --------------------------------------------------------------------------- daemon
 class Pool:
-    def __init__(self, root: Path, workers: int, reserve_gb: float, poll: float):
+    def __init__(self, root: Path, workers: int, reserve_gb: float, poll: float,
+                 group_limits: dict[str, int] | None = None, kill_children: bool = False):
+        self.kill_children = kill_children
+        self.group_limits = dict(group_limits or {})
+        self.groups: dict[str, str] = {}
         self.root = root
         self.workers = workers
         self.reserve_gb = reserve_gb
@@ -190,6 +194,7 @@ class Pool:
             pid = st.get("pid")
             if _pid_alive(pid):
                 self.running[t["name"]] = (None, pid, t["mem_gb"])
+                self.groups[t["name"]] = t.get("group", "default")
                 self.log(f"adopted live task {t['name']} pid={pid}")
             else:
                 new = "done" if _is_done(t) else "pending"
@@ -261,13 +266,23 @@ class Pool:
         )
         fh.close()
         self.running[task["name"]] = (proc, proc.pid, task.get("mem_gb", 0.5))
+        self.groups[task["name"]] = task.get("group", "default")
         _set_state(self.root, task["name"], state="running", pid=proc.pid,
                    start=time.time(), attempts=attempts, log=str(log_path))
         self.log(f"start  {task['name']} pid={proc.pid}")
 
+    def group_full(self, task: dict) -> bool:
+        g = task.get("group", "default")
+        limit = self.group_limits.get(g)
+        if limit is None:
+            return False
+        active = sum(1 for n in self.running if self.groups.get(n) == g)
+        return active >= limit
+
     def admit(self, task: dict) -> bool:
         need = task.get("mem_gb", 0.5)
-        committed = sum(m for _, _, m in self.running.values())
+        current = {t["name"]: t.get("mem_gb", 0.5) for t in load_tasks(self.root)}
+        committed = sum(current.get(n, m) for n, (_, _, m) in self.running.items())
         if committed + need > mem_total_gb() - self.reserve_gb:
             return False
         return mem_available_gb() - need >= self.reserve_gb
@@ -283,15 +298,21 @@ class Pool:
         while not self.stopping:
             self.reap()
             for t in self.pending():
-                if len(self.running) >= self.workers or not self.admit(t):
+                if len(self.running) >= self.workers:
                     break
+                if self.group_full(t):
+                    continue
+                if not self.admit(t):
+                    continue          # try smaller tasks; big ones wait for memory
                 self.launch(t)
             if exit_when_empty and not self.running and not self.pending() and \
                     not any(t["_state"].get("state", "pending") == "pending"
                             for t in load_tasks(self.root)):
                 break
             time.sleep(self.poll)
-        if self.stopping:
+        if self.stopping and not self.kill_children:
+            self.log(f"stopping: leaving {len(self.running)} running tasks for the next daemon to adopt")
+        elif self.stopping:
             self.log("stopping: terminating running tasks and requeueing them")
             for name, (proc, pid, _) in self.running.items():
                 with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -389,7 +410,12 @@ def cmd_run(args) -> int:
             print(f"another cpu_pool daemon owns {lock}", file=sys.stderr)
             return 2
         fh.seek(0); fh.truncate(); fh.write(f"pid={os.getpid()}\n"); fh.flush()
-        return Pool(args.root, args.workers, args.reserve_gb, args.poll).run(args.exit_when_empty)
+        limits = {}
+        for item in args.group_limit:
+            g, _, n = item.partition("=")
+            limits[g] = int(n)
+        return Pool(args.root, args.workers, args.reserve_gb, args.poll,
+                    limits, args.kill_children).run(args.exit_when_empty)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -416,6 +442,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--reserve-gb", type=float, default=6.0)
     r.add_argument("--poll", type=float, default=3.0)
     r.add_argument("--exit-when-empty", action="store_true")
+    r.add_argument("--kill-children", action="store_true",
+                   help="on SIGTERM terminate and requeue running tasks (default: leave them "
+                        "running; the next daemon adopts them)")
+    r.add_argument("--group-limit", action="append", default=[], metavar="GROUP=N",
+                   help="cap concurrent tasks of a group (e.g. IO-bound jobs on an HDD)")
     r.set_defaults(func=cmd_run)
 
     st = sub.add_parser("status")

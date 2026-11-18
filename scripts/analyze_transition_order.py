@@ -171,6 +171,8 @@ def solve_global(B: np.ndarray, counts: np.ndarray, f0: np.ndarray | None = None
                  tol: float = 1e-7, max_iter: int = 200) -> tuple[np.ndarray, np.ndarray]:
     """Newton MBAR over mixture states. B[j,x] = log unnormalised density of state j."""
     F = B.shape[0]
+    if F == 1:
+        return np.zeros(1), B[0].copy()
     f = np.zeros(F) if f0 is None else f0.copy()
     f -= f[0]
     total = float(np.sum(counts))
