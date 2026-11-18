@@ -1,0 +1,14 @@
+sequence,Z,priority,discovery_sizes,confirmation_sizes,scan,required_orders,classification
+1,-0.5,anchor,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+2,-0.75,fill,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+3,-0.9,fill,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+4,-0.95,endpoint,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+5,-0.95625,endpoint,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+6,-0.9625,endpoint,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+7,-1.0,anchor,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+8,-1.25,fill,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+9,-1.5,anchor,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+10,-1.75,fill,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+11,-2.0,anchor,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+12,-2.25,fill,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
+13,-2.5,anchor,12;16;20,20;24,adaptive in m2 around both candidate boundaries,M2;Pq;H;Q;G,joint histograms; FSS peaks; barrier scaling; source agreement
