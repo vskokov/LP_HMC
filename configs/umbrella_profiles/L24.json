@@ -28,17 +28,21 @@
     "L": 24,
     "Z": -0.6,
     "binder_estimates": [
-      0.37656952370494734,
-      0.16868909316578462
+      0.27448972716225795,
+      0.2829865868684007
     ],
     "both_endpoints_visited": true,
+    "canonical_combined_z": 0.8496859706142779,
+    "confirm_samples": 8000,
+    "confirm_thermalization_multiplier": 2.0,
+    "confirm_thermalization_sweeps": 256000,
     "confirmed_candidates": 2,
     "epsilon": 0.02318953874,
     "m2": -1.86421,
-    "minimum_edge_swap_acceptance": 0.3870752243622063,
-    "minimum_histogram_overlap": 0.495,
+    "minimum_edge_swap_acceptance": 0.38871323529411766,
+    "minimum_histogram_overlap": 0.5311250000000001,
     "n_lf": 43,
-    "provenance": "/home/vskokov/Binder/LP_HMC/runs/tuning/tune_L24_confirm_nlf43",
+    "provenance": "/home/vskokov/Binder/LP_HMC/runs/umbrella_tuning_tsp/L24/tune_L24_confirm_nlf43",
     "stable_diffusion_both_phases": true,
     "worst_phase_hmc_acceptance": 0.75
   }
