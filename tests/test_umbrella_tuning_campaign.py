@@ -50,6 +50,57 @@ class UmbrellaTuningCampaignTests(unittest.TestCase):
                 self.assertTrue(manifest.is_file())
                 self.assertTrue((manifest.parent / "lsf_job.sh").is_file())
 
+    def test_prepare_tsp_writes_manifest_without_lsf_script(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+                 "prepare", "--scheduler", "tsp", "--sizes", "6", "--dry-run",
+                 "--campaign-dir", str(root / "campaign"),
+                 "--profile-dir", str(root / "profiles"),
+                 "--report-dir", str(root / "reports")],
+                text=True, capture_output=True, check=True,
+            )
+            self.assertIn("campaign_index=", result.stdout)
+            state = json.loads((root / "campaign" / "L6" / "state.json").read_text())
+            self.assertEqual(state["stage"], "pilot")
+            manifest = Path(state["pilot_manifest"])
+            self.assertTrue(manifest.is_file())
+            self.assertFalse((manifest.parent / "lsf_job.sh").is_file())
+            self.assertTrue((manifest.parent / "submission.json").is_file())
+            submission = json.loads((manifest.parent / "submission.json").read_text())
+            self.assertEqual(submission["scheduler"], "tsp")
+
+    def test_submit_tsp_dry_run_prints_tsp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            common = [
+                sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+                "--scheduler", "tsp",
+                "--campaign-dir", str(root / "campaign"),
+                "--profile-dir", str(root / "profiles"),
+                "--report-dir", str(root / "reports"),
+            ]
+            subprocess.run(
+                [sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+                 "prepare", "--scheduler", "tsp", "--sizes", "6",
+                 "--campaign-dir", str(root / "campaign"),
+                 "--profile-dir", str(root / "profiles"),
+                 "--report-dir", str(root / "reports")],
+                check=True, capture_output=True, text=True,
+            )
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/umbrella_tuning_campaign.py"),
+                 "submit", "--scheduler", "tsp", "--dry-run", "--L", "6",
+                 "--campaign-dir", str(root / "campaign"),
+                 "--profile-dir", str(root / "profiles"),
+                 "--report-dir", str(root / "reports"),
+                 "--tsp", "tsp"],
+                check=True, capture_output=True, text=True,
+            )
+            self.assertIn("tsp", result.stdout)
+            self.assertIn("run_umbrella_task.py", result.stdout)
+
     def test_prepare_merges_sizes_into_existing_campaign_index(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

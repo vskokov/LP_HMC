@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from tune_umbrella_profile import (  # noqa: E402
     canonical_gate_passes,
     confirm_is_complete,
+    confirm_statistics_provenance,
     confirmation_attempts,
     manifest_only_flags,
     nlf_candidates,
@@ -66,6 +67,25 @@ class TuneUmbrellaProfileTests(unittest.TestCase):
             confirmation_attempts(args),
             [(1000, 1.0), (2000, 1.5), (4000, 2.0)],
         )
+
+    def test_confirm_statistics_provenance_uses_metadata_not_cli_default(self):
+        profile = {"minimum_thermalization_sweeps": 16245}
+        metadatas = [
+            {"samples_per_window": "4000", "thermalization_sweeps": "24367"},
+            {"samples_per_window": "4000", "thermalization_sweeps": "24367"},
+        ]
+        samples, multiplier, sweeps = confirm_statistics_provenance(metadatas, profile)
+        self.assertEqual(samples, 4000)
+        self.assertEqual(sweeps, 24367)
+        self.assertAlmostEqual(multiplier, 1.5)
+        with self.assertRaises(SystemExit):
+            confirm_statistics_provenance(
+                metadatas, profile, confirm_samples=1000,
+            )
+        with self.assertRaises(SystemExit):
+            confirm_statistics_provenance(
+                metadatas, profile, thermalization_multiplier=1.0,
+            )
 
     def test_canonical_gate_passes_within_two_sigma(self):
         self.assertTrue(canonical_gate_passes({"canonical_combined_z": 1.9}))

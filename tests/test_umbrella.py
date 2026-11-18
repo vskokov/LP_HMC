@@ -10,7 +10,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from analyze_umbrella import estimate, read_umbrella, solve_binned_wham  # noqa: E402
+from analyze_umbrella import (  # noqa: E402
+    estimate, estimate_with_bin_fallback, evaluate_umbrella_model,
+    prepare_umbrella_model, read_umbrella, solve_binned_wham,
+)
 
 
 class UmbrellaTests(unittest.TestCase):
@@ -31,6 +34,41 @@ class UmbrellaTests(unittest.TestCase):
         self.assertAlmostEqual(result["mean_M2"], expected_m2)
         self.assertAlmostEqual(result["binder"], expected_binder)
         self.assertTrue(all(abs(value) < 1e-12 for value in result["free_energies"]))
+        density = np.asarray(result["profile_density"])
+        widths = np.diff(np.asarray(result["profile_edges"]))
+        self.assertAlmostEqual(float(np.dot(density, widths)), 1.0, places=6)
+
+    def test_analytic_mass_derivative_matches_finite_difference(self):
+        base_m2 = np.asarray([0.01, 0.04, 0.09, 0.16, 0.25])
+        replicas = 3
+        values = np.tile(base_m2, replicas)
+        q = np.tile(np.asarray([2.0, 2.5, 4.0, 7.0, 11.0]), replicas)
+        arrays = {
+            "slot": np.repeat(np.arange(1, replicas + 1), len(base_m2)).astype(float),
+            "M2": values,
+            "M4": values**2,
+            "Q": q,
+            "umbrella_center": np.repeat([0.0, 0.1, 0.2], len(base_m2)),
+            "umbrella_kappa": np.zeros(replicas * len(base_m2)),
+        }
+        model = prepare_umbrella_model(arrays)
+        temperature = 1.7
+        delta = 0.03
+        central = evaluate_umbrella_model(
+            model, delta_m2=delta, temperature=temperature,
+        )
+        step = 1e-5
+        upper = evaluate_umbrella_model(
+            model, delta_m2=delta + step, temperature=temperature,
+        )["binder"]
+        lower = evaluate_umbrella_model(
+            model, delta_m2=delta - step, temperature=temperature,
+        )["binder"]
+        finite_difference = (upper - lower) / (2.0 * step)
+        self.assertAlmostEqual(
+            central["binder_slope_m2"], finite_difference, places=8,
+        )
+        self.assertGreater(central["m4q_contribution_ess"], 0.0)
 
     def test_binned_wham_converges_for_long_overlapping_ladder(self):
         rng = np.random.default_rng(1729)
@@ -49,6 +87,64 @@ class UmbrellaTests(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(free)))
         self.assertTrue(np.all(np.isfinite(denominator)))
         self.assertLess(iterations, 100)
+
+    def test_binned_wham_converges_for_tight_long_ladder(self):
+        rng = np.random.default_rng(1729)
+        replicas = 81
+        samples = 80
+        centers = np.linspace(0.0, 0.4, replicas)
+        kappas = np.full(replicas, 379_259.0)
+        counts = np.full(replicas, samples, dtype=float)
+        values = np.concatenate([
+            rng.normal(center, 1.0 / np.sqrt(kappa), samples)
+            for center, kappa in zip(centers, kappas)
+        ])
+        free, denominator, iterations = solve_binned_wham(
+            values, centers, kappas, counts, bins=512
+        )
+        self.assertTrue(np.all(np.isfinite(free)))
+        self.assertTrue(np.all(np.isfinite(denominator)))
+        self.assertLess(iterations, 100)
+
+    def test_binned_wham_converges_with_sparse_tail_bins(self):
+        rng = np.random.default_rng(1729)
+        replicas = 58
+        samples = 80
+        centers = np.linspace(0.0, 0.4, replicas)
+        kappas = np.full(replicas, 20_000.0)
+        counts = np.full(replicas, samples, dtype=float)
+        values = np.concatenate([
+            rng.normal(center, 1.0 / np.sqrt(kappa), samples)
+            for center, kappa in zip(centers, kappas)
+        ])
+        values[0] = 1e-12
+        values[-1] = 0.42
+        free, denominator, iterations = solve_binned_wham(
+            values, centers, kappas, counts, bins=512
+        )
+        self.assertTrue(np.all(np.isfinite(free)))
+        self.assertTrue(np.all(np.isfinite(denominator)))
+        self.assertLessEqual(iterations, 200)
+
+    def test_estimate_with_bin_fallback_coarsens_after_stall(self):
+        calls: list[int] = []
+
+        def fake_estimate(arrays, bins, initial_free=None):
+            calls.append(bins)
+            if bins == 512:
+                raise RuntimeError("binned umbrella WHAM line search stalled (residual=0.004)")
+            return {"binder": 0.5, "neighbor_overlap": [0.4]}
+
+        import analyze_umbrella as module
+        original = module.estimate
+        module.estimate = fake_estimate
+        try:
+            result = estimate_with_bin_fallback({"unused": True})
+        finally:
+            module.estimate = original
+        self.assertEqual(calls, [512, 256])
+        self.assertEqual(result["wham_bins"], 256)
+        self.assertEqual(result["binder"], 0.5)
 
     def test_schema_reader_rejects_missing_window(self):
         with tempfile.TemporaryDirectory() as directory:

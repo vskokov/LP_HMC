@@ -216,12 +216,15 @@ def build_rows(args: argparse.Namespace, points: list[tuple[float, float]], run_
     return rows
 
 
-def worker_command(args, manifest: Path, task_token: str) -> str:
+def worker_command(args, manifest: Path, task_token: str, *,
+                   allocation: int | None = None) -> str:
     values = [args.python, str(WORKER), "--manifest", str(manifest.resolve()),
               "--task-id", task_token, "--julia", args.julia,
               "--runtime-budget-minutes", str(args.runtime_budget_minutes)]
     if args.resume:
         values.append("--resume")
+    if allocation is not None:
+        values.extend(["--allocation", str(allocation)])
     return " ".join(task_token if value == task_token else shlex.quote(value) for value in values)
 
 
@@ -372,17 +375,25 @@ def main(scheduler_default: str | None = None) -> int:
     manifest = run_dir / "manifest.csv"
     rows = build_rows(args, points, run_dir)
     write_manifest(manifest, rows)
+    submission = {
+        "scheduler": args.scheduler,
+        "run_name": args.run_name,
+        "julia": args.julia,
+        "python": args.python,
+        "tsp": args.tsp,
+        "runtime_budget_minutes": args.runtime_budget_minutes,
+        "max_continuations": args.max_continuations,
+    }
     if args.scheduler == "lsf":
-        submission = {
-            "run_name": args.run_name, "queue": args.queue, "walltime": args.walltime,
+        submission.update({
+            "queue": args.queue, "walltime": args.walltime,
             "cpus": args.cpus, "mem_gb": args.mem_gb, "gpu_select": args.gpu_select,
             "exclude_host": args.exclude_host, "gpu_request": args.gpu_request,
             "bsub": args.bsub, "self_resubmit": args.self_resubmit,
-            "max_continuations": args.max_continuations,
-        }
-        (run_dir / "submission.json").write_text(
-            json.dumps(submission, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
+        })
+    (run_dir / "submission.json").write_text(
+        json.dumps(submission, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     print(f"manifest: {manifest}")
     print(f"HMC: eps={args.eps:.11g} n_lf={args.n_lf}")
     print(f"umbrella: windows={args.umbrella_windows} range=[{args.umbrella_min:g},"

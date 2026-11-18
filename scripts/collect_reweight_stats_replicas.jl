@@ -142,15 +142,14 @@ function main()
                     @printf(stats_io, "%d,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n",
                             state.sweeps, stats.M, M2, M2^2, stats.Q, stats.G,
                             interval_acceptance)
+                    low_coverage, high_coverage = walker_endpoint_coverage(state)
                     diag_values = vcat(
                         [state.sweeps],
                         acceptance_rates(state.hmc_accepts, state.hmc_attempts),
                         acceptance_rates(state.swap_accepts, state.swap_attempts),
-                        let low_coverage, high_coverage = walker_endpoint_coverage(state)
-                            [sum(state.round_trips), exchange_rounds(state, swap_every),
-                             count(>(0), state.round_trips), count(low_coverage),
-                             count(high_coverage)]
-                        end,
+                        [sum(state.round_trips), exchange_rounds(state, swap_every),
+                         count(>(0), state.round_trips), count(low_coverage),
+                         count(high_coverage)],
                         state.round_trips,
                         [stats.M, abs(stats.M), Int(ordered),
                          ordered_fraction, phase_transitions,

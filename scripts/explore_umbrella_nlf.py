@@ -464,6 +464,9 @@ def main() -> int:
         print(f"enqueued {len(tasks)} nlf probe array tasks")
         return 0
 
+    if args.prepare_only:
+        print("prepare-only: sweep manifest written; tsp tasks were not enqueued")
+        return 0
     subprocess.run([args.tsp, "-S", str(args.slots)], check=True)
     for command in commands:
         subprocess.run([args.tsp, *command], cwd=REPO_ROOT, check=True)

@@ -8,6 +8,7 @@ import csv
 import json
 import math
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -30,30 +31,41 @@ def logsumexp(values: np.ndarray, axis: int) -> np.ndarray:
 
 def read_umbrella(path: Path) -> tuple[dict[str, str], dict[str, np.ndarray]]:
     metadata: dict[str, str] = {}
+    header_line = -1
     with path.open(newline="", encoding="utf-8") as handle:
-        while True:
-            position = handle.tell()
-            line = handle.readline()
+        for line_number, line in enumerate(handle):
             if not line:
                 raise ValueError(f"{path}: missing CSV header")
             if not line.startswith("#"):
-                handle.seek(position)
+                header_line = line_number
+                if tuple(line.rstrip("\r\n").split(",")) != REQUIRED:
+                    raise ValueError(f"{path}: unexpected columns")
                 break
             key, separator, value = line[1:].strip().partition("=")
             if not separator:
                 raise ValueError(f"{path}: malformed metadata line")
             metadata[key.strip()] = value.strip()
-        reader = csv.DictReader(handle)
-        if tuple(reader.fieldnames or ()) != REQUIRED:
-            raise ValueError(f"{path}: unexpected columns")
-        rows = list(reader)
+        else:
+            raise ValueError(f"{path}: missing CSV header")
     if metadata.get("schema_version") != "3" or metadata.get("sampler") != "umbrella_exchange":
         raise ValueError(f"{path}: not an umbrella-exchange schema-3 file")
-    if not rows:
+    try:
+        # Loading the numeric body directly avoids retaining millions of Python
+        # dictionaries.  On the largest production files this lowers peak RSS
+        # by more than an order of magnitude while preserving the public return
+        # shape of this reader.
+        table = np.loadtxt(
+            path, delimiter=",", skiprows=header_line + 1, dtype=np.float64,
+        )
+    except ValueError as error:
+        raise ValueError(f"{path}: non-numeric statistics row") from error
+    if table.size == 0:
         raise ValueError(f"{path}: no samples")
+    table = np.atleast_2d(table)
+    if table.shape[1] != len(REQUIRED):
+        raise ValueError(f"{path}: unexpected numeric column count")
     arrays = {
-        column: np.asarray([float(row[column]) for row in rows], dtype=float)
-        for column in REQUIRED
+        column: table[:, index] for index, column in enumerate(REQUIRED)
     }
     if not all(np.all(np.isfinite(values)) for values in arrays.values()):
         raise ValueError(f"{path}: non-finite values")
@@ -65,6 +77,135 @@ def read_umbrella(path: Path) -> tuple[dict[str, str], dict[str, np.ndarray]]:
     if len(set(counts)) != 1 or counts[0] != int(metadata["samples_per_window"]):
         raise ValueError(f"{path}: unequal or incorrect per-window sample counts")
     return metadata, arrays
+
+
+@dataclass(frozen=True)
+class UmbrellaModel:
+    """Solved fixed-mass umbrella model with sample-level observables."""
+
+    M2: np.ndarray
+    M4: np.ndarray
+    Q: np.ndarray | None
+    slots: np.ndarray
+    centers: np.ndarray
+    kappas: np.ndarray
+    counts: np.ndarray
+    free_energies: np.ndarray
+    log_denominator: np.ndarray
+    iterations: int
+    bins: int
+
+
+def prepare_umbrella_model(
+    arrays: dict[str, np.ndarray], bins: int = 0,
+    initial_free: np.ndarray | None = None,
+) -> UmbrellaModel:
+    """Solve the umbrella normalization once for repeated mass evaluation."""
+    slots = arrays["slot"].astype(int)
+    order = np.argsort(slots, kind="stable")
+    slots = slots[order]
+    m2_values = arrays["M2"][order]
+    m4_values = arrays["M4"][order]
+    q_values = arrays.get("Q")
+    if q_values is not None:
+        q_values = q_values[order]
+    centers = np.asarray([
+        arrays["umbrella_center"][order][slots == slot][0]
+        for slot in sorted(set(slots))
+    ])
+    kappas = np.asarray([
+        arrays["umbrella_kappa"][order][slots == slot][0]
+        for slot in sorted(set(slots))
+    ])
+    counts = np.bincount(slots)[1:].astype(float)
+    if bins > 0:
+        free, denominator, iterations = solve_binned_wham(
+            m2_values, centers, kappas, counts, bins,
+            initial_free=initial_free,
+        )
+    else:
+        reduced = 0.5 * kappas[:, None] * (
+            m2_values[None, :] - centers[:, None]
+        ) ** 2
+        free, denominator, iterations = solve_mbar(reduced, counts)
+    return UmbrellaModel(
+        M2=m2_values, M4=m4_values, Q=q_values, slots=slots,
+        centers=centers, kappas=kappas, counts=counts,
+        free_energies=free, log_denominator=denominator,
+        iterations=iterations, bins=bins,
+    )
+
+
+def _absolute_contribution_diagnostics(values: np.ndarray) -> tuple[float, float]:
+    absolute = np.abs(np.asarray(values, dtype=float))
+    total = float(np.sum(absolute))
+    if not math.isfinite(total) or total <= 0.0:
+        return float(len(absolute)), 0.0
+    squared = float(np.dot(absolute, absolute))
+    ess = total * total / squared if squared > 0.0 else float(len(absolute))
+    count = max(1, int(math.ceil(0.01 * len(absolute))))
+    top = float(np.partition(absolute, -count)[-count:].sum() / total)
+    return ess, top
+
+
+def evaluate_umbrella_model(
+    model: UmbrellaModel, *, delta_m2: float = 0.0, temperature: float = 1.0,
+) -> dict[str, float]:
+    """Evaluate canonical moments and dU4/dm2 at a locally reweighted mass."""
+    if not math.isfinite(temperature) or temperature <= 0.0:
+        raise ValueError("temperature must be finite and positive")
+    log_weights = -model.log_denominator
+    if delta_m2 != 0.0:
+        if model.Q is None:
+            raise ValueError("mass reweighting requires Q=sum(phi^2)")
+        log_weights = log_weights - 0.5 * delta_m2 * model.Q / temperature
+    log_weights = log_weights - np.max(log_weights)
+    weights = np.exp(log_weights)
+    weights /= np.sum(weights)
+    mean_m2 = float(np.dot(weights, model.M2))
+    mean_m4 = float(np.dot(weights, model.M4))
+    if mean_m2 <= 16.0 * np.finfo(float).tiny:
+        raise ValueError("weighted <M2> is numerically zero")
+    binder = 1.0 - mean_m4 / (3.0 * mean_m2**2)
+    result = {
+        "mean_M2": mean_m2,
+        "mean_M4": mean_m4,
+        "binder": binder,
+        "effective_sample_size": 1.0 / float(np.dot(weights, weights)),
+        "ess_fraction": 1.0 / (len(weights) * float(np.dot(weights, weights))),
+        "max_normalized_weight": float(np.max(weights)),
+    }
+    if model.Q is None:
+        return result
+    mean_q = float(np.dot(weights, model.Q))
+    centered_q = model.Q - mean_q
+    centered_m2 = model.M2 - mean_m2
+    centered_m4 = model.M4 - mean_m4
+    cov_m2_q = float(np.dot(weights, centered_m2 * centered_q))
+    cov_m4_q = float(np.dot(weights, centered_m4 * centered_q))
+    slope = (
+        cov_m4_q / (6.0 * temperature * mean_m2**2)
+        - mean_m4 * cov_m2_q / (3.0 * temperature * mean_m2**3)
+    )
+    m2q_ess, top_m2q = _absolute_contribution_diagnostics(
+        weights * centered_m2 * centered_q
+    )
+    m4q_ess, top_m4q = _absolute_contribution_diagnostics(
+        weights * centered_m4 * centered_q
+    )
+    result.update({
+        "mean_Q": mean_q,
+        "cov_M2_Q": cov_m2_q,
+        "cov_M4_Q": cov_m4_q,
+        "binder_slope_m2": slope,
+        "m2q_contribution_ess": m2q_ess,
+        "m2q_contribution_ess_fraction": m2q_ess / len(weights),
+        "top1_abs_m2q_fraction": top_m2q,
+        "m4q_contribution_ess": m4q_ess,
+        "m4q_contribution_ess_fraction": m4q_ess / len(weights),
+        "top1_abs_m4q_fraction": top_m4q,
+    })
+    return result
 
 
 def solve_mbar(reduced: np.ndarray, counts: np.ndarray, tolerance: float = 1e-11,
@@ -149,7 +290,7 @@ def solve_binned_wham(m2_values: np.ndarray, centers: np.ndarray,
         gauge_hessian = hessian[1:, 1:]
         try:
             step = np.linalg.solve(
-                gauge_hessian + 1e-12 * np.eye(len(counts) - 1),
+                gauge_hessian + 1e-8 * np.eye(len(counts) - 1),
                 -gradient[1:],
             )
         except np.linalg.LinAlgError:
@@ -172,51 +313,94 @@ def solve_binned_wham(m2_values: np.ndarray, centers: np.ndarray,
             scale *= 0.5
         else:
             raise RuntimeError("binned umbrella WHAM line search failed")
+        # Sparse occupied bins (typical when a few M² tails stretch a 512-bin
+        # histogram) make the Newton Hessian ill-conditioned. The residual can
+        # stall around 1e-8, just above the default 1e-9 tolerance, while the
+        # line search accepts numerically zero steps.
+        if scale < 1e-8:
+            residual = float(np.max(np.abs(gradient[1:])))
+            if residual <= max(1e-6, 1_000.0 * tolerance):
+                break
+            # Newton can stall on a long, tightly spaced ladder even with
+            # excellent occupancy. Retry the same iteration with steepest
+            # descent instead of aborting the solve.
+            step = -gradient[1:]
+            slope = -float(np.dot(gradient[1:], gradient[1:]))
+            scale = 1.0
+            while scale >= 1e-10:
+                candidate = free.copy()
+                candidate[1:] += scale * step
+                if objective(candidate) <= current_objective + 1e-4 * scale * slope:
+                    free = candidate
+                    break
+                scale *= 0.5
+            else:
+                raise RuntimeError(
+                    "binned umbrella WHAM line search stalled "
+                    f"(residual={residual:.3g})"
+                )
+            if scale < 1e-8:
+                raise RuntimeError(
+                    "binned umbrella WHAM line search stalled "
+                    f"(residual={residual:.3g})"
+                )
     else:
         raise RuntimeError("binned umbrella WHAM did not converge within the iteration limit")
     return free, sample_log_denominator(m2_values, centers, kappas, counts, free), iteration
 
 
-def estimate(arrays: dict[str, np.ndarray], bins: int = 0,
-             initial_free: np.ndarray | None = None) -> dict[str, object]:
-    slots = arrays["slot"].astype(int)
-    order = np.argsort(slots, kind="stable")
-    slots = slots[order]
-    m2_values = arrays["M2"][order]
-    m4_values = arrays["M4"][order]
-    centers = np.asarray([
-        arrays["umbrella_center"][order][slots == slot][0]
-        for slot in sorted(set(slots))
-    ])
-    kappas = np.asarray([
-        arrays["umbrella_kappa"][order][slots == slot][0]
-        for slot in sorted(set(slots))
-    ])
-    counts = np.bincount(slots)[1:].astype(float)
-    if bins > 0:
-        free, denominator, iterations = solve_binned_wham(
-            m2_values, centers, kappas, counts, bins,
-            initial_free=initial_free,
-        )
-    else:
-        reduced = 0.5 * kappas[:, None] * (m2_values[None, :] - centers[:, None]) ** 2
-        free, denominator, iterations = solve_mbar(reduced, counts)
-    log_weights = -denominator
-    log_weights -= np.max(log_weights)
-    weights = np.exp(log_weights)
-    weights /= np.sum(weights)
-    mean_m2 = float(np.dot(weights, m2_values))
-    mean_m4 = float(np.dot(weights, m4_values))
-    binder = 1.0 - mean_m4 / (3.0 * mean_m2**2)
-    ess = 1.0 / float(np.dot(weights, weights))
+def estimate_with_bin_fallback(
+    arrays: dict[str, np.ndarray],
+    bin_schedule: tuple[int, ...] = (512, 256, 128),
+    initial_free: np.ndarray | None = None,
+    *, delta_m2: float = 0.0, temperature: float = 1.0,
+) -> dict[str, object]:
+    """Unbias with occupied-bin WHAM, coarsening the grid if Newton stalls."""
+    last_error: RuntimeError | None = None
+    for bins in bin_schedule:
+        try:
+            if delta_m2 == 0.0 and temperature == 1.0:
+                result = estimate(arrays, bins, initial_free=initial_free)
+            else:
+                result = estimate(
+                    arrays, bins, initial_free=initial_free,
+                    delta_m2=delta_m2, temperature=temperature,
+                )
+            result["wham_bins"] = bins
+            return result
+        except RuntimeError as error:
+            last_error = error
+    if last_error is None:
+        raise RuntimeError("binned umbrella WHAM bin schedule is empty")
+    raise RuntimeError(
+        f"binned umbrella WHAM failed for bins={bin_schedule}: {last_error}"
+    ) from last_error
 
-    bins = np.linspace(float(np.min(m2_values)), float(np.max(m2_values)), 65)
+
+def estimate(arrays: dict[str, np.ndarray], bins: int = 0,
+             initial_free: np.ndarray | None = None, *,
+             delta_m2: float = 0.0,
+             temperature: float = 1.0) -> dict[str, object]:
+    model = prepare_umbrella_model(arrays, bins, initial_free=initial_free)
+    evaluated = evaluate_umbrella_model(
+        model, delta_m2=delta_m2, temperature=temperature,
+    )
+    weights_log = -model.log_denominator
+    if delta_m2 != 0.0:
+        if model.Q is None:
+            raise ValueError("mass reweighting requires Q=sum(phi^2)")
+        weights_log -= 0.5 * delta_m2 * model.Q / temperature
+    weights_log -= np.max(weights_log)
+    weights = np.exp(weights_log)
+    weights /= np.sum(weights)
+
+    profile_bins = np.linspace(float(np.min(model.M2)), float(np.max(model.M2)), 65)
     neighbor_overlap: list[float] = []
-    for slot in range(1, len(counts)):
-        left, _ = np.histogram(m2_values[slots == slot], bins=bins)
-        right, _ = np.histogram(m2_values[slots == slot + 1], bins=bins)
+    for slot in range(1, len(model.counts)):
+        left, _ = np.histogram(model.M2[model.slots == slot], bins=profile_bins)
+        right, _ = np.histogram(model.M2[model.slots == slot + 1], bins=profile_bins)
         neighbor_overlap.append(float(np.minimum(left / left.sum(), right / right.sum()).sum()))
-    hist, edges = np.histogram(m2_values, bins=bins, weights=weights)
+    hist, edges = np.histogram(model.M2, bins=profile_bins, weights=weights)
     widths = np.diff(edges)
     density = hist / widths
     positive = density > 0
@@ -224,11 +408,14 @@ def estimate(arrays: dict[str, np.ndarray], bins: int = 0,
     free_profile[positive] = -np.log(density[positive])
     free_profile[positive] -= np.nanmin(free_profile)
     return {
-        "mean_M2": mean_m2, "mean_M4": mean_m4, "binder": binder,
-        "effective_sample_size": ess, "mbar_iterations": iterations,
-        "free_energies": free.tolist(), "neighbor_overlap": neighbor_overlap,
+        **evaluated,
+        "mbar_iterations": model.iterations,
+        "free_energies": model.free_energies.tolist(),
+        "neighbor_overlap": neighbor_overlap,
         "profile_centers": (0.5 * (edges[:-1] + edges[1:])).tolist(),
         "profile_free_energy": free_profile.tolist(),
+        "profile_density": density.tolist(),
+        "profile_edges": edges.tolist(),
     }
 
 

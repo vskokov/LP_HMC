@@ -21,7 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from analyze_umbrella import estimate, read_umbrella
+from analyze_umbrella import estimate_with_bin_fallback, read_umbrella
 from hmc_defaults import resolve_hmc_parameters, resolve_startup_hmc_parameters
 from lsf_defaults import resolved_exclude_hosts
 from umbrella_profiles import (
@@ -80,6 +80,55 @@ def canonical_combined_z(report: dict[str, object]) -> float | None:
     return None if value is None else float(value)
 
 
+def confirm_statistics_provenance(
+    metadatas: list[dict[str, str]],
+    profile: dict[str, object],
+    *,
+    confirm_samples: int | None = None,
+    thermalization_multiplier: float | None = None,
+) -> tuple[int, float, int]:
+    """Read confirm sample count and thermalization from statistics metadata.
+
+    CLI defaults must not override the run that was actually analyzed.
+    """
+    if not metadatas:
+        raise SystemExit("no confirmation statistics metadata")
+    samples = {int(metadata["samples_per_window"]) for metadata in metadatas}
+    if len(samples) != 1:
+        raise SystemExit(
+            "confirmation statistics disagree on samples_per_window: "
+            + ", ".join(str(value) for value in sorted(samples))
+        )
+    observed_samples = samples.pop()
+    if confirm_samples is not None and int(confirm_samples) != observed_samples:
+        raise SystemExit(
+            f"confirm_samples={int(confirm_samples)} does not match "
+            f"statistics samples_per_window={observed_samples}"
+        )
+    sweeps = {int(metadata["thermalization_sweeps"]) for metadata in metadatas}
+    if len(sweeps) != 1:
+        raise SystemExit(
+            "confirmation statistics disagree on thermalization_sweeps: "
+            + ", ".join(str(value) for value in sorted(sweeps))
+        )
+    observed_sweeps = sweeps.pop()
+    base = float(profile["minimum_thermalization_sweeps"])
+    if base <= 0:
+        raise SystemExit("profile minimum_thermalization_sweeps must be positive")
+    observed_multiplier = observed_sweeps / base
+    if thermalization_multiplier is not None:
+        if abs(observed_multiplier - float(thermalization_multiplier)) > 0.05:
+            raise SystemExit(
+                f"confirm_thermalization_multiplier={thermalization_multiplier:g} "
+                f"does not match statistics thermalization_sweeps="
+                f"{observed_sweeps} / {base:g} = {observed_multiplier:g}"
+            )
+        observed_multiplier = float(thermalization_multiplier)
+    else:
+        observed_multiplier = round(observed_multiplier * 2.0) / 2.0
+    return observed_samples, observed_multiplier, observed_sweeps
+
+
 def canonical_gate_passes(report: dict[str, object]) -> bool:
     combined_z = canonical_combined_z(report)
     return combined_z is not None and abs(combined_z) <= CANONICAL_Z_MAX
@@ -131,7 +180,7 @@ def run_confirmation_campaign(args: argparse.Namespace, candidates: list[int]) -
                 save_selected_nlf(args, candidate)
                 if args.stage == "confirm":
                     return 0
-                if stage_promote(args, candidate, confirm_dir) == 0:
+                if stage_promote(args, candidate, confirm_dir, report=report) == 0:
                     return 0
 
             print(
@@ -473,18 +522,27 @@ def stage_confirm(args: argparse.Namespace, n_lf: int, *,
 def build_validation_report(args: argparse.Namespace, n_lf: int,
                             confirm_dir: Path, *,
                             confirm_samples: int | None = None,
-                            thermalization_multiplier: float = 1.0) -> dict[str, object]:
+                            thermalization_multiplier: float | None = None) -> dict[str, object]:
     profile = load_profile(profile_path(args.profile_dir, args.L), args.L, require_validated=False)
     stats_paths = sorted((confirm_dir / "statistics").glob("*.csv"))
     if len(stats_paths) < 2:
         raise SystemExit(f"expected two confirmation statistics files in {confirm_dir / 'statistics'}")
     overlaps: list[float] = []
     binders: list[float] = []
+    metadatas: list[dict[str, str]] = []
+    wham_bins: list[int] = []
     for path in stats_paths:
         metadata, arrays = read_umbrella(path)
-        fit = estimate(arrays, 512)
+        metadatas.append(metadata)
+        fit = estimate_with_bin_fallback(arrays)
         overlaps.extend(float(value) for value in fit["neighbor_overlap"])
         binders.append(float(fit["binder"]))
+        wham_bins.append(int(fit["wham_bins"]))
+    observed_samples, observed_multiplier, observed_sweeps = confirm_statistics_provenance(
+        metadatas, profile,
+        confirm_samples=confirm_samples,
+        thermalization_multiplier=thermalization_multiplier,
+    )
     diag_dir = confirm_dir / "diagnostics"
     hmc_mins: list[float] = []
     swap_mins: list[float] = []
@@ -511,8 +569,10 @@ def build_validation_report(args: argparse.Namespace, n_lf: int,
         "confirmed_candidates": len(stats_paths),
         "provenance": str(confirm_dir.resolve()),
         "binder_estimates": binders,
-        "confirm_samples": confirm_samples or args.confirm_samples,
-        "confirm_thermalization_multiplier": thermalization_multiplier,
+        "confirm_samples": observed_samples,
+        "confirm_thermalization_sweeps": observed_sweeps,
+        "confirm_thermalization_multiplier": observed_multiplier,
+        "wham_bins": wham_bins,
     }
     if len(binders) >= 2:
         report["canonical_combined_z"] = binder_canonical_combined_z(binders)
@@ -521,8 +581,18 @@ def build_validation_report(args: argparse.Namespace, n_lf: int,
     return report
 
 
-def stage_promote(args: argparse.Namespace, n_lf: int, confirm_dir: Path) -> int:
-    report = build_validation_report(args, n_lf, confirm_dir)
+def stage_promote(args: argparse.Namespace, n_lf: int, confirm_dir: Path, *,
+                  report: dict[str, object] | None = None,
+                  confirm_samples: int | None = None,
+                  thermalization_multiplier: float | None = None) -> int:
+    if report is None:
+        report = build_validation_report(
+            args, n_lf, confirm_dir,
+            confirm_samples=confirm_samples,
+            thermalization_multiplier=thermalization_multiplier,
+        )
+    else:
+        atomic_json(args.report_dir / f"L{args.L}_validation.json", report)
     profile = profile_path(args.profile_dir, args.L)
     report_path = args.report_dir / f"L{args.L}_validation.json"
     command = [

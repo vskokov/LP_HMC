@@ -6,11 +6,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import shlex
 import subprocess
 import sys
 from pathlib import Path
 
+from runtime_preflight import run as run_cuda_preflight
 from lsf_defaults import DEFAULT_MEM_GB, resolved_exclude_hosts, submit_bsub_script
 from umbrella_campaign import active_lsf_tasks, claim, load_rows, preflight, repair_manifest
 from umbrella_profiles import SUPPORTED_SIZES, load_profile, proposed_profile
@@ -86,8 +88,8 @@ def tune_args_from_namespace(args: argparse.Namespace, L: int) -> argparse.Names
         report_dir=args.report_dir,
         julia=args.julia,
         tsp=args.tsp,
-        scheduler="lsf",
-        slots=1,
+        scheduler=getattr(args, "scheduler", "lsf"),
+        slots=getattr(args, "slots", 1),
         dry_run=args.dry_run,
         fresh_pilot=args.fresh_pilot,
         pilot_max_thermalization_sweeps=args.pilot_max_thermalization_sweeps,
@@ -182,10 +184,11 @@ def nlf_prepare_command(tune_args: argparse.Namespace, pilot_dir: Path,
         f"--run-dir={pilot_dir}",
         f"--probe-sweeps={tune_args.nlf_probe_sweeps}",
         f"--lags={lags}",
-        "--scheduler=lsf",
+        f"--scheduler={getattr(tune_args, 'scheduler', 'lsf')}",
         "--prepare-only",
-        f"--slots=1",
+        f"--slots={getattr(tune_args, 'slots', 1)}",
         f"--julia={tune_args.julia}",
+        f"--tsp={tune_args.tsp}",
         f"--output-dir={output_dir}",
         f"--queue={tune_args.queue}",
         f"--walltime={tune_args.walltime}",
@@ -268,6 +271,79 @@ def sync_campaign_index(args: argparse.Namespace) -> Path:
 def bsub_script(script_path: Path, *, dry_run: bool, job_name: str | None = None,
                task_ids: list[int] | None = None) -> None:
     submit_bsub_script(script_path, dry_run=dry_run, job_name=job_name, task_ids=task_ids)
+
+
+def tsp_set_slots(tsp: str, slots: int, *, dry_run: bool) -> None:
+    command = [tsp, "-S", str(slots)]
+    print("+", shlex.join(command))
+    if not dry_run:
+        subprocess.run(command, check=True)
+
+
+def active_tsp_task_ids(tsp: str, haystack: str) -> set[int]:
+    """Task ids currently queued or running whose tsp command mentions haystack."""
+    try:
+        result = subprocess.run(
+            [tsp, "-l"], text=True, capture_output=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return set()
+    active: set[int] = set()
+    for line in result.stdout.splitlines():
+        lower = line.lower()
+        if not any(state in lower for state in ("queued", "running", "allocating")):
+            continue
+        if haystack not in line:
+            continue
+        match = re.search(r"--task-id[= ](\d+)", line) or re.search(r"--run-probe-id[= ](\d+)", line)
+        if match:
+            active.add(int(match.group(1)))
+    return active
+
+
+def tsp_worker_command(manifest: Path, task: int, allocation: int,
+                       config: dict[str, object]) -> list[str]:
+    command = [
+        str(config.get("python", "python3")),
+        str(REPO_ROOT / "scripts/run_umbrella_task.py"),
+        "--manifest", str(manifest.resolve()),
+        "--task-id", str(task),
+        "--julia", str(config.get("julia", "julia")),
+        "--runtime-budget-minutes", str(config.get("runtime_budget_minutes", 360)),
+        "--resume",
+        "--allocation", str(allocation),
+    ]
+    return command
+
+
+def enqueue_incomplete_manifest_tsp(
+    manifest: Path, args: argparse.Namespace, *, task_ids: set[int] | None = None,
+) -> None:
+    rows = load_rows(manifest)
+    submission_path = manifest.parent / "submission.json"
+    config = json.loads(submission_path.read_text(encoding="utf-8")) if submission_path.is_file() else {}
+    if getattr(args, "runtime_budget_minutes", None) is not None:
+        config["runtime_budget_minutes"] = args.runtime_budget_minutes
+    tsp = str(config.get("tsp", args.tsp))
+    haystack = str(manifest.parent.resolve())
+    active = active_tsp_task_ids(tsp, haystack)
+    tsp_set_slots(tsp, int(getattr(args, "slots", 1)), dry_run=args.dry_run)
+    for row in rows:
+        task = int(row["task_id"])
+        if task_ids is not None and task not in task_ids:
+            continue
+        if Path(row["completion_marker"]).is_file() or task in active:
+            continue
+        state = Path(row.get("progress_marker", row["completion_marker"]))
+        claims = list(state.parent.glob(state.name + ".continuation-*"))
+        allocation = max([int(path.name.rsplit("-", 1)[1]) for path in claims], default=0)
+        if allocation >= int(row.get("max_continuations", config.get("max_continuations", 20))):
+            print(f"task={task} state=continuation_limit_reached", file=sys.stderr)
+            continue
+        command = [tsp, *tsp_worker_command(manifest, task, allocation, config)]
+        print("+", shlex.join(command))
+        if not args.dry_run:
+            subprocess.run(command, cwd=REPO_ROOT, check=True)
 
 
 def prepare_size(args: argparse.Namespace, L: int) -> dict[str, object]:
@@ -416,6 +492,12 @@ def active_manifest_for_state(state: dict[str, object]) -> Path | None:
 def preflight_cmd(args: argparse.Namespace) -> int:
     if args.L is None:
         raise SystemExit("preflight requires --L")
+    if getattr(args, "scheduler", "lsf") == "tsp":
+        print(f"+ local Julia/CUDA preflight julia={args.julia}")
+        if not args.dry_run:
+            run_cuda_preflight(args.julia, REPO_ROOT)
+        print("tsp preflight ok")
+        return 0
     _, state = selected_states(args)[0]
     manifest = active_manifest_for_state(state)
     if manifest is None:
@@ -424,12 +506,25 @@ def preflight_cmd(args: argparse.Namespace) -> int:
     return preflight(preflight_args)
 
 
-def submit_nlf_jobs(output_dir: Path, *, dry_run: bool, bjobs: str) -> None:
+def submit_nlf_jobs(args: argparse.Namespace, L: int, state: dict[str, object]) -> None:
+    output_dir = Path(str(state["nlf_output_dir"]))
     pending = nlf_pending_probe_ids(output_dir)
-    script = output_dir / "lsf_job.sh"
     if not pending:
         print(f"L nlf probes already complete: {output_dir}")
         return
+    if getattr(args, "scheduler", "lsf") == "tsp":
+        tune_args = tune_args_from_namespace(args, L)
+        command = [
+            flag for flag in nlf_prepare_command(
+                tune_args, Path(str(state["pilot_manifest"])).parent, output_dir,
+            )
+            if flag != "--prepare-only"
+        ]
+        print("+", shlex.join(command))
+        if not args.dry_run:
+            subprocess.run(command, cwd=REPO_ROOT, check=True)
+        return
+    script = output_dir / "lsf_job.sh"
     if not script.is_file():
         raise SystemExit(f"missing nlf LSF script: {script}")
     submission_path = output_dir / "submission.json"
@@ -437,12 +532,12 @@ def submit_nlf_jobs(output_dir: Path, *, dry_run: bool, bjobs: str) -> None:
         json.loads(submission_path.read_text(encoding="utf-8"))["run_name"]
         if submission_path.is_file() else output_dir.name
     )
-    active = active_lsf_tasks(run_name, bjobs)
+    active = active_lsf_tasks(run_name, args.bjobs)
     pending = [probe for probe in pending if probe not in active]
     if not pending:
         print(f"pending nlf probes already queued: {run_name}")
         return
-    bsub_script(script, dry_run=dry_run, task_ids=pending)
+    bsub_script(script, dry_run=args.dry_run, task_ids=pending)
 
 
 def submit_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> None:
@@ -452,11 +547,13 @@ def submit_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> N
         return
     if stage == "pilot":
         manifest = Path(str(state["pilot_manifest"]))
-        script = manifest.parent / "lsf_job.sh"
         if manifest_complete(manifest):
             print(f"L={L} pilot already complete")
             return
-        bsub_script(script, dry_run=args.dry_run)
+        if getattr(args, "scheduler", "lsf") == "tsp":
+            enqueue_incomplete_manifest_tsp(manifest, args)
+            return
+        bsub_script(manifest.parent / "lsf_job.sh", dry_run=args.dry_run)
         return
     if stage == "nlf":
         output_dir = Path(str(state["nlf_output_dir"]))
@@ -466,15 +563,17 @@ def submit_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> N
         if nlf_all_probes_done(output_dir):
             print(f"L={L} nlf probes complete; run repair to summarize")
             return
-        submit_nlf_jobs(output_dir, dry_run=args.dry_run, bjobs=args.bjobs)
+        submit_nlf_jobs(args, L, state)
         return
     if stage == "confirm":
         manifest = Path(str(state["confirm_manifest"]))
         if manifest_complete(manifest):
             print(f"L={L} confirm already complete")
             return
-        script = manifest.parent / "lsf_job.sh"
-        bsub_script(script, dry_run=args.dry_run)
+        if getattr(args, "scheduler", "lsf") == "tsp":
+            enqueue_incomplete_manifest_tsp(manifest, args)
+            return
+        bsub_script(manifest.parent / "lsf_job.sh", dry_run=args.dry_run)
         return
     print(f"L={L} stage={stage} has no GPU submission")
 
@@ -488,11 +587,14 @@ def submit(args: argparse.Namespace) -> int:
 def advance_pilot(args: argparse.Namespace, L: int, state: dict[str, object]) -> bool:
     manifest = Path(str(state["pilot_manifest"]))
     if not pilot_is_complete(manifest.parent):
-        repair_args = argparse.Namespace(
-            manifest=manifest, dry_run=args.dry_run, active_task=[],
-            evaluation_json=None, bjobs=args.bjobs,
-        )
-        repair_manifest(repair_args, manifest)
+        if getattr(args, "scheduler", "lsf") == "tsp":
+            enqueue_incomplete_manifest_tsp(manifest, args)
+        else:
+            repair_args = argparse.Namespace(
+                manifest=manifest, dry_run=args.dry_run, active_task=[],
+                evaluation_json=None, bjobs=args.bjobs,
+            )
+            repair_manifest(repair_args, manifest)
         return False
     state["stage"] = "nlf"
     tune_args = tune_args_from_namespace(args, L)
@@ -584,19 +686,30 @@ def advance_confirm(args: argparse.Namespace, L: int, state: dict[str, object]) 
     manifest = Path(str(state["confirm_manifest"]))
     confirm_dir = Path(str(state["confirm_dir"]))
     if not confirm_is_complete(confirm_dir):
-        repair_args = argparse.Namespace(
-            manifest=manifest, dry_run=args.dry_run, active_task=[],
-            evaluation_json=None, bjobs=args.bjobs,
-        )
-        repair_manifest(repair_args, manifest)
+        if getattr(args, "scheduler", "lsf") == "tsp":
+            enqueue_incomplete_manifest_tsp(manifest, args)
+        else:
+            repair_args = argparse.Namespace(
+                manifest=manifest, dry_run=args.dry_run, active_task=[],
+                evaluation_json=None, bjobs=args.bjobs,
+            )
+            repair_manifest(repair_args, manifest)
         return False
     tune_args = tune_args_from_namespace(args, L)
     selected = int(state["selected_n_lf"])
-    report = build_validation_report(
-        tune_args, selected, confirm_dir,
-        confirm_samples=state.get("confirm_samples"),
-        thermalization_multiplier=float(state.get("confirm_thermalization_multiplier", 1.0)),
-    )
+    try:
+        report = build_validation_report(
+            tune_args, selected, confirm_dir,
+            confirm_samples=state.get("confirm_samples"),
+            thermalization_multiplier=float(state.get("confirm_thermalization_multiplier", 1.0)),
+        )
+    except RuntimeError as error:
+        print(
+            f"validation WHAM failed for L={L} n_lf={selected}: {error}; "
+            "not escalating samples (fix the analyzer or rerun this confirm)",
+            file=sys.stderr,
+        )
+        return False
     if canonical_gate_passes(report):
         save_selected_nlf(tune_args, selected)
         if args.dry_run:
@@ -605,7 +718,7 @@ def advance_confirm(args: argparse.Namespace, L: int, state: dict[str, object]) 
             state["validated"] = True
             save_state(state_file(args.campaign_dir, L), state)
             return True
-        rc = stage_promote(tune_args, selected, confirm_dir)
+        rc = stage_promote(tune_args, selected, confirm_dir, report=report)
         if rc == 0:
             state["stage"] = "validated"
             state["validated"] = True
@@ -642,7 +755,7 @@ def repair_size(args: argparse.Namespace, L: int, state: dict[str, object]) -> N
             if advance_nlf(args, L, state):
                 submit_size(args, L, state)
             return
-        submit_nlf_jobs(output_dir, dry_run=args.dry_run, bjobs=args.bjobs)
+        submit_nlf_jobs(args, L, state)
         return
     if stage == "confirm":
         if advance_confirm(args, L, state) and state.get("stage") == "confirm":
@@ -673,7 +786,9 @@ def parser() -> argparse.ArgumentParser:
         item.add_argument("--profile-dir", type=Path, default=DEFAULT_PROFILE_DIR)
         item.add_argument("--report-dir", type=Path, default=DEFAULT_REPORT_DIR)
         item.add_argument("--julia", default=str(LOCAL_JULIA) if LOCAL_JULIA.is_file() else "julia")
+        item.add_argument("--scheduler", choices=("lsf", "tsp"), default="lsf")
         item.add_argument("--tsp", default="tsp")
+        item.add_argument("--slots", type=int, default=1)
         item.add_argument("--dry-run", action="store_true")
         item.add_argument("--force-revalidate", action="store_true",
                           help="restart tuning for a profile even if already validated")

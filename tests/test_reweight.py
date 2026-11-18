@@ -626,6 +626,77 @@ class ReweightTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must be 1 or an odd integer", result.stderr)
 
+    def test_production_zm06_source_window(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from collect_binder_m2 import SCAN_M2_END, SCAN_M2_START, SCAN_Z, run_name, samples_for
+        from reweight_manifest import read_points_csv
+
+        points = read_points_csv(ROOT / "configs/reweight_sources_Zm0p6.csv")
+        masses = [float(m2) for _, m2 in points]
+        self.assertEqual(len(points), 5)
+        self.assertTrue(all(float(Z) == SCAN_Z for Z, _ in points))
+        self.assertEqual(masses[0], SCAN_M2_START)
+        self.assertEqual(masses[-1], SCAN_M2_END)
+        self.assertIn(-1.86421, masses)
+        self.assertEqual(samples_for(8), 2000)
+        self.assertEqual(samples_for(18), 4000)
+        self.assertEqual(samples_for(32), 8000)
+        self.assertEqual(run_name(12), "binder_Zm06_L12")
+        self.assertEqual(run_name(12, tempered=True), "binder_Zm06_temp_L12")
+        self.assertEqual(run_name(12, tempering_replicas=17), "binder_Zm06_temp17_L12")
+
+    def test_collect_binder_m2_dry_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [
+                    sys.executable, str(ROOT / "scripts/collect_binder_m2.py"),
+                    "6", "--dry-run", "--run-root", directory,
+                    "--julia", "julia",
+                ],
+                check=True, text=True, capture_output=True,
+            )
+        self.assertIn("tempering: replicas=1 span=0", result.stdout)
+        self.assertIn("no tasks were enqueued", result.stdout)
+        self.assertIn("tasks: 10 (5 points x 2 replicas)", result.stdout)
+
+    def test_collect_binder_m2_dense_ladder_run_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [
+                    sys.executable, str(ROOT / "scripts/collect_binder_m2.py"),
+                    "8", "--dry-run", "--run-root", directory,
+                    "--julia", "julia",
+                    "--tempering-replicas", "17", "--mass-span", "0.6",
+                ],
+                check=True, text=True, capture_output=True,
+            )
+        self.assertIn("binder_Zm06_temp17_L8", result.stdout)
+        self.assertIn("tempering: replicas=17 span=0.6", result.stdout)
+
+    def test_analyze_prefers_complete_dense_ladder(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from analyze_binder_m2 import manifest_for
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = "schema_version,task_id,tempering_replicas\n"
+
+            short = root / "binder_Zm06_temp_L12"
+            short.mkdir()
+            (short / "manifest.csv").write_text(header + "1,0,5\n1,1,5\n")
+            (short / "complete").mkdir()
+            (short / "complete" / "0.complete").write_text("")
+            (short / "complete" / "1.complete").write_text("")
+
+            dense = root / "binder_Zm06_temp17_L12"
+            dense.mkdir()
+            (dense / "manifest.csv").write_text(header + "1,0,17\n1,1,17\n")
+            (dense / "complete").mkdir()
+            (dense / "complete" / "0.complete").write_text("")
+            self.assertEqual(manifest_for(root, 12), short / "manifest.csv")
+            (dense / "complete" / "1.complete").write_text("")
+            self.assertEqual(manifest_for(root, 12), dense / "manifest.csv")
+
 
 if __name__ == "__main__":
     unittest.main()
