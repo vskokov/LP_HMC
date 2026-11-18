@@ -167,28 +167,39 @@ def _logsumexp_rows(a: np.ndarray) -> np.ndarray:
     return mx + np.log(np.sum(np.exp(a - mx[None, :]), axis=0))
 
 
-def solve_global(B: np.ndarray, counts: np.ndarray, f0: np.ndarray | None = None,
-                 tol: float = 1e-7, max_iter: int = 200) -> tuple[np.ndarray, np.ndarray]:
-    """Newton MBAR over mixture states. B[j,x] = log unnormalised density of state j."""
+def _newton_terms(f: np.ndarray, B: np.ndarray, chunk: int = 200_000):
+    """Chunked MBAR objective pieces: sum(denom), expected counts, R R^T, denom."""
+    F, N = B.shape
+    denom = np.empty(N)
+    expected = np.zeros(F)
+    RRt = np.zeros((F, F))
+    for a in range(0, N, chunk):
+        blk = f[:, None] + B[:, a:a + chunk]
+        d = _logsumexp_rows(blk)
+        denom[a:a + chunk] = d
+        R = np.exp(blk - d[None, :])
+        expected += R.sum(axis=1)
+        RRt += R @ R.T
+    return denom, expected, RRt
+
+
+def _solve_global_dense(B, counts, f, tol, max_iter):
     F = B.shape[0]
-    if F == 1:
-        return np.zeros(1), B[0].copy()
-    f = np.zeros(F) if f0 is None else f0.copy()
-    f -= f[0]
     total = float(np.sum(counts))
 
     def obj_and_denom(fv):
-        d = _logsumexp_rows(fv[:, None] + B)
+        d = np.empty(B.shape[1])
+        for a in range(0, B.shape[1], 200_000):
+            d[a:a + 200_000] = _logsumexp_rows(fv[:, None] + B[:, a:a + 200_000])
         return (float(np.sum(d)) - float(np.dot(counts, fv))) / total, d
 
     obj, denom = obj_and_denom(f)
     for _ in range(max_iter):
-        R = np.exp(f[:, None] + B - denom[None, :])
-        expected = R.sum(axis=1)
+        denom, expected, RRt = _newton_terms(f, B)
         grad = (expected - counts) / total
         if np.max(np.abs(grad[1:])) * total < tol * max(1.0, counts.min()):
             break
-        H = (np.diag(expected) - R @ R.T) / total
+        H = (np.diag(expected) - RRt) / total
         try:
             step = np.linalg.solve(H[1:, 1:] + 1e-12 * np.eye(F - 1), -grad[1:])
         except np.linalg.LinAlgError:
@@ -208,6 +219,37 @@ def solve_global(B: np.ndarray, counts: np.ndarray, f0: np.ndarray | None = None
         else:
             break
     return f, denom
+
+
+def solve_global(B: np.ndarray, counts: np.ndarray, f0: np.ndarray | None = None,
+                 tol: float = 1e-7, max_iter: int = 200,
+                 fit_max: int = 300_000) -> tuple[np.ndarray, np.ndarray]:
+    """Newton MBAR over mixture states. B[j,x] = log unnormalised density of state j.
+
+    Columns of B are grouped by file in the order of ``counts``.  For large N the
+    free energies are first converged on a strided subsample (same stride in every
+    file, so the count ratios are preserved), then refined by a few full-data Newton
+    steps -- the fixed point is the full-data MBAR solution."""
+    F = B.shape[0]
+    if F == 1:
+        return np.zeros(1), B[0].copy()
+    f = np.zeros(F) if f0 is None else f0.copy()
+    f -= f[0]
+    N = B.shape[1]
+    counts = np.asarray(counts, float)
+    if N > 2 * fit_max:
+        # Coarse-to-fine cascade: cheap cold start on a small subsample, then a larger
+        # one, then a few Newton steps on the full data.
+        edges = np.concatenate([[0], np.cumsum(counts.astype(int))])
+        for target in (fit_max // 16, fit_max):
+            if f0 is not None and target < fit_max:
+                continue  # warm start: skip the coarsest level
+            stride = int(math.ceil(N / target))
+            idx = np.concatenate([np.arange(edges[j], edges[j + 1], stride) for j in range(F)])
+            sub_counts = np.array([len(range(edges[j], edges[j + 1], stride)) for j in range(F)], float)
+            f, _ = _solve_global_dense(B[:, idx], sub_counts, f, tol, max_iter)
+        return _solve_global_dense(B, counts, f, tol, 8)
+    return _solve_global_dense(B, counts, f, tol, max_iter)
 
 
 # ------------------------------------------------------------------ observables
