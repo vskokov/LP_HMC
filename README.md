@@ -158,8 +158,9 @@ The reweighting submitters have newer, per-volume defaults tuned specifically at
 | 32 | 0.02070175658 | 4 | 0.0828 |
 
 Explicit `--eps` and `--n-lf` options override the table. For an unlisted L,
-both options are required. The scan and confirmation data are in
-`reports/hmc_tuning_Zm0p6_m2m1p85764/`.
+both options are required. The scan and confirmation data were removed from the
+working tree in commit `1ec8b69`; recover them with
+`git checkout 4a100b7 -- reports/hmc_tuning_Zm0p6_m2m1p85764`.
 
 **Do not** follow the naive advice to "increase ε for larger lattices" — the volume
 scaling means you must *decrease* ε as L grows.
@@ -660,7 +661,7 @@ profile. LSF and TSP share the resolver and materialize the same physics:
 python3 scripts/submit_reweight_tsp.py \
     --L 24 --points-csv critical_sources_L24.csv --replicas 8 \
     --tempering-profile critical \
-    --tempering-profile-file reports/tempering_tuning_A6000/recommendations.csv \
+    --tempering-profile-file path/to/recommendations.csv \
     --init-schedule split --run-name critical_L24
 ```
 
