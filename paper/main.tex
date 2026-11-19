@@ -424,10 +424,10 @@ order-parameter distribution at equal height.}
 \begin{tabular}{lccc}
  & 3D Ising & tricritical & first order\\
 \hline
-$\Ufour$ at crossing/minimum & $0.4655$ & $\to1/3$ & $\propto-L^3$\\
-$\chi_{\max}$ & $L^{1.964}$ & $L^{2}$ (log corr.) & $L^3$\\
+$\Ufour^{*}$ or $\Ufour^{\min}$ & $0.4655$ & $\to1/3$ & $\propto-L^3$\\
+$\chi_{\max}$ & $L^{1.964}$ & $L^{2}$ (logs) & $L^3$\\
 $\Delta F$ & $\to$ const & $\to$ const & $\propto L^2$\\
-$P(M)$ & double peak & triple peak & triple peak, deepening
+$P(M)$ & 2 peaks & 3 peaks & 3 peaks, deepening
 \end{tabular}
 \end{ruledtabular}
 \end{table}
@@ -555,15 +555,168 @@ $\frac12(\nabla_\perp^2u)^2$ is therefore $K=A^2\qs^2/2$.
 \section{Hartree approximation on the lattice}
 \label{app:hartree}
 
-The single-direction lattice momentum $q_1=4\sin^2(k/2)$ with $k$ uniform on
-$[-\pi,\pi]$ has the arcsine distribution
-$F(q_1)=\frac2\pi\arcsin(\sqrt{q_1}/2)$ on $[0,4]$; the density of states of
-$\khat$ is its threefold convolution, which we evaluate on $1.2\times10^5$ bins
-with exact bin probabilities.  For finite $L$ we sum over the $L^3$ allowed
-momenta.  For $Z<0$ the gap equation~\eqref{eq:gap} is solved by bracketing
-above $r_{\min}=-\min_k\varepsilon_k$, where $G_0$ diverges in infinite volume.
-Condensate amplitudes are found by bounded minimization of Eq.~\eqref{eq:FH};
-phase boundaries by bisection on equal free energies.
+This appendix gives everything needed to reproduce Fig.~\ref{fig:theory} and
+Eq.~\eqref{eq:hartree-meet}; the implementation is
+\texttt{scripts/hartree\_lattice.py}.
+
+\paragraph*{Variational functional.}
+We write $\phi_x=\Phi_x+\delta\phi_x$ and take the Gaussian trial Hamiltonian
+$H_0=\frac12\sum_k(r+\varepsilon_k)|\delta\tilde\phi_k|^2$, with
+$\varepsilon_k=Z\khat+(\khat)^2$ and
+$\khat=\sum_\mu4\sin^2(k_\mu/2)$.  At $T=1$ the Gibbs--Bogoliubov bound
+$F\le F_0+\langle H-H_0\rangle_0$ per site involves only
+\begin{align*}
+ F_0&=\tfrac12\overline{\textstyle\sum_k}\ln(r+\varepsilon_k),\\
+ \langle\delta\phi_x^2\rangle_0&=G_0\equiv\overline{\textstyle\sum_k}\,\frac{1}{r+\varepsilon_k},\\
+ \langle(\Phi+\delta\phi)^4\rangle_0&=\Phi^4+6\Phi^2G_0+3G_0^2,
+\end{align*}
+together with the mass mismatch
+$\langle H_2-H_0\rangle_0/V=\frac{m^2-r}{2}G_0$, where $H_2$ is the quadratic
+part of $H$ in $\delta\phi$.
+Additive constants common to all phases are dropped.  This yields
+Eq.~\eqref{eq:FH}.  Since $\partial_rF_0=G_0/2$, the condition
+$\partial_rF=0$ factorizes as $G_0'(r)\,[\,m^2-r+3\lambda(G_0+\langle\Phi^2\rangle)]=0$, i.e.\
+the gap equation~\eqref{eq:gap}.  Inserting it back gives the on-shell form
+\begin{equation}
+ F=\tfrac12\overline{\textstyle\sum_k}\ln(r+\varepsilon_k)-\tfrac{3\lambda}{4}G_0^2
+ +K[\Phi]+\tfrac{m^2}{2}\langle\Phi^2\rangle+\tfrac{\lambda}{4}\langle\Phi^4\rangle .
+ \label{eq:FH-onshell}
+\end{equation}
+
+\paragraph*{Condensates.}
+We use $\Phi=0$ (symmetric), $\Phi=v$ (uniform), and $\Phi_x=A\cos(\mathbf k_c\cdot x)$ (lamellar).
+For the lamellar state
+\[
+ \langle\Phi^2\rangle=\tfrac{A^2}{2},\qquad
+ \langle\Phi^4\rangle=\tfrac{3A^4}{8},\qquad
+ K=\tfrac{A^2}{4}\varepsilon_c .
+\]
+Here $\varepsilon_c\equiv\varepsilon(\mathbf k_c)$.  The value of
+$\langle\Phi^4\rangle$ requires a lattice period $p\ne2,4$; for $p=4$ it becomes
+$A^4/2$.  Because the fluctuation propagator is taken translation invariant
+(Brazovskii's approximation), only $\varepsilon_c$ enters.
+\begin{itemize}
+ \item In infinite volume we take $\khat_c=-Z/2$, the moat minimum.  A wavevector
+ along a lattice axis can reach it for $-8\le Z<0$.
+ \item At finite $L$ we take the axis mode $4\sin^2(\pi n/L)$ that minimizes $\varepsilon$.
+\end{itemize}
+Stationarity in the amplitude at fixed $r$, combined with Eq.~\eqref{eq:gap},
+gives closed forms:
+\begin{equation}
+ v^2=\frac{r}{2\lambda},\qquad A^2=\frac{4(r+\varepsilon_c)}{3\lambda}.
+ \label{eq:amp}
+\end{equation}
+Each branch is therefore an explicit curve parametrized by the gap $r$:
+\begin{equation}
+\begin{aligned}
+ \text{symmetric:}\quad& m^2=r-3\lambda G_0(r),\\
+ \text{uniform:}\quad& m^2=-\tfrac r2-3\lambda G_0(r),\\
+ \text{lamellar:}\quad& m^2=-r-2\varepsilon_c-3\lambda G_0(r).
+\end{aligned}
+\label{eq:branches}
+\end{equation}
+The free energy along each branch follows from Eq.~\eqref{eq:FH-onshell}.
+The trial ensemble is normalizable only for $r>r_{\min}\equiv-\min_k\varepsilon_k$.  This bound is
+\begin{itemize}
+ \item $r_{\min}=Z^2/4$ for $-8\le Z<0$ in infinite volume;
+ \item $r_{\min}=0$ for $Z\ge0$.
+\end{itemize}
+
+Folds of the curves~\eqref{eq:branches}, where $dm^2/dr=0$, are the spinodals.
+A phase boundary is the value of $m^2$ at which the lowest branches cross in $F$.
+
+\paragraph*{Why the transitions are first order.}
+The behaviour of $G_0$ as $r\to r_{\min}$ is set by the density of states of
+$\varepsilon$ near its minimum.
+\begin{itemize}
+ \item For $Z>0$ the minimum is the point $k=0$, and $\rho(\varepsilon)\propto\varepsilon^{1/2}$.
+ $G_0(0)$ stays finite.
+ \item For $Z=0$, $\varepsilon\propto k^4$ and $\rho\propto\varepsilon^{-1/4}$, so
+ $G_0\propto r^{-1/4}$.
+ \item For $Z<0$ the minimum is the two-dimensional surface $\khat=-Z/2$, so
+ $\rho\propto(\varepsilon-\varepsilon_{\min})^{-1/2}$ and
+ $G_0\propto(r-r_{\min})^{-1/2}$, Eq.~\eqref{eq:braz-tadpole}.
+\end{itemize}
+For $Z\le0$ the symmetric branch $m^2(r)$ therefore extends to $m^2\to-\infty$
+and never folds back.  The symmetric phase stays locally stable, and ordering
+can only occur by a first-order crossing of free energies.
+
+\paragraph*{Momentum sums.}
+For $k$ uniform on $[-\pi,\pi]$, a single direction $q_1=4\sin^2(k/2)$ has
+the arcsine density $\rho_1(q_1)=[\pi\sqrt{q_1(4-q_1)}]^{-1}$ on $[0,4]$, with
+distribution function $\frac2\pi\arcsin(\sqrt{q_1}/2)$.
+
+\emph{Infinite volume.}
+\begin{itemize}
+ \item Divide $[0,4]$ into $N_b=4\times10^4$ equal bins of width $h$.
+ \item Take exact bin probabilities from the distribution function.
+ \item Convolve them three times. This gives the probability that $\khat$
+ falls in the sum of three bins, which is placed at the midpoint
+ $(i+j+k+\frac32)h$.
+ \item Then $\overline\sum_kf(\varepsilon_k)$ becomes a weighted sum over
+ $1.2\times10^5$ nodes.
+\end{itemize}
+With this discretization:
+\begin{itemize}
+ \item $G_0$ remains finite at $r_{\min}$. The gap equations are solved at
+ $r-r_{\min}=O(1)$, far from the resolution of the bins.
+ \item Lowering $N_b$ fourfold changes the lines in Table~\ref{tab:hartree-bench}
+ by less than $10^{-5}$.
+\end{itemize}
+
+\emph{Finite $L$.}
+\begin{itemize}
+ \item Sum exactly over the $L^3$ momenta $k_\mu=2\pi n_\mu/L$, including
+ $k=0$, which equals the momenta of the simulations.
+ \item $G_0$ then diverges as $(r-r_{\min})^{-1}$ at the lowest allowed
+ $\varepsilon_k$, and $r_{\min}$ depends on $L$ through the discrete shells.
+\end{itemize}
+
+\paragraph*{Numerical procedure.}
+\begin{enumerate}
+ \item For given $(Z,m^2)$ and condensate, solve Eq.~\eqref{eq:gap} for $r$ by
+ Brent's method on $(r_{\min},r_{\max}]$.
+ \item Minimize Eq.~\eqref{eq:FH} over $v$ or $A$ with a bounded scalar
+ minimizer.  This reproduces Eq.~\eqref{eq:amp} to $10^{-8}$.
+ \item Locate the transition from the symmetric phase to the uniform or
+ lamellar phase by bisecting $F_{\rm ord}-F_{\rm sym}$ in $m^2$ (50 steps).
+ Do the same for $F_{\rm uni}-F_{\rm lam}$.
+\end{enumerate}
+The parametric form~\eqref{eq:branches} gives the same lines without any root
+finding: tabulate $G_0(r)$ and $F_0(r)$ once per $Z$, and compare the
+branches at equal $m^2$ by interpolation.
+
+\paragraph*{Benchmarks.}
+Table~\ref{tab:hartree-bench} lists reference values for checking an
+independent implementation ($\lambda=4$).
+
+\begin{table}[b]
+\caption{Hartree benchmarks at $\lambda=4$: the tadpole $G_0(r)$, and the
+symmetric--uniform ($m^2_{\rm u}$) and symmetric--lamellar ($m^2_{\rm l}$)
+transition masses.}
+\label{tab:hartree-bench}
+\begin{ruledtabular}
+\begin{tabular}{lccc}
+ & $Z=0.5$ & \multicolumn{1}{c}{$Z=-1$} & \multicolumn{1}{c}{$Z=-2$}\\
+\hline
+$G_0$, $L=\infty$ & $0.052574^{a}$ & $0.091005^{a}$ & $0.105752^{b}$\\
+$G_0$, $L=12$     & $0.052575^{a}$ & $0.090959^{a}$ & $0.105804^{b}$\\
+$m^2_{\rm u}$, $L=\infty$ & $-0.9741$ & $-1.7720$ & $-2.8222$\\
+$m^2_{\rm l}$, $L=\infty$ & \multicolumn{1}{c}{---} & $-1.6373$ & $-1.3336$\\
+$m^2_{\rm u}$, $L=12$ & $-0.9750$ & $-1.7725$ & $-2.8200$\\
+$m^2_{\rm l}$, $L=12$ & \multicolumn{1}{c}{---} & $-1.7726$ & $-1.3337$\\
+$m^2_{\rm u}$, $L=16$ & $-0.9742$ & $-1.7718$ & $-2.8193$\\
+$m^2_{\rm l}$, $L=16$ & \multicolumn{1}{c}{---} & $-1.6552$ & $-1.4682$\\
+\end{tabular}
+\end{ruledtabular}
+\begin{flushleft}\footnotesize
+$^a$\,At $r=1$.\quad $^b$\,At $r=2$.
+\end{flushleft}
+\end{table}
+
+The $L=12$ and $L=16$ rows at $Z=-1$ show that shell locking moves the
+lamellar line by $0.12$ in $m^2$.  This is the finite-size effect that the
+commensurate choice of Eq.~\eqref{eq:commensurate} removes.
 
 \bibliography{refs}
 
