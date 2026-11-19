@@ -23,6 +23,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -226,7 +227,14 @@ def analyze(run_dir: Path, bootstrap: int, block: int, nbins: int, ngrid: int,
     st = build(runs, grid)
     ev = evaluate(st, V, m_grid, edges, keep=True)
     summ = summarize(st, V, ev, ess_min)
-    out_dir = ROOT / "reports" / "cv_umbrella" / run_dir.relative_to(ROOT / "runs" / "cv_umbrella")
+    # Runs live under <repo>/runs/cv_umbrella locally, under $LP_HMC_RUNS/cv_umbrella on clusters.
+    bases = [ROOT / "runs" / "cv_umbrella"]
+    if os.environ.get("LP_HMC_RUNS"):
+        bases.append(Path(os.environ["LP_HMC_RUNS"]).resolve() / "cv_umbrella")
+    rel = next((run_dir.relative_to(b) for b in bases if run_dir.is_relative_to(b)), None)
+    if rel is None:
+        raise SystemExit(f"{run_dir} is not under any of {[str(b) for b in bases]}")
+    out_dir = ROOT / "reports" / "cv_umbrella" / rel
     out_dir.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out_dir / "hist.npz", m=m_grid, centers=ev["centers"], hist=ev["hist"],
                         twopeak=ev["twopeak"])
