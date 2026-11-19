@@ -9,6 +9,8 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
                (add masses with --m2 once the pilot coexistence point is known).
   lro          unbiased lamellar-phase runs for S(q*) vs L (kappa=0, independent
                replicas, lamellar start, no transport gate): Z=-2 (p=6) and Z=-4 (p=4).
+  s2_zm1172_prod  p=8 production, L=16/24/32, two masses per L around the pilot
+               transition m2 ~ -2.5 (L=16).
   uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
                L=24/32, 3 masses x ordered/disordered starts (gate G1).
   validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
@@ -103,6 +105,17 @@ def stage_rows(stage: str) -> list[dict]:
         for L in (12, 16, 20, 24, 32, 40):
             rows.append(lro_row(-4.0, 2.0, L, 0.0, 0.6, 60 + L))
         return rows
+    if stage == "s2_zm1172_prod":
+        # From the L=16 pilots: chi_s peaks at m2 ~ -2.46..-2.52 (twopeak there, ordered
+        # peak d_eff ~ 1.6, no uniform order).  The line moves down with L (Z=-2: -1.73 ->
+        # -1.835 for L 12 -> 18), so two masses per L bracket the expected m_eq(L).
+        rows = []
+        for L, masses, mt in ((16, (-2.47, -2.53), 300000), (24, (-2.49, -2.55), 500000),
+                              (32, (-2.51, -2.57), 800000)):
+            for k, m2 in enumerate(masses):
+                rows.append(umbrella_row(stage, Z_P8, Q_P8, L, m2, 800 + 10 * k + L,
+                                         smax=0.45, max_therm=mt))
+        return rows
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -132,7 +145,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
                  -0.90: {24: -2.384, 32: -2.388}, -0.95: {24: -2.487, 32: -2.490}}
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro")
-ALL_STAGES = STAGES + ("validate", "uline")
+ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod")
 
 
 def manifest(stage: str) -> Path:
