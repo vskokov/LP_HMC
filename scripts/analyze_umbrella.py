@@ -244,7 +244,8 @@ def solve_binned_wham(m2_values: np.ndarray, centers: np.ndarray,
                       tolerance: float = 1e-9,
                       max_iterations: int = 200,
                       initial_free: np.ndarray | None = None,
-                      ) -> tuple[np.ndarray, np.ndarray, int]:
+                      sample_denominator: bool = True,
+                      ) -> tuple[np.ndarray, np.ndarray | None, int]:
     edges = np.linspace(float(np.min(m2_values)), float(np.max(m2_values)), bins + 1)
     histogram, _ = np.histogram(m2_values, bins=edges)
     occupied = histogram > 0
@@ -346,6 +347,8 @@ def solve_binned_wham(m2_values: np.ndarray, centers: np.ndarray,
                 )
     else:
         raise RuntimeError("binned umbrella WHAM did not converge within the iteration limit")
+    if not sample_denominator:
+        return free, None, iteration
     return free, sample_log_denominator(m2_values, centers, kappas, counts, free), iteration
 
 

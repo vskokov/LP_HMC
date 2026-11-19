@@ -150,7 +150,8 @@ def solve_file(fd: FileData, rows: np.ndarray, m2_grid: np.ndarray,
     for bins in (256, 128, 64):
         try:
             free, _, _ = solve_binned_wham(m2, fd.centers, fd.kappas, counts, bins,
-                                           initial_free=initial_free)
+                                           initial_free=initial_free,
+                                           sample_denominator=False)
             break
         except RuntimeError as err:  # pragma: no cover - fallback path
             last = err
@@ -351,29 +352,38 @@ class Ensemble:
         hists = np.empty((len(m_grid), nbins))
         kinds = []
         cls_list = []
-        for i, m in enumerate(m_grid):
-            lw = -0.5 * m * (Q - qshift) - denom
-            lw -= lw.max()
-            w = np.exp(lw)
-            w /= w.sum()
-            a2 = float(w @ m2)
-            a4 = float(w @ m4)
-            a1 = float(w @ absM)
-            qm = float(w @ Q)
-            out["U4"][i] = 1.0 - a4 / (3.0 * a2 * a2)
-            out["M2"][i] = a2
-            out["absM"][i] = a1
-            out["chi"][i] = self.V * (a2 - a1 * a1)
-            out["q"][i] = qm / self.V
-            out["cq"][i] = float(w @ (Q - qm) ** 2) / self.V
-            out["ess"][i] = 1.0 / float(w @ w)
-            p = np.bincount(bin_index, weights=w, minlength=nbins) / widths
-            hists[i] = p
-            c = classify(p, centers)
-            cls_list.append(c)
-            kinds.append(c["kind"])
-            for key in ("F0", "F1", "Fmin", "M0", "Mmin"):
-                out[key][i] = c.get(key, np.nan)
+        from scipy import sparse
+        N = len(M)
+        ind = sparse.csr_matrix((np.ones(N), (np.arange(N), bin_index)), shape=(N, nbins))
+        Qc = Q - qshift
+        cols = np.stack([m2, m4, absM, Qc, Qc * Qc])           # (5, N)
+        chunk = max(1, int(2.0e7 // max(N, 1)))
+        for a in range(0, len(m_grid), chunk):
+            mm = m_grid[a:a + chunk]
+            lw = -0.5 * mm[:, None] * Qc[None, :] - denom[None, :]
+            lw -= lw.max(axis=1, keepdims=True)
+            W = np.exp(lw)
+            W /= W.sum(axis=1, keepdims=True)
+            mom = W @ cols.T                                    # (chunk, 5)
+            ess = 1.0 / np.einsum("ij,ij->i", W, W)
+            H = np.asarray((ind.T @ W.T).T) / widths[None, :]
+            for r in range(len(mm)):
+                i = a + r
+                a2, a4, a1, qc, qc2 = mom[r]
+                out["U4"][i] = 1.0 - a4 / (3.0 * a2 * a2)
+                out["M2"][i] = a2
+                out["absM"][i] = a1
+                out["chi"][i] = self.V * (a2 - a1 * a1)
+                out["q"][i] = (qc + qshift) / self.V
+                out["cq"][i] = (qc2 - qc * qc) / self.V
+                out["ess"][i] = ess[r]
+                p = H[r]
+                hists[i] = p
+                c = classify(p, centers)
+                cls_list.append(c)
+                kinds.append(c["kind"])
+                for key in ("F0", "F1", "Fmin", "M0", "Mmin"):
+                    out[key][i] = c.get(key, np.nan)
         out["kind"] = np.array(kinds)
         out["hist"] = hists if keep_hist else None
         out["hist_centers"] = centers
