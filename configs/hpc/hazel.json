@@ -1,8 +1,8 @@
 {
-  "_comment": "NCSU Hazel (Slurm since 2026-08). short_gpu QOS: <=2 h jobs on idle partner GPUs. Edit gpu_type/modules/depot after `module avail julia cuda` and `si --gpus`.",
+  "_comment": "NCSU Hazel (Slurm since 2026-08). short_gpu QOS: <=2 h jobs on idle partner GPUs. gpu_type may be a comma list: Hazel requires one typed GPU per job, so each (re)submission picks the listed type with most idle GPUs within the per-user QOS caps. Edit modules/depot after `module avail julia cuda`.",
   "partition": "gpu_partners",
   "qos": "short_gpu",
-  "gpu_type": "l40s",
+  "gpu_type": "l40s,h100,h200",
   "time": "02:00:00",
   "runtime_minutes": 100,
   "mem": "16G",

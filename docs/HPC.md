@@ -20,6 +20,8 @@ Cluster settings live in `configs/hpc/hazel.json`. Everything in it can be overr
 - `--gpu` and `--runtime-minutes` on the command line;
 - a different config file via `LP_HMC_HPC_CONFIG`.
 
+`gpu_type` may be a comma list, for example `l40s,h100,h200` (the default) or `--gpu l40s,h200`. Hazel refuses untyped GPU requests, so every job still names one type. On each submission, including every self-resubmission of a chain, `slurm_backend.py pick-gpu` chooses the listed type that could start soonest. It ranks by the smaller of idle GPUs and remaining per-user `short_gpu` cap (L40S 4, H100 2, H200 2), then by remaining cap. If a query fails, it falls back to the first type. A chain may therefore move between GPU types; the checkpoint is device-independent.
+
 ## 0. One-time setup
 
 ```bash

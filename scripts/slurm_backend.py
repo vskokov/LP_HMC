@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -56,6 +57,79 @@ def load_config(path: Path | None = None, overrides: dict | None = None) -> dict
     return cfg
 
 
+def gpu_types(cfg: dict) -> list[str]:
+    """``gpu_type`` may be one type ("l40s") or a comma list ("l40s,h100,h200")."""
+    return [t.strip().lower() for t in str(cfg["gpu_type"]).split(",") if t.strip()]
+
+
+def _run(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, check=True,
+                              timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def pick_gpu_type(types: list[str], partition: str, qos: str) -> str:
+    """Choose one of ``types`` for the next submission.
+
+    Hazel rejects typed-OR and untyped GPU requests, so every job names one type.
+    Preference: most GPUs we could start on now = min(idle GPUs of the type,
+    remaining per-user QOS cap); then most remaining cap; then list order.
+    Any query failure falls back to the first type.
+    """
+    if len(types) == 1:
+        return types[0]
+    idle = dict.fromkeys(types, 0)
+    out = _run(["sinfo", "-h", "-N", "-p", partition,
+                "-O", "NodeHost:30,Gres:80,GresUsed:120,StateCompact:20"])
+    seen = set()
+    for line in out.splitlines():
+        f = line.split()
+        if len(f) < 4 or f[0] in seen:
+            continue
+        seen.add(f[0])
+        if not re.match(r"^(idle|mix)$", f[3].rstrip("~#!%$@^*-+")):
+            continue
+        tot = re.search(r"gpu:([\w]+):(\d+)", f[1])
+        used = re.search(r"gpu:([\w]+):(\d+)", f[2])
+        if tot and tot.group(1).lower() in idle:
+            idle[tot.group(1).lower()] += int(tot.group(2)) - (int(used.group(2)) if used else 0)
+    caps = {}
+    for item in _run(["sacctmgr", "-n", "-P", "show", "qos", qos,
+                      "format=MaxTRESPU"]).strip().split(","):
+        m = re.match(r"gres/gpu:(\w+)=(\d+)", item)
+        if m:
+            caps[m.group(1).lower()] = int(m.group(2))
+    mine = dict.fromkeys(types, 0)
+    for line in _run(["squeue", "--me", "-h", "-o", "%b"]).splitlines():
+        m = re.search(r"gpu:(\w+):?(\d*)", line)
+        if m and m.group(1).lower() in mine:
+            mine[m.group(1).lower()] += int(m.group(2) or 1)
+    def score(t):
+        head = caps.get(t, 1 << 30) - mine[t]
+        return (min(idle[t], max(head, 0)), head, -types.index(t))
+    return max(types, key=score)
+
+
+def pick_main(argv: list[str]) -> int:
+    """`slurm_backend.py pick-gpu TYPES PARTITION QOS` -> prints the chosen type."""
+    types = [t for t in argv[0].lower().split(",") if t]
+    try:
+        print(pick_gpu_type(types, argv[1], argv[2] if len(argv) > 2 else ""))
+    except Exception:  # never break a chain over the heuristic
+        print(types[0])
+    return 0
+
+
+def gpu_sbatch_lines(cfg: dict, gpu: str | None = None) -> list[str]:
+    """--gres (and --exclude) lines for one concrete GPU type."""
+    gpu = gpu or gpu_types(cfg)[0]
+    lines = [f"#SBATCH --gres=gpu:{gpu}:1"]
+    if cfg.get("exclude"):
+        lines.append(f"#SBATCH --exclude={cfg['exclude']}")
+    return lines
+
 def active_job_names() -> set[str]:
     try:
         out = subprocess.run(["squeue", "--me", "--noheader", "--format=%j"],
@@ -72,7 +146,7 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
     lines = ["#!/bin/bash",
              f"#SBATCH --job-name={label}",
              f"#SBATCH --partition={cfg['partition']}",
-             f"#SBATCH --gres=gpu:{cfg['gpu_type']}:1",
+             *gpu_sbatch_lines(cfg),
              "#SBATCH --ntasks=1",
              f"#SBATCH --cpus-per-task={cfg['cpus_per_task']}",
              f"#SBATCH --mem={cfg['mem']}",
@@ -83,8 +157,6 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
         lines.append(f"#SBATCH --qos={cfg['qos']}")
     if cfg.get("account"):
         lines.append(f"#SBATCH --account={cfg['account']}")
-    if cfg.get("exclude"):
-        lines.append(f"#SBATCH --exclude={cfg['exclude']}")
     lines += [f"#SBATCH {x}" for x in cfg.get("extra_sbatch", [])]
     lines += ["", "set -u"]
     if cfg.get("module_init"):
@@ -108,12 +180,25 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
         'echo "exit=$rc end=$(date -Is)"',
         'if [[ $rc -eq 75 ]]; then',
         '  n=$(( $(cat "$COUNT" 2>/dev/null || echo 0) + 1 )); echo $n > "$COUNT"',
-        '  if (( n < MAXC )); then sbatch "$SELF"; else echo "continuation cap $MAXC reached"; fi',
+        *resubmit_lines(cfg),
         '  exit 0',
         'fi',
         'exit $rc',
         ""]
     return "\n".join(lines)
+
+
+def resubmit_lines(cfg: dict) -> list[str]:
+    """Bash lines that resubmit the chain; re-pick the GPU type if several are allowed."""
+    types = gpu_types(cfg)
+    if len(types) == 1:
+        sub = 'sbatch "$SELF"'
+    else:
+        pick = (f"python3 {shlex.quote(str(Path(__file__).resolve()))} pick-gpu "
+                f"{','.join(types)} {shlex.quote(cfg['partition'])} {shlex.quote(cfg.get('qos') or '')}")
+        sub = (f'G=$({pick} 2>/dev/null || echo {types[0]}); G=${{G:-{types[0]}}}; '
+               'echo "resubmit gpu=$G"; sbatch --gres=gpu:$G:1 "$SELF"')
+    return [f'  if (( n < MAXC )); then {sub}; else echo "continuation cap $MAXC reached"; fi']
 
 
 def submit_rows_slurm(rows: list[dict], *, env_of: Callable[[dict], dict],
@@ -140,8 +225,9 @@ def submit_rows_slurm(rows: list[dict], *, env_of: Callable[[dict], dict],
         if dry_run:
             print(f"dry-run  {lab}  -> {script}")
         else:
-            subprocess.run(["sbatch", str(script)], check=True)
-            print(f"submit   {lab}")
+            gpu = pick_gpu_type(gpu_types(cfg), cfg["partition"], cfg.get("qos") or "")
+            subprocess.run(["sbatch", f"--gres=gpu:{gpu}:1", str(script)], check=True)
+            print(f"submit   {lab}  gpu={gpu}")
         n += 1
     return n
 
@@ -170,7 +256,7 @@ def selftest_script(cfg: dict, out: Path) -> str:
     out.mkdir(parents=True, exist_ok=True)
     lines = ["#!/bin/bash", "#SBATCH --job-name=lp_hmc_selftest",
              f"#SBATCH --partition={cfg['partition']}",
-             f"#SBATCH --gres=gpu:{cfg['gpu_type']}:1", "#SBATCH --ntasks=1",
+             *gpu_sbatch_lines(cfg), "#SBATCH --ntasks=1",
              f"#SBATCH --mem={cfg['mem']}", f"#SBATCH --time={cfg['time']}",
              f"#SBATCH --output={out}/%j.out", f"#SBATCH --error={out}/%j.out"]
     if cfg.get("qos"):
@@ -195,6 +281,9 @@ def selftest_script(cfg: dict, out: Path) -> str:
 
 def main() -> int:
     import argparse
+    import sys
+    if sys.argv[1:2] == ["pick-gpu"]:
+        return pick_main(sys.argv[2:])
     ap = argparse.ArgumentParser(description="Cluster self-test (instantiate + correctness tests).")
     ap.add_argument("cmd", choices=("selftest",))
     ap.add_argument("--config", type=Path)
@@ -208,7 +297,9 @@ def main() -> int:
     script.write_text(selftest_script(cfg, out))
     print(script)
     if not args.dry_run:
-        subprocess.run(["sbatch", str(script)], check=True)
+        gpu = pick_gpu_type(gpu_types(cfg), cfg["partition"], cfg.get("qos") or "")
+        print(f"gpu={gpu}")
+        subprocess.run(["sbatch", f"--gres=gpu:{gpu}:1", str(script)], check=True)
     return 0
 
 
