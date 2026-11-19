@@ -39,7 +39,7 @@ DEFAULTS = {
     "cpus_per_task": 1,
     "max_continuations": 400,
     "module_init": "",               # e.g. /usr/share/Modules/init/bash if `module` is absent
-    "modules": ["cuda/13.2", "julia/1.12.6"],
+    "modules": ["julia/1.12.6"],           # no cuda module: CUDA.jl ships its own runtime
     "julia": "julia",
     "julia_depot_path": "/usr/local/usrapps/${GROUP:-$(id -gn)}/$USER/julia_depot",
     "account": "",
