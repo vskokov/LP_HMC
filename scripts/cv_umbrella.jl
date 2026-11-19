@@ -209,8 +209,14 @@ function main()
     buffer = similar(st.batch, L, L, L)
     @printf("cv_umbrella L=%d Z=%.6g m2=%.6g cv=%s windows=%d device=%s phase=%s sweeps=%d\n",
             L, Z, M2_VALUE, CV.label, NW, cpu ? "cpu" : "cuda", st.phase, st.sweeps)
+    out_of_time() = time() - t0 > RUNTIME
     while st.phase == "therm"
         sweep!(st, ws, buffer, rng)
+        if st.sweeps % CHECK_EVERY != 0 && out_of_time()
+            # Budget exhausted between gate checks (large L): checkpoint and yield.
+            save_state(st); write_json(DIAG, diagnostics(st, t0))
+            return 75
+        end
         if st.sweeps % CHECK_EVERY == 0
             d = diagnostics(st, t0)
             @printf("therm sweeps=%d min_swap=%.3f rt_walkers=%d/%d hmc=%.3f\n", st.sweeps,
@@ -226,7 +232,7 @@ function main()
                 println("transport gate not met by max sweeps; checkpoint kept"); return 3
             end
             save_state(st); write_json(DIAG, diagnostics(st, t0))
-            time() - t0 > RUNTIME && return 75
+            out_of_time() && return 75
         end
     end
     # Drop rows written after the last checkpoint (crash between flush and save).
@@ -262,12 +268,12 @@ function main()
                         stats[r].Q, stats[r].G, o.P_shell, o.P_maxpair, o.lambda1, o.lambda2,
                         o.lambda3, o.d_eff)
             end
-            if st.collected % 50 == 0 || st.collected == SAMPLES
+            if st.collected % 50 == 0 || st.collected == SAMPLES || out_of_time()
                 flush(io)
                 save_state(st); write_json(DIAG, diagnostics(st, t0))
                 @printf("collect %d/%d min_swap=%.3f rt=%d\n", st.collected, SAMPLES,
                         diagnostics(st, t0)["min_swap"], sum(st.trips))
-                if time() - t0 > RUNTIME && st.collected < SAMPLES
+                if out_of_time() && st.collected < SAMPLES
                     return 75
                 end
             end

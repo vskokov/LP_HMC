@@ -9,6 +9,13 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
                (add masses with --m2 once the pilot coexistence point is known).
   lro          unbiased lamellar-phase runs for S(q*) vs L (kappa=0, independent
                replicas, lamellar start, no transport gate): Z=-2 (p=6) and Z=-4 (p=4).
+  validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
+               m2=-1.73) with a new seed; compare with reports/cv_umbrella/s2/Zm2/L12.
+
+Backends: ``--backend tsp`` (local A6000, task-spooler) or ``--backend slurm``
+(scripts/slurm_backend.py, config configs/hpc/hazel.json; default when ``sbatch``
+is on PATH).  Slurm jobs run <=2 h, checkpoint (exit 75) and resubmit themselves.
+Set LP_HMC_RUNS to put run directories on cluster scratch/project storage.
 
 Scaling rules (reference: L=12, eps=0.039, nlf=26, kappa=2e4, 72 windows):
   eps ~ L^-3/4 (HMC volume scaling), nlf keeps tau ~ 1;  kappa ~ V (fixed relative
@@ -24,11 +31,14 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
+import shutil
 from pathlib import Path
 
+import slurm_backend
 from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit_rows, tag, write_manifest
 
-BASE = ROOT / "runs" / "cv_umbrella"
+BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
@@ -89,10 +99,14 @@ def stage_rows(stage: str) -> list[dict]:
         for L in (12, 16, 20, 24, 32, 40):
             rows.append(lro_row(-4.0, 2.0, L, 0.0, 0.6, 60 + L))
         return rows
+    if stage == "validate":
+        # Same parameters as the local reference run s2/Zm2/L12/m2m1p73_s21, new seed.
+        return [umbrella_row(stage, -2.0, 1.0, 12, -1.73, 121)]
     raise SystemExit(f"unknown stage {stage}")
 
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro")
+ALL_STAGES = STAGES + ("validate",)
 
 
 def manifest(stage: str) -> Path:
@@ -115,23 +129,42 @@ def label(row: dict) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--backend", choices=("tsp", "slurm"),
+                    default="slurm" if shutil.which("sbatch") else "tsp")
+    ap.add_argument("--config", type=Path, help="Slurm JSON config (default configs/hpc/hazel.json)")
+    ap.add_argument("--gpu", help="Slurm GPU type, e.g. l40s, a100, h100, rtx_6000_pro")
+    ap.add_argument("--runtime-minutes", type=int, help="simulation budget per Slurm job")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare"); p.add_argument("--stage", nargs="+", default=list(STAGES))
     s = sub.add_parser("submit"); s.add_argument("--stage", nargs="+", default=list(STAGES))
     s.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("status"); t.add_argument("--stage", nargs="+", default=list(STAGES))
     args = ap.parse_args()
+    cfg = slurm_backend.load_config(args.config, {"gpu_type": args.gpu,
+                                                  "runtime_minutes": args.runtime_minutes})
+    done_of = lambda r: Path(r["out"]) / "complete.json"
     for stage in args.stage:
+        if stage not in ALL_STAGES:
+            raise SystemExit(f"unknown stage {stage}")
         if args.cmd == "prepare":
             write_manifest(manifest(stage), stage_rows(stage))
             print(f"{stage}: wrote {manifest(stage)}")
             continue
         rows = read_manifest(manifest(stage))
-        if args.cmd == "submit":
+        print(stage, end=": ")
+        if args.backend == "slurm":
+            if args.cmd == "submit":
+                n = slurm_backend.submit_rows_slurm(
+                    rows, env_of=env_of, workdir_of=lambda r: Path(r["out"]), done_of=done_of,
+                    command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT)],
+                    label=label, cfg=cfg, dry_run=args.dry_run)
+                print(f"{n} job chains started")
+            else:
+                slurm_backend.status_rows_slurm(rows, done_of=done_of, label=label)
+        elif args.cmd == "submit":
             submit_rows(rows, command=lambda r: julia_command(SCRIPT, env=env_of(r)),
                         is_complete=is_complete, label=label, dry_run=args.dry_run)
         else:
-            print(stage, end=": ")
             status_rows(rows, is_complete=is_complete, label=label)
     return 0
 
