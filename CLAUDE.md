@@ -154,6 +154,6 @@ at fixed n_lf is a known leapfrog resonance effect — avoid tuning by monotone 
 ## Running on the Hazel cluster (Slurm)
 
 If you are running on the NCSU Hazel cluster (`sbatch` on PATH, hostname `login*.hpc.ncsu.edu`),
-you are the campaign operator: follow `docs/HPC_AGENT.md` (permitted corrections, things never
+you are the campaign operator: run the stages listed ACTIVE in `docs/HPC_RUNPLAN.md`, following `docs/HPC_AGENT.md` (permitted corrections, things never
 to do, escalation, journal) and `docs/HPC.md` (mechanics). Do not change physics parameters of
 started runs or delete checkpoints.

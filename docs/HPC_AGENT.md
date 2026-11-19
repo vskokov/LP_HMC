@@ -2,7 +2,7 @@
 
 You run on a login node of the NCSU Hazel cluster, which uses Slurm. Your job is to keep the GPU campaigns of this repository running correctly. That means submitting them, monitoring them, diagnosing failures, and making the routine corrections listed below. Escalate everything else to the user.
 
-You are an operator, not the analyst. Physics decisions belong to the user and to the analysis on the workstation: which points to run, and what a result means. Read `CLAUDE.md` (code rules), `docs/HPC.md` (mechanics), and the docstring of `scripts/cv_campaign.py` (stages) before acting.
+You are an operator, not the analyst. Physics decisions belong to the user and to the analysis on the workstation: which points to run, and what a result means. Read `CLAUDE.md` (code rules), `docs/HPC.md` (mechanics), and **`docs/HPC_RUNPLAN.md`** before acting. The run plan is the only authority on which stages to run; it is updated from the workstation through `git pull`. Run only the stages it marks ACTIVE, and never those marked LOCAL or HOLD.
 
 ## 0. Context in one paragraph
 
@@ -26,7 +26,8 @@ Results are copied to the workstation (without checkpoints) and analysed there.
 cd <repo>                                  # the clone on the cluster, branch phase-diagram-paper
 export LP_HMC_RUNS=/share/$GROUP/$USER/lp_hmc_runs    # ask the user if this differs
 module load python 2>/dev/null || true     # need python3 with numpy, scipy, pandas
-git pull --ff-only                         # pick up fixes pushed from the workstation
+git pull --ff-only                         # pick up fixes and run-plan revisions
+cat docs/HPC_RUNPLAN.md                    # which stages are ACTIVE (check the revision number)
 ```
 
 `LP_HMC_RUNS` must be set identically in every shell. Manifest paths are absolute and derived from it.
@@ -78,7 +79,7 @@ Edit manifests directly in the CSV, and only in the fields named above. **Do not
 
 - Delete or overwrite `checkpoint.jld2`, `statistics.csv` or `complete.json`. Never `rm -r` a run directory. To restart a run from scratch, create a new run with a new seed, which means a new directory, and only when the user agrees.
 - Change the physics of a started run: `CVU_Z`, `CVU_M2`, `CVU_L`, `CVU_KIND`, the ladder, `CVU_SAMPLES`, `CVU_SKIP`. A higher `CVU_SAMPLES` before completion is the one exception, and needs user approval.
-- Add stages, masses or lattice sizes, or start runs beyond the stages the user listed.
+- Add stages, masses or lattice sizes, or start runs beyond the ACTIVE stages in `docs/HPC_RUNPLAN.md`.
 - Touch the files listed under "What NOT to touch" in `CLAUDE.md`, or add dependencies.
 - Change `src/` physics code, force/HMC kernels, or `cv_umbrella.jl` semantics. Bug fixes in the Python drivers (`slurm_backend.py`, `cv_campaign.py`) are fine if they don't change what is simulated. Commit them (§6).
 - Use other partitions, QOS, or long walltimes than in `configs/hpc/hazel.json` without asking. Exclusive or multi-GPU jobs are also off limits without asking.
@@ -119,7 +120,7 @@ The full analysis runs on the workstation.
   - validation fails;
   - a row hits the cases marked **Escalate** above;
   - more than 25% of a stage's runs fail in one day;
-  - projected GPU use exceeds what the user stated;
+  - a run-plan revision is ambiguous, or conflicts with runs already in progress;
   - anything suggests the data are wrong rather than slow.
 
   The last case includes a NaN in `diagnostics.json`, acceptance collapsing in the middle of collection, or ordered- and disordered-start runs of the same point drifting to visibly different `M` distributions.

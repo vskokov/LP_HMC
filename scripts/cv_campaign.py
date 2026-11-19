@@ -11,6 +11,8 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
                replicas, lamellar start, no transport gate): Z=-2 (p=6) and Z=-4 (p=4).
   s2_zm1172_prod  p=8 production, L=16/24/32, two masses per L around the pilot
                transition m2 ~ -2.5 (L=16).
+  s2_zm2_ext   Z=-2: L=36 (two masses) + second seeds at L=24/30.
+  p9_pilot     p=9 (Z=-0.9358) shell-CV pilots at L=18, four masses (meeting region).
   uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
                L=24/32, 3 masses x ordered/disordered starts (gate G1).
   validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
@@ -46,6 +48,8 @@ BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
+Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
+Q_P9 = 4 * math.sin(math.pi / 9) ** 2            # 0.467911
 
 
 def hmc(L: int) -> dict:
@@ -116,6 +120,19 @@ def stage_rows(stage: str) -> list[dict]:
                 rows.append(umbrella_row(stage, Z_P8, Q_P8, L, m2, 800 + 10 * k + L,
                                          smax=0.45, max_therm=mt))
         return rows
+    if stage == "s2_zm2_ext":
+        # Z=-2 barrier scaling beyond the local L=18/24/30: L=36, plus independent second
+        # seeds at L=24/30 (combined with the local runs in the analysis).
+        return [umbrella_row(stage, -2.0, 1.0, 24, -1.88, 132, max_therm=500000),
+                umbrella_row(stage, -2.0, 1.0, 30, -1.90, 133, max_therm=800000),
+                umbrella_row(stage, -2.0, 1.0, 36, -1.92, 134, max_therm=1200000),
+                umbrella_row(stage, -2.0, 1.0, 36, -1.96, 135, max_therm=1200000)]
+    if stage == "p9_pilot":
+        # Meeting region on the commensurate p=9 lattice (Z=-0.9358): shell-CV pilots
+        # bracketing the region where the uniform line (m2 ~ -2.47 at L=24) and the
+        # lamellar line meet; the M^2 coordinate (uniform order) is recorded as well.
+        return [umbrella_row(stage, Z_P9, Q_P9, 18, m2, 900 + i, smax=0.45, max_therm=300000)
+                for i, m2 in enumerate((-2.2, -2.35, -2.5, -2.65))]
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -145,7 +162,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
                  -0.90: {24: -2.384, 32: -2.388}, -0.95: {24: -2.487, 32: -2.490}}
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro")
-ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod")
+ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot")
 
 
 def manifest(stage: str) -> Path:
