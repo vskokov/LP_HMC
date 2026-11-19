@@ -75,7 +75,8 @@ def pick_gpu_type(types: list[str], partition: str, qos: str) -> str:
 
     Hazel rejects typed-OR and untyped GPU requests, so every job names one type.
     Preference: most GPUs we could start on now = min(idle GPUs of the type,
-    remaining per-user QOS cap); then most remaining cap; then list order.
+    remaining per-user QOS cap); then most remaining cap relative to the cap
+    (queued jobs count); then list order.
     Any query failure falls back to the first type.
     """
     if len(types) == 1:
@@ -107,8 +108,11 @@ def pick_gpu_type(types: list[str], partition: str, qos: str) -> str:
         if m and m.group(1).lower() in mine:
             mine[m.group(1).lower()] += int(m.group(2) or 1)
     def score(t):
-        head = caps.get(t, 1 << 30) - mine[t]
-        return (min(idle[t], max(head, 0)), head, -types.index(t))
+        cap = caps.get(t, 1 << 30)
+        head = cap - mine[t]
+        # then the least-loaded type relative to its cap, so a backlog splits
+        # in proportion to the per-user caps (L40S 4 : H100 2 : H200 2)
+        return (min(idle[t], max(head, 0)), head / max(cap, 1), -types.index(t))
     return max(types, key=score)
 
 
