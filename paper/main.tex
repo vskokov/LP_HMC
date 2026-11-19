@@ -1,511 +1,570 @@
-\documentclass[11pt]{article}
+\documentclass[aps,prd,twocolumn,superscriptaddress,nofootinbib,10pt]{revtex4-2}
 
-\usepackage[margin=0.88in]{geometry}
 \usepackage{amsmath,amssymb}
-\usepackage{booktabs}
+\usepackage{bm}
 \usepackage{graphicx}
+\usepackage{booktabs}
 \usepackage{xcolor}
-\usepackage{microtype}
-\usepackage{hyperref}
-\usepackage[section]{placeins}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,
+            urlcolor=blue!65!black]{hyperref}
 
-\hypersetup{colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,
-  urlcolor=blue!65!black}
-\setlength{\emergencystretch}{2em}
 \newcommand{\Ufour}{U_4}
-\newcommand{\qhat}{\widehat q}
-\newcommand{\TODO}[1]{\par\medskip\noindent
-  \fcolorbox{orange!70!black}{orange!7}{\parbox{0.94\linewidth}{\textbf{Open result:} #1}}
-  \par\medskip}
-
-\title{\textbf{Competing uniform and modulated order in a three-dimensional
-Lifshitz scalar field theory}}
-\author{Working draft---LP\_HMC collaboration}
-\date{Draft of 18 November 2026}
+\newcommand{\khat}{\widehat{k}^{2}}
+\newcommand{\qs}{q_*}
+\newcommand{\eff}{\mathrm{eff}}
+% Drafting aid: remove before submission.
+\newcommand{\pending}[1]{\par\noindent{\color{gray}\small[\emph{Pending:} #1]}\par}
 
 \begin{document}
-\maketitle
+
+\title{Fate of the Lifshitz point and competing uniform and lamellar order\\
+in a three-dimensional scalar field theory with a moat spectrum}
+
+\author{[Authors]}
+\affiliation{[Affiliation]}
+
+\date{\today}
 
 \begin{abstract}
-We study the equilibrium phase structure of a three-dimensional real scalar
-field theory containing both a conventional gradient term and a positive
-biharmonic kinetic term.  A negative quadratic-gradient coefficient favors
-ordering at nonzero wavevector and produces competition among a symmetric
-phase, a uniform symmetry-broken phase, and a spatially modulated phase.
-We use Hybrid Monte Carlo, replica exchange, umbrella reconstruction, Binder
-cumulants, and shell-resolved structure factors to map this competition.
-The uniform broken--symmetric line is directly resolved by finite-size Binder
-crossings over a broad range of couplings.  The current direct calculation
-places the termination of its conventional continuation in the narrow bare
-coupling interval $-0.9625<Z_*<-0.95$.  The midpoint $Z=-0.95625$ is itself
-coexistence dominated and does not support a more precise assignment.
-Independent structure-factor measurements validate the detection
-of finite-wavevector order, while restricted-branch thermodynamic integration
-provides exploratory locations of the modulated boundaries at $L=20$.
-Those restricted estimates are used only to seed unbiased finite-size scans,
-not as final thermodynamic transition lines.  We set out a common
-finite-size-scaling and histogram program to determine the order of all three
-boundaries and to locate their junction.
+\pending{Abstract to be written once the numerical results are final.  Planned
+content: model (real scalar, $Z(\nabla\phi)^2+(\nabla^2\phi)^2$, $\phi^4$);
+mean-field Lifshitz point; lattice HMC with Fourier-space umbrella sampling; the
+symmetric--uniform line is 3D Ising and terminates near $Z_*\approx-0.95$; the
+symmetric--lamellar transition is fluctuation-induced first order (Brazovskii)
+with rank-one order; nature of the meeting point; implications for the QCD moat
+regime.}
 \end{abstract}
 
+\maketitle
+
+%======================================================================
 \section{Introduction}
+\label{sec:intro}
 
-Competing interactions can move the softest fluctuations away from zero
-momentum.  The resulting phase diagrams are richer than that of an ordinary
-scalar $\phi^4$ theory: uniform order can compete with lamellar or more general
-modulated configurations, and the associated transition lines can meet at a
-Lifshitz point, a critical endpoint, a tricritical point, or a fluctuation-
-induced first-order boundary.  The distinction is especially delicate in
-finite periodic volumes, where only discrete momentum shells are available.
+Competing interactions can move the minimum of the inverse propagator of an
+order parameter from zero to nonzero momentum.  The resulting ``moat''
+spectrum~\cite{Pisarski2021} is the generic precursor of spatially modulated
+order and arises in systems as different as magnets with competing exchange
+couplings~\cite{Hornreich1975,Selke1988}, block-copolymer melts and their
+blends~\cite{Leibler1980,Fredrickson1987,Bates1990,Bates1997}, convection
+patterns~\cite{Swift1977,Hohenberg1995}, and dense quark matter, where
+inhomogeneous chiral condensates and moat regimes have been proposed in
+effective models and functional QCD~\cite{Nickel2009,Buballa2015,Kojo2010,
+Pisarski2019,Pisarski2019b,Fu2020,Fu2025,Rennecke2023,Haensch2024}.
 
-The present work asks three related questions.  First, where are the
-symmetric--uniform, symmetric--modulated, and uniform--modulated transition
-lines in the bare $(Z,m^2)$ plane?  Second, which transitions remain continuous
-once fluctuations are included, and which become first order?  Third, how
-does the familiar three-dimensional Ising critical line terminate when the
-finite-wavevector mode becomes competitive?
+In mean-field theory the line on which the coefficient $Z$ of the
+$(\nabla\phi)^2$ term changes sign meets the order--disorder line at a Lifshitz
+point (LP)~\cite{Hornreich1975}, where the symmetric, uniform, and modulated
+phases coexist and the quadratic dispersion becomes purely quartic.  Whether
+an isotropic LP survives fluctuations in three dimensions is a long-standing
+question.  Field theory places its upper critical dimension at
+$d^*=8$~\cite{Diehl2002,Diehl2002b}; for continuous symmetry its lower
+critical dimension is $d_L=4$~\cite{Diehl2002,Zappala2018}; functional
+renormalization group (FRG) studies find an isotropic Ising Lifshitz fixed
+point only for $5.5<d<8$~\cite{Bonanno2015}; and in polymer blends the
+mean-field LP is replaced by first-order lines and a bicontinuous
+microemulsion~\cite{Bates1997,Kielhorn1997,Duchs2003}.  For QCD it has been
+argued that strong infrared fluctuations wash out the LP and leave a broad
+``Lifshitz regime''~\cite{Pisarski2019,Pisarski2019b,Pisarski2021b}.  What
+replaces the LP, and how the remaining transition lines meet, has not been
+established for the simplest case: a single real scalar with $Z_2$ symmetry.
 
-The numerical challenge is not merely to identify a peak in a structure
-factor.  Near a competing-order boundary, metastability, slow motion between
-orientations, shell locking, and incomplete overlap can all imitate a sharp
-transition.  We therefore combine direct finite-size observables with
-distribution-level diagnostics and independent initial conditions.  Claims
-about transition order are reserved for trends across several volumes.
+The modulated side has its own subtleties.  For a soft shell $|k|=\qs$ the
+one-loop self-energy diverges as the gap closes, so the symmetric phase never
+becomes locally unstable and the ordering transition is fluctuation-induced
+first order (Brazovskii mechanism)~\cite{Brazovskii1975,Swift1977,
+Fredrickson1987,Hohenberg1995}.  A one-dimensionally modulated state is in
+addition subject to Landau--Peierls layer fluctuations, which in three
+dimensions reduce long-range order to quasi-long-range
+order~\cite{Chaikin1995,Grinstein1981,Grinstein1982}, as also discussed for
+chiral density waves~\cite{Hidaka2015,Lee2015,Pisarski2019}.  For $N\ge2$
+component fields transverse fluctuations can disorder the inhomogeneous
+condensate altogether, as seen in recent lattice simulations of a moat
+$O(N)$ model~\cite{Pisarski2020,Winstel2024}; for $N=1$ these Goldstone-type
+mechanisms are absent.
 
+In this paper we determine the phase diagram of the three-dimensional lattice
+theory with Hamiltonian Eq.~\eqref{eq:H} from first principles.  We combine
+(i)~exact lattice mean-field theory, (ii)~a self-consistent Hartree
+(Brazovskii) treatment with the exact lattice spectrum in finite and infinite
+volume, and (iii)~Hybrid Monte Carlo simulations with replica-exchange
+umbrella sampling in the magnetization and in Fourier-shell power, analyzed
+with free-energy barriers and finite-size scaling.
+\pending{Summary of main results.}
+
+The paper is organized as follows.  Section~\ref{sec:model} defines the model
+and its lattice spectrum.  Section~\ref{sec:mf} gives the mean-field phase
+diagram.  Section~\ref{sec:fluct} discusses fluctuations: the Hartree
+approximation, the Brazovskii mechanism and its range of validity, the fate of
+the LP, the elasticity of the lamellar phase, and the finite-size signatures
+that discriminate among the possible topologies of the phase diagram.
+Section~\ref{sec:methods} describes the numerical methods,
+Sec.~\ref{sec:results} the results, and Sec.~\ref{sec:discussion} their
+implications.
+
+%======================================================================
 \section{Model}
+\label{sec:model}
 
-We consider a real field $\phi_x$ on a periodic cubic lattice of volume
-$V=L^3$, with Hamiltonian
+We consider a real field $\phi_x$ on a periodic simple-cubic lattice of
+$V=L^3$ sites (lattice spacing $a=1$) with
 \begin{equation}
- H[\phi]=\sum_x\left[
- \frac{Z}{2}(\nabla\phi_x)^2+\frac12(\nabla^2\phi_x)^2
- +\frac{m^2}{2}\phi_x^2+\frac{\lambda}{4}\phi_x^4\right].
+ H[\phi]=\sum_x\Bigl[\frac{Z}{2}(\nabla\phi)_x^2+\frac12(\nabla^2\phi)_x^2
+ +\frac{m^2}{2}\phi_x^2+\frac{\lambda}{4}\phi_x^4\Bigr],
  \label{eq:H}
 \end{equation}
-Throughout this work $\lambda=4$ and $T=1$, and configurations have weight
-$\exp[-H/T]$.  We use $m^2$ as the name of the bare mass parameter; expressions
-such as $(m^2)^2$ denote its ordinary square.
+where $(\nabla\phi)_x^2=\sum_\mu(\phi_{x+\hat\mu}-\phi_x)^2$ and
+$(\nabla^2\phi)_x=\sum_\mu(\phi_{x+\hat\mu}+\phi_{x-\hat\mu}-2\phi_x)$.
+Configurations are weighted by $e^{-H/T}$ with $T=1$; we fix $\lambda=4$ and
+scan the bare couplings $(Z,m^2)$.  The model has a $Z_2$ symmetry
+$\phi\to-\phi$ and the cubic lattice symmetry.
 
-For lattice momentum $k$, define
+In momentum space the quadratic part is
+$\frac12\sum_k(m^2+\varepsilon_k)|\tilde\phi_k|^2/V$ with
 \begin{equation}
- q(k)=\widehat{k}^{,2}=4\sum_{\mu=1}^{3}\sin^2(k_\mu/2).
+ \varepsilon_k=Z\khat+(\khat)^2,\qquad
+ \khat=\sum_{\mu=1}^3 4\sin^2\frac{k_\mu}{2}\in[0,12].
+ \label{eq:disp}
 \end{equation}
-The quadratic kernel is
+The dispersion depends on $k$ only through $\khat$.  For $Z\ge0$ it is
+minimal at $k=0$.  For $-24\le Z<0$ it is minimal on the surface
+$\khat=\qs^2\equiv-Z/2$ with $\varepsilon_{\min}=-Z^2/4$: the spectrum has a
+moat.  Near this surface
 \begin{equation}
- K(k)=m^2+Zq(k)+q(k)^2. \label{eq:kernel}
+ m^2+\varepsilon_k\simeq r_0+(\khat-\qs^2)^2,\qquad r_0=m^2-\frac{Z^2}{4}.
+ \label{eq:moat}
 \end{equation}
-For $Z\geq0$ its minimum is at $k=0$.  For $Z<0$, an unconstrained minimum
-occurs at $q_*=-Z/2$, so that $K(k_*)=m^2-Z^2/4$.  This is a bare relation;
-the observed ordering wavevector need not follow it quantitatively after
-fluctuation renormalization, nonlinear mode coupling, and finite-volume
-momentum quantization.
 
-\subsection{Mean-field phase diagram}
+\paragraph*{Commensurate lattices.}
+In a finite periodic box only $k_\mu=2\pi n_\mu/L$ are allowed, and the shell
+$\khat=\qs^2$ is generally not realized exactly.  This ``shell locking'' biases
+finite-$L$ simulations toward particular wavevectors.  We avoid it by working
+at couplings for which lamellae of period $p$ along a lattice axis are exactly
+optimal,
+\begin{equation}
+ Z_p=-8\sin^2\frac{\pi}{p},\qquad L\in p\,\mathbb{N},
+ \label{eq:commensurate}
+\end{equation}
+namely $Z_4=-4$, $Z_6=-2$, $Z_8\simeq-1.1716$, and $Z_9\simeq-0.9358$.
 
-It is useful to establish a transparent baseline.  Write $r=m^2$.  A uniform
-field has free-energy density
-\begin{equation}
- f_{\rm u}(v)=\frac r2v^2+\frac\lambda4v^4,
- \qquad f_{\rm u}^{\min}=-\frac{r^2}{4\lambda}\quad(r<0).
-\end{equation}
-For a single-mode lamellar ansatz $\phi(x)=A\cos(k_*x)$,
-\begin{equation}
- f_{\rm m}(A)=\frac{r-Z^2/4}{4}A^2+\frac{3\lambda}{32}A^4,
- \qquad f_{\rm m}^{\min}=-\frac{(r-Z^2/4)^2}{6\lambda}.
-\end{equation}
-This approximation gives a symmetric--modulated instability at
-$r=Z^2/4$ and a uniform--modulated equality line
-\begin{equation}
- r=-\frac{2+\sqrt6}{4}Z^2. \label{eq:mf-um}
-\end{equation}
-Together with the $r=0$ symmetric--uniform line for $Z\geq0$, the three lines
-meet at the mean-field Lifshitz point $(Z,r)=(0,0)$.
+%======================================================================
+\section{Mean-field theory}
+\label{sec:mf}
 
-\begin{figure}[htbp]
+\subsection{Single-mode analysis}
+
+For a uniform field $\phi=v$ the free-energy density is
+$f_u=\frac{m^2}{2}v^2+\frac{\lambda}{4}v^4$, minimized for $m^2<0$ by
+$f_u=-(m^2)^2/(4\lambda)$.  For a single lamellar mode
+$\phi=A\cos(k\cdot x)$ with $\khat=\qs^2$, $\langle\phi^2\rangle=A^2/2$ and
+$\langle\phi^4\rangle=3A^4/8$, so
+\begin{equation}
+ f_\ell=\frac{r_0}{4}A^2+\frac{3\lambda}{32}A^4
+ \;\to\; -\frac{r_0^2}{6\lambda},\qquad A^2=\frac{4|r_0|}{3\lambda}.
+ \label{eq:flam}
+\end{equation}
+Superpositions of $n$ orthogonal modes of equal amplitude give
+$-r_0^2/(9\lambda)$ for $n=2$ (square) and $-r_0^2/(10\lambda)$ for $n=3$
+(simple cubic): the quartic term penalizes mode coupling, and without a cubic
+invariant---forbidden by the $Z_2$ symmetry---no triangular (hexagonal,
+bcc) resonance can compensate.  Lamellae therefore win, as for symmetric
+diblock copolymers~\cite{Leibler1980,Fredrickson1987,Kats1993}.  The
+symmetric--lamellar instability is at $r_0=0$, i.e.\ $m^2=Z^2/4$, and the
+uniform and lamellar free energies are equal on
+\begin{equation}
+ m^2=-\frac{2+\sqrt6}{4}Z^2,
+ \label{eq:mf-um}
+\end{equation}
+a first-order line tangent to the order--disorder line at the mean-field LP
+$(Z,m^2)=(0,0)$~\cite{Michelson1977}.
+
+\subsection{Exact lattice mean field}
+
+We minimized $H/V$ over static periodic configurations without any ansatz
+(Appendix~\ref{app:mf}).  Lamellar profiles on rings of $N=120$ sites with all
+harmonics retained, and two- and three-dimensional periodic boxes seeded with
+square and cubic patterns, confirm that lamellae are the mean-field ground
+state wherever modulated order exists; e.g.\ at $(Z,m^2)=(-2,-3)$ we find
+$f_\ell=-0.780$, $f_{\rm sq}=-0.512$, $f_{\rm cub}=-0.553$ and
+$f_u=-0.5625$.  Higher harmonics lower $f_\ell$ appreciably below the
+single-mode value $-0.667$ at this point and move the uniform--lamellar line
+below Eq.~\eqref{eq:mf-um}.
+
+The lattice also introduces a qualitatively new feature.  A sharp wall between
+domains $\phi=\pm a$ perpendicular to a lattice axis costs, per unit area,
+\begin{equation}
+ \sigma_{\rm wall}=(2Z+4)\,a^2,
+ \label{eq:wall}
+\end{equation}
+$2Za^2$ from the bond across the wall and $4a^2$ from the Laplacian on the two
+adjacent planes.  For $Z<-2$ walls lower the energy, so a uniform state is
+unstable to lamellae at any $m^2$ and the uniform--modulated line exists only
+for $-2<Z<0$ (Fig.~\ref{fig:theory}); it reaches $m^2=-0.30$, $-1.27$, and
+$-3.75$ at $Z=-0.5$, $-1$, and $-1.5$ and diverges as $Z\to-2^+$.  This is a
+lattice-scale effect absent in the continuum; it sets the range of $Z$ in which
+a uniform--lamellar boundary can be studied.
+
+%======================================================================
+\section{Fluctuations}
+\label{sec:fluct}
+
+\subsection{Hartree (Gibbs--Bogoliubov) approximation}
+
+We use the Gibbs--Bogoliubov inequality with a Gaussian trial ensemble
+centered on a condensate $\Phi(x)$, with translation-invariant propagator
+$G_k=1/(r+\varepsilon_k)$.  The variational free-energy density is
+\begin{align}
+ F={}&\frac12\overline{\sum_k}\ln(r+\varepsilon_k)+\frac{m^2-r}{2}G_0
+ +\frac{3\lambda}{4}G_0^2\nonumber\\
+ &+K[\Phi]+\frac{m^2}{2}\langle\Phi^2\rangle+\frac{\lambda}{4}\langle\Phi^4\rangle
+ +\frac{3\lambda}{2}G_0\langle\Phi^2\rangle,
+ \label{eq:FH}
+\end{align}
+where $\overline{\sum}_k=V^{-1}\sum_k$ (or the Brillouin-zone integral),
+$G_0=\overline{\sum}_kG_k$, $\langle\cdot\rangle$ is a spatial average, and
+$K[\Phi]$ is the gradient energy of the condensate.  Stationarity in $r$ gives
+the Hartree gap equation
+\begin{equation}
+ r=m^2+3\lambda\bigl[G_0(r)+\langle\Phi^2\rangle\bigr].
+ \label{eq:gap}
+\end{equation}
+We minimize Eq.~\eqref{eq:FH} for the symmetric ($\Phi=0$), uniform
+($\Phi=v$), and lamellar [$\Phi=A\cos(k\cdot x)$,
+$K=A^2\varepsilon_k/4$] states, using the exact lattice spectrum: the
+infinite-volume density of states of $\khat$ is the threefold convolution of
+arcsine densities on $[0,4]$, and for finite $L$ we perform the same mode sums
+as in the simulations.  Treating the propagator as translation invariant in the
+lamellar phase is Brazovskii's approximation~\cite{Brazovskii1975}.
+
+The Hartree approximation is known to render the Ising transition weakly first
+order; on the uniform side we therefore use it only for the location of the
+line.  There it is accurate: at $Z=0.5$ it gives $m^2_c=-0.97$, compared with
+$-0.95$ from our Binder crossings.
+
+\subsection{Brazovskii mechanism and its range of validity}
+\label{sec:braz}
+
+In the symmetric phase near the moat, Eq.~\eqref{eq:moat}, the tadpole is
+dominated by the shell.  In the continuum,
+\begin{equation}
+ G_0(r)\simeq\frac{\qs}{4\pi\sqrt{\tilde r}}+G_{\rm reg},
+ \qquad \tilde r=r-\frac{Z^2}{4},
+ \label{eq:braz-tadpole}
+\end{equation}
+because the soft modes fill a two-dimensional surface of area $4\pi\qs^2$ with
+radial stiffness $4\qs^2$.  The gap equation
+$\tilde r=\tau+\alpha/\sqrt{\tilde r}$, with
+$\alpha=3\lambda\qs/(4\pi)$ and $\tau=r_0+3\lambda G_{\rm reg}$, has a positive
+solution for every $\tau$: the symmetric phase never becomes locally unstable,
+and lamellar order appears through a first-order transition at
+$\tau_t\propto-\alpha^{2/3}$, where the gap is still
+$\tilde r_t\sim\alpha^{2/3}$~\cite{Brazovskii1975,Fredrickson1987}.
+
+The shell picture requires the fluctuating modes to be confined near the
+shell, i.e.\ the radial width $\delta k\simeq\sqrt{\tilde r}/(2\qs)$ to be small
+compared with $\qs$.  At the transition this condition reads $b\ll1$ with
+\begin{equation}
+ b\equiv\frac{\alpha^{1/3}}{2\qs^2}
+ =\frac12\Bigl(\frac{3\lambda}{4\pi}\Bigr)^{1/3}\qs^{-5/3}
+ \simeq0.49\Bigl(\frac{2}{|Z|}\Bigr)^{5/6}
+ \quad(\lambda=4).
+ \label{eq:bpar}
+\end{equation}
+Thus $b=0.28$, $0.49$, and $0.88$ at $Z=-4$, $-2$, and $-1$, and $b=1$ at
+$Z\simeq-0.85$.  For smaller $|Z|$ the shell is not resolved: the relevant
+fluctuations are those of the quartic Lifshitz dispersion $k^4$, and the
+Brazovskii analysis no longer applies.  Two consequences follow.  First,
+Brazovskii's first-order transition is controlled only deep in the moat
+regime; at $\lambda=4$ the whole range $Z\gtrsim-2$ studied here is strongly
+coupled, so quantitative Hartree predictions for the lamellar line should not
+be expected to hold there.  Second, the crossover $b\simeq1$ falls close to
+the region where the symmetric--uniform line is found to end
+(Sec.~\ref{sec:results}).  Equation~\eqref{eq:bpar} is an order-of-magnitude
+criterion; the Hartree solution itself (Fig.~\ref{fig:theory}) contains the
+full lattice spectrum.
+
+\subsection{Hartree phase diagram}
+
+Figure~\ref{fig:theory} compares the Hartree and mean-field phase diagrams.
+Fluctuations lower all ordering lines by $\Delta m^2=O(1)$.  The
+symmetric--lamellar line flattens: near the would-be LP the shell tadpole
+grows, and the lamellar line reaches its maximum depth $m^2\simeq-1.64$ at
+$Z\simeq-1$.  The uniform and lamellar ordering lines cross at
+\begin{equation}
+ (Z,m^2)_{\rm H}\simeq(-0.81,\,-1.63),
+ \label{eq:hartree-meet}
+\end{equation}
+where the uniform--lamellar coexistence line also ends.  Within the Hartree
+approximation all three lines are first order, so their junction is a triple
+point; the approximation cannot decide the order of the uniform line near the
+junction (see above).  In finite volume the junction moves by up to $0.2$ in
+$Z$ depending on which shells are available ($Z_{\rm H}$ between $-1.05$ and
+$-0.80$ for $12\le L\le32$), a direct measure of the shell-locking effects that
+motivate the commensurate lattices of Eq.~\eqref{eq:commensurate}.
+
+\begin{figure}[t]
  \centering
- \includegraphics[width=0.98\textwidth]{generated/mean_field_phase_diagram.pdf}
- \caption{Left: single-mode mean-field phase diagram.  Right: the mass-
- independent part of the lattice quadratic kernel.  These curves are a
- baseline, not fits to the Monte Carlo phase boundaries.}
- \label{fig:mf}
+ \includegraphics[width=\columnwidth]{figures/theory_phase_diagram}
+ \caption{Mean-field (dashed) and Hartree (solid, infinite volume, exact
+ lattice spectrum) phase diagrams of Eq.~\eqref{eq:H} at $\lambda=4$.  Blue:
+ symmetric--uniform; orange: symmetric--lamellar; black: uniform--lamellar.
+ The open circle is the mean-field Lifshitz point, the square the Hartree
+ junction, Eq.~\eqref{eq:hartree-meet}.  The exact lattice mean-field
+ uniform--lamellar line diverges as $Z\to-2^+$ [Eq.~\eqref{eq:wall}]; the
+ Hartree line uses a single-harmonic condensate.}
+ \label{fig:theory}
 \end{figure}
 
-Several effects can change this picture.  Fluctuations shift all bare
-transition lines and renormalize the preferred wavevector.  The large set of
-nearly soft modes around a nonzero momentum shell can enhance fluctuations
-and may drive the symmetric--modulated transition first order in the spirit
-of the Brazovskii mechanism~\cite{Brazovskii1975}.  The uniform--modulated
-boundary couples inequivalent order parameters and may also be discontinuous.
-Conversely, the uniform symmetric transition is expected to retain
-three-dimensional Ising behavior while the finite-$q$ sector remains massive.
-None of these expectations substitutes for finite-size evidence in the
-modified theory studied here.
+\subsection{Fate of the Lifshitz point}
+\label{sec:lp}
 
-\section{Numerical approach}
+At $Z=0$ the dispersion is purely quartic and the tadpole in the symmetric
+phase behaves as
+$G_0\simeq\int\!d^3k/(2\pi)^3\,(r+k^4)^{-1}\propto r^{-1/4}$: it diverges as
+the gap closes.  Within the self-consistent theory the symmetric phase
+therefore cannot become unstable at an LP, and ordering near $Z=0$ must
+proceed through a first-order transition, as in the Brazovskii case.  Beyond
+Hartree, the LP of a one-component field in $d=3$ lies far below its upper
+critical dimension $d^*=8$ ($\epsilon_8=5$)~\cite{Diehl2002,Diehl2002b}; for
+continuous symmetry the ordered phases are destroyed for
+$d\le d_L=4$~\cite{Diehl2002,Zappala2018}, and nonperturbative FRG finds no
+isotropic Ising Lifshitz fixed point below $d=5.5$~\cite{Bonanno2015}.
+Experiments and simulations of polymer blends show the same:
+the mean-field LP is replaced by first-order transitions and a fluctuating
+microemulsion channel~\cite{Bates1995,Bates1997,Kielhorn1997,Duchs2003}.  We
+therefore do not expect a multicritical point at which the uniform and
+modulated lines join continuously.  Two generic topologies remain:
+\begin{enumerate}
+ \item[(a)] \emph{Critical endpoint (CEP).}  The continuous (3D Ising)
+ symmetric--uniform line ends on the first-order symmetric--lamellar line,
+ which continues as the uniform--lamellar boundary~\cite{Fisher1990,Fisher1991}.
+ \item[(b)] \emph{Tricritical point and triple point.}  The
+ symmetric--uniform line becomes first order at a tricritical point at
+ $Z_t>Z_*$, and three first-order lines meet at a triple point.  A line of such
+ tricritical points, ending in a Lifshitz tricritical point, appears in the
+ $\epsilon$ expansion for competing interactions in a field~\cite{Barbosa1993}.
+\end{enumerate}
+Both are compatible with the general arguments above; the difference lies in
+whether the shell fluctuations that make the lamellar transition first order
+also drive the uniform transition first order before the lines meet.
+Section~\ref{sec:fss} lists the finite-size signatures used to discriminate
+between them.
+
+\subsection{Elasticity and order of the lamellar phase}
+\label{sec:smectic}
+
+Let $\phi=A\cos[\qs(z-u)]$ with a slowly varying layer displacement $u(x)$.
+Expanding the single-mode energy around the optimal wavevector, where
+$\partial\varepsilon/\partial k^2=0$, gives smectic-A elasticity
+$f_{\rm el}=\frac B2(\partial_zu)^2+\frac K2(\nabla_\perp^2u)^2$ with
+(Appendix~\ref{app:smectic})
+\begin{equation}
+ B=2A^2\qs^4,\qquad K=\frac{A^2\qs^2}{2}.
+ \label{eq:BK}
+\end{equation}
+Rotational invariance forbids a $(\nabla_\perp u)^2$ term.  The layer
+fluctuations then diverge logarithmically,
+$\langle u^2\rangle\propto T\ln L/\sqrt{BK}$ (Landau--Peierls), and the Bragg
+peaks become power laws with Caill\'e exponent
+$\eta=\qs^2T/(8\pi\sqrt{BK})$~\cite{Chaikin1995}, with logarithmic anharmonic
+corrections~\cite{Grinstein1981,Grinstein1982}.  With the mean-field amplitude
+of Eq.~\eqref{eq:flam},
+\begin{equation}
+ \eta=\frac{T}{8\pi A^2\qs}=\frac{3\lambda T}{32\pi\,\qs\,|r_0|}.
+ \label{eq:caille}
+\end{equation}
+At the points used for our long-range-order tests,
+$(Z,m^2)=(-2,-3)$ and $(-4,0)$, Eq.~\eqref{eq:caille} gives $\eta\simeq0.030$
+and $0.021$.  The lamellar order parameter
+$P_*=\sum_{k\in\text{shell}}|\tilde\phi_k|^2/V^2$ should then decay as
+$P_*\propto L^{-\eta_\eff}$ with $\eta\le\eta_\eff\le2\eta$, depending on the
+direction-averaged anisotropic decay: by less than $7\%$ between $L=12$ and
+$36$.
+
+On the lattice two corrections enter.  The single-mode energy depends on $k$
+only through $\khat$, so the degenerate surface $\khat=\qs^2$ still admits
+zero-energy tilts and smectic elasticity survives at harmonic order.  However,
+for commensurate wavevectors $\qs=2\pi/p$ umklapp terms of order $A^p$ in the
+energy (e.g.\ $\sum_x\cos^4$ for $p=4$) pin the layer phase $u$ and restore true
+long-range order beyond a pinning length, strongly for $p=4$ and weakly for
+$p=6$.  Either way the difference from true long-range order is a few percent
+on accessible volumes.  The numerical test of Sec.~\ref{sec:results}
+distinguishes an ordered lamellar phase ($P_*$ independent of $L$ up to such
+corrections) from a disordered one ($P_*\propto1/V$), but not QLRO with
+$\eta\approx0.03$ from LRO.
+
+\subsection{Finite-size signatures}
+\label{sec:fss}
+
+We characterize transitions with the Binder cumulant
+$\Ufour=1-\langle M^4\rangle/(3\langle M^2\rangle^2)$ of the magnetization
+$M=V^{-1}\sum_x\phi_x$, the susceptibility
+$\chi=V(\langle M^2\rangle-\langle|M|\rangle^2)$, and the free-energy barrier
+$\Delta F=\ln(P_{\max}/P_{\min})$ of the order-parameter distribution at
+equal peak height~\cite{Lee1990}.  Table~\ref{tab:fss} summarizes the expected
+behavior.  At the 3D Ising fixed point $\Ufour^*=0.46547(3)$ and
+$\gamma/\nu=2-\eta=1.964$~\cite{Hasenbusch2010}.  Since $d=3$ is the upper
+critical dimension of the Ising tricritical point~\cite{Riedel1972,Deng2004},
+the tricritical cumulant approaches its mean-field value $\Ufour=1/3$ (from
+$P(M)\propto e^{-cM^6}$) up to logarithmic corrections.  At a first-order
+transition with coexisting symmetric and ordered peaks of weights $w$ and
+$1-w$, $\Ufour=1-[3(1-w)]^{-1}$, which is negative for $w>2/3$: a negative
+Binder minimum alone does not establish a first-order transition, but its
+growth as $-L^3$~\cite{Vollmayr1993}, together with $\Delta F\propto L^2$ and
+$\chi_{\max}\propto L^3$~\cite{Challa1986,Lee1990}, does.  The discriminator
+between scenarios (a) and (b) is therefore whether the symmetric--uniform
+transition develops a growing barrier before the lamellar phase intervenes.
+
+\begin{table}[t]
+\caption{Finite-size signatures used to classify transitions in three
+dimensions.  $\Delta F$: barrier between coexisting peaks of the
+order-parameter distribution at equal height.}
+\label{tab:fss}
+\begin{ruledtabular}
+\begin{tabular}{lccc}
+ & 3D Ising & tricritical & first order\\
+\hline
+$\Ufour$ at crossing/minimum & $0.4655$ & $\to1/3$ & $\propto-L^3$\\
+$\chi_{\max}$ & $L^{1.964}$ & $L^{2}$ (log corr.) & $L^3$\\
+$\Delta F$ & $\to$ const & $\to$ const & $\propto L^2$\\
+$P(M)$ & double peak & triple peak & triple peak, deepening
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+%======================================================================
+\section{Numerical methods}
+\label{sec:methods}
 
 \subsection{Hybrid Monte Carlo}
 
 We sample Eq.~\eqref{eq:H} with Hybrid Monte Carlo (HMC)~\cite{Duane1987}.
-The molecular-dynamics force is evaluated in two lattice passes,
+The force $F_x=Z(\nabla^2\phi)_x-[\nabla^2(\nabla^2\phi)]_x-m^2\phi_x-
+\lambda\phi_x^3$ is computed in two passes of the six-neighbor Laplacian.
+Leapfrog step sizes scale as $\epsilon\propto L^{-3/4}$ to keep the
+acceptance between $70\%$ and $80\%$, with trajectory length $\tau\simeq1$.
+Finite-difference forces, energy conservation, reversibility, and acceptance
+are tested before production on CPUs and GPUs.
+
+\subsection{Replica-exchange umbrella sampling in Fourier space}
+
+To sample across free-energy barriers we bias a quadratic form in the Fourier
+modes,
 \begin{equation}
- F_x=Z\nabla^2\phi_x-\nabla^2(\nabla^2\phi)_x-m^2\phi_x-\lambda\phi_x^3,
+ s[\phi]=\frac{1}{V^2}\sum_k w_k|\tilde\phi_k|^2,\qquad
+ \frac{\partial s}{\partial\phi_x}=\frac{2}{V}\,
+ \mathrm{Re}\bigl[\mathcal F^{-1}(w\tilde\phi)\bigr]_x,
+ \label{eq:cv}
 \end{equation}
-followed by a leapfrog trajectory and an exact Metropolis accept/reject step.
-CPU and GPU implementations use the same lattice action.  Step sizes are
-volume dependent and are tuned to maintain useful acceptance and
-decorrelation.  Force finite differences, reversibility, energy conservation,
-and acceptance sanity are tested independently before production.
+which we evaluate with fast Fourier transforms.  The choice $w_k=\delta_{k,0}$
+gives $s=M^2$; $w_k=1$ on a full lattice shell $\khat=q^2$ gives the shell power
+$P_*$, invariant under translations, $Z_2$, and cubic rotations, with
+$P_*=A^2/2$ for a lamella of amplitude $A$; mixed weights interpolate between
+uniform and modulated order.  Windows $j$ carry harmonic biases
+$\frac{\kappa}{2}(s-s_j)^2$ and are coupled by replica exchange between
+neighbors~\cite{Torrie1977,Swendsen1986,Hukushima1996,Sugita2000}.  Bias
+forces, energy conservation, reversibility, and exact swap actions are
+verified to machine precision, and the $M^2$ coordinate reproduces an
+independent implementation.  Production runs begin only after a transport
+criterion (a minimum fraction of walkers completing round trips between the
+ends of the ladder) is met.
 
-\subsection{Umbrellas, replica exchange, and reweighting}
+\subsection{Reweighting}
 
-Uniform-transition calculations use overlapping umbrellas in the squared
-magnetization $M^2$ and replica exchange between neighboring windows.  The
-crossed-action swap probability is evaluated from
-$Q=\sum_x\phi_x^2$, exactly accounting for the mass difference.  Canonical
-distributions are reconstructed with the umbrella biases removed.  Each
-source mass is run from at least two independent phase starts; disagreement is
-treated as a convergence diagnostic rather than folded silently into a small
-statistical error.
+Within each run the window free energies are obtained by binned
+WHAM~\cite{Kumar1992}; runs at different $m^2$ are then combined by MBAR
+over mixture states~\cite{Shirts2008,Ferrenberg1989}, using
+$\partial H/\partial m^2=Q/2$ with $Q=\sum_x\phi_x^2$, so that all
+observables and distributions are available as continuous functions of $m^2$.
+Statistical errors come from a synchronized block bootstrap of the time
+series, re-solving both stages for every draw.  Each mass is simulated from
+both ordered and disordered starts; disagreement between them is treated as a
+convergence diagnostic.
 
-The collector retains $M^2$, $M^4$, $Q$, the energy, the gradient observable
-$G=\sum_{x,\mu}(\phi_{x+\hat\mu}-\phi_x)^2$, and shell-resolved Fourier power.
-This permits local reweighting in both $m^2$ and $Z$,
-\begin{equation}
- w(\delta m^2,\delta Z)\propto
- \exp\left[-\frac{\delta m^2}{2T}Q-\frac{\delta Z}{2T}G\right],
-\end{equation}
-subject to effective-sample-size and overlap requirements.
-
-\subsection{Restricted-branch thermodynamic integration}
-
-To obtain efficient initial guesses in the modulated region, separate uniform
-and finite-$q$ continuations are followed in mass.  Their free-energy
-difference obeys
-\begin{equation}
- \frac{\partial(f_a-f_b)}{\partial m^2}
- =\frac{1}{2V}\bigl(\langle Q\rangle_a-\langle Q\rangle_b\bigr).
- \label{eq:ti}
-\end{equation}
-Five nearby momentum shells are initialized independently, and the lowest
-coherent finite-$q$ branch defines an envelope.  This construction is useful
-for locating candidate scan windows.  Because it does not ensure equilibrium
-transitions among all competing branches, its equality points are not by
-themselves thermodynamic phase boundaries.
-
-\section{Observables and transition diagnostics}
-
-\subsection{Uniform order}
-
-The uniform magnetization and Binder cumulant are
-\begin{equation}
- M=\frac1V\sum_x\phi_x,\qquad
- \Ufour=1-\frac{\langle M^4\rangle}{3\langle M^2\rangle^2}.
- \label{eq:binder}
-\end{equation}
-Pairwise crossings between sizes locate finite-volume pseudocritical masses.
-The mass derivative is obtained without numerical differencing:
-\begin{equation}
- \partial_{m^2}\langle O\rangle=-\frac{1}{2T}\operatorname{Cov}(O,Q),
-\end{equation}
-with analytic propagation through the definition of $\Ufour$.  At a continuous
-transition the slope scales approximately as
-$|\partial_{m^2}\Ufour|\sim L^{1/\nu}$, up to corrections.  A first-order
-transition instead produces volume scaling in appropriate response peaks and
-a growing free-energy barrier.
-
-\subsection{Finite-wavevector order}
-
-For the Fourier transform $\widetilde\phi_k$, define total power on a lattice
-shell $\mathcal S_n$ by
-\begin{equation}
- P_n=\frac{1}{V^2}\sum_{k\in\mathcal S_n}|\widetilde\phi_k|^2,
- \qquad S_n=\frac{V\langle P_n\rangle}{g_n},
- \label{eq:shell}
-\end{equation}
-where $g_n$ is the shell degeneracy.  Summing the full shell makes $P_n$
-invariant under translations, sign flips, cubic rotations, and averaging
-among equivalent orientations.  The selected shell is determined from the
-largest coherent $S_n$, not imposed from the bare estimate $q_*=-Z/2$.
-
-We also monitor the shell-amplitude susceptibility, a degeneracy-normalized
-Binder ratio, the fraction carried by the strongest conjugate momentum pair,
-and its orientation participation ratio.  Transition classification uses
-joint distributions of $(M^2,P_*)$ and of the energy.  At a candidate
-first-order boundary we require stable two-phase weights and barrier growth
-with interfacial area, rather than bimodality in a single histogram binning.
-
-\begin{table}[htbp]
-\centering
-\caption{Common evidence required for the three boundaries.  ``Location''
-means a finite-size pseudocritical estimator followed by controlled drift in
-$L$; no single row alone classifies a transition.}
-\label{tab:diagnostics}
-\begin{tabular}{p{0.22\textwidth}p{0.27\textwidth}p{0.39\textwidth}}
-\toprule
-Boundary & Primary location estimator & Nature diagnostics \\
-\midrule
-Symmetric--uniform broken & Pairwise crossings of $\Ufour(M)$; uniform
-susceptibility peak & Binder-slope exponent, susceptibility scaling,
-histograms and latent-heat/barrier bounds; compare with Ising scaling \\
-Symmetric--modulated & Crossings or correlation ratios built from $P_*$;
-finite-$q$ susceptibility & Peak scaling, energy and $P_*$ coexistence,
-barrier $\propto L^2$ versus continuous collapse; selected-$q$ drift \\
-Uniform broken--modulated & Equal weight in the joint $(M^2,P_*)$
-distribution & Direct switching, two-dimensional barrier, discontinuities in
-$M^2$, $P_*$, $Q/V$, and energy; volume and area scaling \\
-\bottomrule
-\end{tabular}
-\end{table}
-
+%======================================================================
 \section{Results}
+\label{sec:results}
 
-\subsection{Uniform broken--symmetric line}
+\subsection{Symmetric--uniform line}
+\pending{Binder crossings, $\chi_{\max}$ and $\Delta F$ vs $L$ for
+$-0.95\le Z\le2$; small-$L$ three-peak structure that vanishes with $L$;
+termination bracket $Z_*$.}
 
-Direct Binder scans for $L=12,16,20,24$ establish a smooth pseudocritical
-line over $-0.5\leq Z\leq2$.  The adjacent-pair crossing masses have a spread
-of roughly $0.011$--$0.017$ in $m^2$ on this grid, although the crossing
-cumulants show larger corrections to scaling.  Representative curves are
-shown in Fig.~\ref{fig:binder}.
+\subsection{Symmetric--lamellar transition}
+\pending{Shell-CV coexistence at $Z=-2$ ($L=12,18,24,30$) and $Z_8$; barrier
+scaling; latent $Q/V$; comparison with Hartree.}
 
-\begin{figure}[htbp]
- \centering
- \begin{minipage}{0.48\textwidth}\centering
-  \includegraphics[width=\linewidth]{../plots/umbrella_binder_mZm0p5_overlay.png}
-  \small (a) $Z=-0.5$
- \end{minipage}\hfill
- \begin{minipage}{0.48\textwidth}\centering
-  \includegraphics[width=\linewidth]{../plots/umbrella_binder_mZ1_overlay.png}
-  \small (b) $Z=1$
- \end{minipage}
- \caption{Representative uniform-magnetization Binder scans.  The transition
- mass is considerably more stable than the finite-size crossing height.}
- \label{fig:binder}
-\end{figure}
+\subsection{Rank and long-range order of the modulated phase}
+\pending{$d_\eff$ in the ordered peak; $P_*(L)$ at $(Z,m^2)=(-2,-3),(-4,0)$
+vs Eq.~\eqref{eq:caille}.}
 
-The direct lower-$Z$ campaign shows a robust $q=0$ crossing at $Z=-0.95$.
-At $Z=-0.9625$ the formal $16\times20$ crossing is
-$m^2=-2.52740$, $\Ufour=0.5122$, but it interpolates into a mass point with
-large ordered/disordered source disagreement and simultaneous takeover by the
-first nonzero shell.  We therefore place the current termination bracket at
-\begin{equation}
- -0.9625<Z_*<-0.95. \label{eq:bracket}
-\end{equation}
-At the midpoint $Z=-0.95625$, a formal crossing occurs at
-$m^2=-2.52025$, $\Ufour=0.6256$.  It lies only $0.0019$ above the lowest
-sampled mass, which is cleanly $q=0$ dominated.  The next mass already has
-severe $L=20$ source disagreement and nearly tied uniform and first-shell
-power.  The interpolation therefore combines one healthy endpoint with one
-contaminated endpoint and cannot defensibly tighten Eq.~\eqref{eq:bracket}.
+\subsection{Uniform--lamellar boundary}
+\pending{Thermodynamic integration on commensurate lattices and direct
+validation with the mixed coordinate.}
 
-\begin{figure}[htbp]
- \centering
- \begin{minipage}{0.48\textwidth}\centering
-  \includegraphics[width=\linewidth]{../plots/binder_termination/binder_Zm0p95625_overlay.png}
-  \small (a) $Z=-0.95625$
- \end{minipage}\hfill
- \begin{minipage}{0.48\textwidth}\centering
-  \includegraphics[width=\linewidth]{../plots/binder_termination/binder_Zm0p9625_overlay.png}
-  \small (b) $Z=-0.9625$
- \end{minipage}
- \caption{Binder reconstructions inside and at the terminated side of the
- endpoint bracket.  Formal crossings exist, but source disagreement and
- finite-$q$ takeover prevent interpreting either as a clean conventional
- critical crossing.}
- \label{fig:endpoint}
-\end{figure}
+\subsection{Junction of the three lines}
+\pending{CEP vs triple point.}
 
-The bracket is now narrower than the observed finite-size and source-history
-systematics.  We therefore stop bisection and retain it as a finite-size
-interval until the endpoint's volume drift and transition character are
-established.
-
-\subsection{Detection of modulated order}
-
-The shell estimator was tested at $(Z,m^2,L)=(-4,-1,16)$, where the simulation
-is trapped near a strongly modulated configuration by construction.  It
-recovers the expected nonzero shell even after averaging over phase and
-orientation, demonstrating that modulation is not rotated away by the
-analysis.  Near the competing regime, $Z=-1$ selects a nonzero shell for
-$L=16$ and $20$, while the crossing neighborhood at $Z=-0.9$ remains strongly
-$q=0$ dominated.  The latter distinction is essential: a soft finite-$q$ mode
-on the symmetric side does not prove that the uniform transition has already
-terminated.
-
-\begin{figure}[htbp]
- \centering
- \begin{minipage}{0.48\textwidth}\centering
-  \includegraphics[width=\linewidth]{../reports/structure_factor_cpu/deep_modulated_validation/spectrum_validation.png}
-  \small (a) deep-modulated validation
- \end{minipage}\hfill
- \begin{minipage}{0.48\textwidth}\centering
-  \includegraphics[width=\linewidth]{../reports/structure_factor_cpu/analysis/figures/finite_q_Zm1p0.png}
-  \small (b) finite-$q$ response near $Z=-1$
- \end{minipage}
- \caption{The shell-summed structure factor detects nonzero-wavevector order
-without choosing an orientation in advance.}
- \label{fig:sf}
-\end{figure}
-
-\subsection{Current phase-diagram status}
-
-Figure~\ref{fig:status} combines three deliberately distinct evidence levels.
-The blue points are direct uniform Binder crossings.  The purple line is an
-$L=20$ equal-free-energy estimate between separately continued uniform and
-finite-$q$ branches.  The orange line is only the point at which the chosen
-finite-$q$ coherence proxy falls below threshold.  The latter two locate
-promising windows but are not yet unbiased transition measurements.
-
-\begin{figure}[htbp]
- \centering
- \includegraphics[width=0.82\textwidth]{generated/phase_diagram_status.pdf}
- \caption{Numerical phase-diagram status.  Direct finite-size measurements,
-restricted-branch estimates, and operational proxies are shown with different
-symbols because their inferential status is different.}
- \label{fig:status}
-\end{figure}
-
-The restricted multi-shell calculation finds an apparent uniform--modulated
-equality curve from $Z=-0.5$ through $Z=-1.625$, with substantial lattice-shell
-and continuation-history effects outside the most stable interval.  Its
-intersection with the older extrapolated Binder line near $Z\simeq-1.57$ is
-superseded for endpoint location by the direct bracket in
-Eq.~\eqref{eq:bracket}; it remains useful as evidence that extrapolating the
-uniform line deep into negative $Z$ is unsafe.  A machine-readable catalog of
-all plotted points, including their evidence class and source, accompanies
-this draft.
-
-\subsection{Nature of the three transitions}
-
-For the symmetric--uniform boundary, the working hypothesis is a continuous
-three-dimensional Ising transition wherever finite-$q$ fluctuations remain
-noncritical.  Existing Binder curves and derivative machinery support this
-hypothesis but a final exponent analysis with stable correlated bootstrap
-errors is still required.
-
-\TODO{Symmetric--uniform: insert joint fits of Binder slopes and susceptibility
-peaks for at least three sizes, correction-to-scaling sensitivity, and a table
-of effective $1/\nu$.}
-
-The symmetric--modulated transition is expected to be particularly sensitive
-to the shell of soft modes.  Its classification will use finite-$q$ response
-peaks and equal-weight histograms across $L=12,16,20,24$.  A first-order claim
-will require response scaling compatible with $V$, stable coexistence in both
-$P_*$ and energy, and a barrier increasing with $L^2$.
-
-\TODO{Symmetric--modulated: insert direct shell-amplitude scans, pseudocritical
-masses, selected wavevectors, peak/barrier scaling, and a continuous-versus-
-first-order model comparison.}
-
-The uniform--modulated boundary is a competition between nonzero $M$ and
-nonzero $P_*$.  One-dimensional cuts can miss the relevant path; the decisive
-object is the joint free-energy surface
-$-\log P(M^2,P_*)$.  Restricted thermodynamic integration supplies initial
-mass windows, after which simulations must demonstrate actual switching or a
-reconstruction with connected overlap.
-
-\TODO{Uniform--modulated: insert joint $(M^2,P_*)$ distributions, equal-weight
-locations, discontinuities, interfacial barrier scaling, and finite-size drift
-of the boundary.}
-
-\section{Planned finite-size phase-map campaign}
-
-The first production domain is $-2.5\leq Z\leq-0.5$.  The anchor values are
-\begin{equation*}
- Z=-0.5,-0.75,-1.0,-1.25,-1.5,-1.75,-2.0,-2.25,-2.5,
-\end{equation*}
-augmented by the endpoint grid near Eq.~\eqref{eq:bracket}.  At each $Z$, restricted-branch
-results define two mass windows: one around uniform--modulated competition and
-one around loss of modulated order.  Discovery uses $L=12,16,20$; $L=24$ is
-reserved for representative points and all putative changes of order.
-
-Every point records $(M^2,P_*,H,Q,G)$ and orientation diagnostics.  The scan is
-adaptive in $m^2$: a coarse pass brackets response peaks or equal-weight
-points, then correlated reweighting is used only inside verified overlap.
-Independent uniform, modulated, and symmetric starts are compared.  A point
-is promoted to finite-size scaling only after source agreement or an explicit
-equilibrium coexistence reconstruction.
-
-The campaign is ordered to answer the physics efficiently:
-\begin{enumerate}
- \item finish the direct endpoint bracket and determine whether the uniform
- line ends continuously or is preempted;
- \item calibrate both modulated boundaries at $Z=-1,-1.5,-2,-2.5$;
- \item fill the boundary curves adaptively in $Z$;
- \item add $L=24$ only at representative continuous, first-order, and junction
- candidates;
- \item perform common scaling fits and map the junction topology.
-\end{enumerate}
-The exact proposed anchor table is stored in
-\path{paper/generated/proposed_transition_campaign.csv}.  No transition-order
-label is assigned from a single volume or from the restricted continuations.
-
+%======================================================================
 \section{Discussion}
-
-The numerical picture already differs sharply from a literal reading of the
-bare mean-field diagram.  The uniform critical line is displaced to negative
-bare mass, and finite-$q$ fluctuations become important well before a naive
-extrapolation of the uniform Binder line intersects an exploratory modulated
-branch.  Momentum-shell locking can create apparently precise onsets at a
-fixed $L$; repeating the calculation at a different volume moves the allowed
-shells and exposes this artifact.
-
-The direct endpoint bracket near $Z\simeq-0.956$ is therefore more reliable
-than the earlier deep extrapolation.  What it represents remains open.  If
-the renormalized quadratic coefficient of $q$ vanishes together with the
-uniform mass, the endpoint could be associated with Lifshitz criticality.
-If coexistence appears before that condition, a first-order line preempts the
-continuous endpoint.  A critical endpoint or tricritical scenario requires
-additional scaling fields and cannot be inferred solely from the shape of a
-Binder curve.
+\label{sec:discussion}
+\pending{Phase diagram figure; comparison with mean field and Hartree;
+implications for the QCD moat regime: $N=1$ retains lamellar order (no
+Goldstone disordering, cf.\ Refs.~\cite{Pisarski2020,Winstel2024}) yet loses the
+Lifshitz point.}
 
 \section{Conclusions}
+\pending{}
 
-We have established a reproducible framework for the three competing phases
-of the higher-derivative scalar theory.  Direct uniform Binder crossings map
-the conventional critical line and currently bracket its termination by
-$-0.9625<Z_*<-0.95$.  Shell-resolved structure factors robustly detect
-modulated order, while multi-shell restricted continuations provide practical
-but explicitly provisional windows for both modulated boundaries.  The next
-stage is a unified finite-size study of all three lines using joint order-
-parameter distributions, response scaling, and free-energy barriers.  This
-will determine whether the modulated boundaries are continuous or first order
-and how they join the known Ising line.
+\begin{acknowledgments}
+\pending{}
+\end{acknowledgments}
 
-\section*{Data and reproducibility}
+%======================================================================
+\appendix
 
-The paper figures are generated by
-\path{scripts/build_paper_figures.py}.  The phase-point catalog is
-\path{paper/generated/phase_boundary_catalog.csv}.  Direct Binder data are in
-\path{plots/binder_crossings_vs_Z.csv} and
-\path{reports/umbrella_binder_termination/}.  Shell-resolved and
-thermodynamic-integration outputs are under
-\path{reports/structure_factor_cpu/}.  The draft distinguishes direct
-finite-size measurements from branch-restricted or operational estimates in
-both prose and the catalog.
+\section{Lattice mean field}
+\label{app:mf}
 
-\begin{thebibliography}{9}
-\bibitem{Hornreich1975}
-R.~M. Hornreich, M. Luban, and S. Shtrikman,
-``Critical behavior at the onset of $k$-space instability on the $\lambda$
-line,'' \emph{Phys. Rev. Lett.} \textbf{35}, 1678 (1975).
+We minimize $H/V$ for static configurations with L-BFGS using the exact lattice
+operators of Eq.~\eqref{eq:H} and analytic gradients.  Lamellar states are
+computed on one-dimensional rings of $N=120$ sites for all period counts $n$
+with $\varepsilon(2\pi n/N)<-m^2$ in a window around the optimum, starting
+from single-mode profiles; square and cubic states on $p^2$ and $p^3$ boxes
+with $p$ the commensurate period.  The uniform--lamellar line is located by
+bisection in $m^2$.  The wall energy Eq.~\eqref{eq:wall} follows from the
+configuration $\phi=+a$ for $z\le0$, $-a$ for $z>0$: the bond across the wall
+contributes $\frac Z2(2a)^2$ per unit area, and the planes $z=0,1$ each
+contribute $\frac12(2a)^2$ from $(\nabla^2\phi)^2$.
 
-\bibitem{Brazovskii1975}
-S.~A. Brazovskii,
-``Phase transition of an isotropic system to a nonuniform state,''
-\emph{Sov. Phys. JETP} \textbf{41}, 85 (1975).
+\section{Smectic elastic constants}
+\label{app:smectic}
 
-\bibitem{Binder1981}
-K. Binder, ``Finite size scaling analysis of Ising model block distribution
-functions,'' \emph{Z. Phys. B} \textbf{43}, 119 (1981).
+For $\phi=A\cos\theta$ with $\theta=\qs(z-u)$,
+$\nabla\theta=\qs(\hat z-\nabla u)$ and
+$|\nabla\theta|^2=\qs^2[1-2\partial_zu+(\partial_zu)^2+(\nabla_\perp u)^2]$.
+Writing $\delta=|\nabla\theta|^2-\qs^2$ and using
+$\varepsilon(k^2)\simeq\varepsilon_{\min}+\delta^2$ at the optimal wavevector,
+the gradient energy averaged over a period is
+$\frac{A^2}{4}\delta^2\simeq A^2\qs^4(\partial_zu)^2$, giving $B=2A^2\qs^4$.
+The curvature term follows from
+$\nabla^2\phi=-A|\nabla\theta|^2\cos\theta-A\sin\theta\,\qs\nabla^2u$, whose
+square averages to $\ldots+\frac{A^2\qs^2}{2}(\nabla^2u)^2$; the coefficient of
+$\frac12(\nabla_\perp^2u)^2$ is therefore $K=A^2\qs^2/2$.
 
-\bibitem{Duane1987}
-S. Duane, A.~D. Kennedy, B.~J. Pendleton, and D. Roweth,
-``Hybrid Monte Carlo,'' \emph{Phys. Lett. B} \textbf{195}, 216 (1987).
+\section{Hartree approximation on the lattice}
+\label{app:hartree}
 
-\bibitem{Ferrenberg2018}
-A.~M. Ferrenberg, J. Xu, and D.~P. Landau,
-``Pushing the limits of Monte Carlo simulations for the three-dimensional
-Ising model,'' \emph{Phys. Rev. E} \textbf{97}, 043301 (2018).
-\end{thebibliography}
+The single-direction lattice momentum $q_1=4\sin^2(k/2)$ with $k$ uniform on
+$[-\pi,\pi]$ has the arcsine distribution
+$F(q_1)=\frac2\pi\arcsin(\sqrt{q_1}/2)$ on $[0,4]$; the density of states of
+$\khat$ is its threefold convolution, which we evaluate on $1.2\times10^5$ bins
+with exact bin probabilities.  For finite $L$ we sum over the $L^3$ allowed
+momenta.  For $Z<0$ the gap equation~\eqref{eq:gap} is solved by bracketing
+above $r_{\min}=-\min_k\varepsilon_k$, where $G_0$ diverges in infinite volume.
+Condensate amplitudes are found by bounded minimization of Eq.~\eqref{eq:FH};
+phase boundaries by bisection on equal free energies.
+
+\bibliography{refs}
 
 \end{document}
