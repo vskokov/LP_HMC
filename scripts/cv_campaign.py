@@ -9,6 +9,8 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
                (add masses with --m2 once the pilot coexistence point is known).
   lro          unbiased lamellar-phase runs for S(q*) vs L (kappa=0, independent
                replicas, lamellar start, no transport gate): Z=-2 (p=6) and Z=-4 (p=4).
+  uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
+               L=24/32, 3 masses x ordered/disordered starts (gate G1).
   validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
                m2=-1.73) with a new seed; compare with reports/cv_umbrella/s2/Zm2/L12.
 
@@ -54,12 +56,14 @@ def ladder(L: int) -> dict:
             "CVU_KAPPA": f"{2e4 * (L / 12) ** 3:.0f}"}
 
 
-def umbrella_row(stage, Z, q, L, m2, seed, smax=0.5, min_rt=0.3, max_therm=None, samples=4000):
-    out = BASE / stage / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}"
+def umbrella_row(stage, Z, q, L, m2, seed, smax=0.5, min_rt=0.3, max_therm=None, samples=4000,
+                 kind="shell", init="umbrella", therm=16000):
+    suffix = "" if init == "umbrella" else f"_{init}"
+    out = BASE / stage / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}{suffix}"
     row = {"stage": stage, "L": L, "Z": f"{Z:.6f}", "m2": m2, "seed": seed, "out": str(out),
-           "CVU_L": L, "CVU_Z": f"{Z:.6f}", "CVU_M2": m2, "CVU_KIND": "shell",
+           "CVU_L": L, "CVU_Z": f"{Z:.6f}", "CVU_M2": m2, "CVU_KIND": kind, "CVU_INIT": init,
            "CVU_SHELL_Q": f"{q:.6f}", "CVU_SMIN": 0.0, "CVU_SMAX": smax, "CVU_POWER": 1.3,
-           "CVU_THERM": 16000, "CVU_MAX_THERM": max_therm or int(4000 * L ** 1.5 / 3),
+           "CVU_THERM": therm, "CVU_MAX_THERM": max_therm or int(4000 * L ** 1.5 / 3),
            "CVU_MIN_RT": min_rt, "CVU_MIN_SWAP": 0.2, "CVU_SAMPLES": samples, "CVU_SKIP": 2,
            "CVU_CHECK_EVERY": 1000, "CVU_SEED": seed, "CVU_OUT": str(out)}
     row.update(hmc(L))
@@ -99,14 +103,36 @@ def stage_rows(stage: str) -> list[dict]:
         for L in (12, 16, 20, 24, 32, 40):
             rows.append(lro_row(-4.0, 2.0, L, 0.0, 0.6, 60 + L))
         return rows
+    if stage == "uline":
+        # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
+        # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
+        # the termination campaign (smax 0.55, kappa ~ V, windows ~ L^1.5), more samples.
+        # Convert for analyze_transition_order.py with scripts/cv_to_schema3.py.
+        rows = []
+        for Z, mc in ULINE_CENTERS.items():
+            for L in (24, 32):
+                for k, dm in enumerate((-0.02, 0.0, 0.02)):
+                    m2 = round(mc[L] + dm, 4)
+                    for init in ("disordered", "ordered"):
+                        r = umbrella_row(stage, Z, 0.0, L, m2, 700 + 10 * k + (init == "ordered"),
+                                         smax=0.55, min_rt=0.3, max_therm=600000,
+                                         samples=8000, kind="M2", init=init, therm=20000)
+                        r.pop("CVU_SHELL_Q")
+                        r["CVU_WINDOWS"] = str(int(round(int(r["CVU_WINDOWS"]) * 1.1 / 4) * 4))
+                        rows.append(r)
+        return rows
     if stage == "validate":
         # Same parameters as the local reference run s2/Zm2/L12/m2m1p73_s21, new seed.
         return [umbrella_row(stage, -2.0, 1.0, 12, -1.73, 121)]
     raise SystemExit(f"unknown stage {stage}")
 
 
+# m2 at chi_max, extrapolated from L=12-24 (reports/transition_order/summary.csv).
+ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297},
+                 -0.90: {24: -2.384, 32: -2.388}, -0.95: {24: -2.487, 32: -2.490}}
+
 STAGES = ("s2_zm2", "s2_zm1172", "lro")
-ALL_STAGES = STAGES + ("validate",)
+ALL_STAGES = STAGES + ("validate", "uline")
 
 
 def manifest(stage: str) -> Path:
