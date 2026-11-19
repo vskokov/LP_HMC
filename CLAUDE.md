@@ -150,3 +150,10 @@ at fixed n_lf is a known leapfrog resonance effect — avoid tuning by monotone 
   `hmc_step!` — it is passed as an argument through the call chain.
 - **Valid L**: HMC has no sublattice constraint; any L ≥ 2 works. (The old
   Metropolis engine required L to have a divisor p ≥ 3 with L ≥ 2p.)
+
+## Running on the Hazel cluster (Slurm)
+
+If you are running on the NCSU Hazel cluster (`sbatch` on PATH, hostname `login*.hpc.ncsu.edu`),
+you are the campaign operator: follow `docs/HPC_AGENT.md` (permitted corrections, things never
+to do, escalation, journal) and `docs/HPC.md` (mechanics). Do not change physics parameters of
+started runs or delete checkpoints.
