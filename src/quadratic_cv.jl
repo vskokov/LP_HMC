@@ -111,6 +111,7 @@ mutable struct BiasBuffers
     kappas::Any        # (1,1,1,n)
     host_centers::Vector{Float64}
     host_kappas::Vector{Float64}
+    label::String      # CV the buffers were built for (M² needs no FFT buffers)
 end
 
 """Work buffers for CV-biased batched HMC (CPU or GPU)."""
@@ -138,12 +139,12 @@ _is_m2(cv::QuadraticCV) = cv.label == "M2"
 function _bias_buffers!(ws::CVWorkspace, cv, batch, centers, kappas)
     n = size(batch, 4)
     b = ws.bias
-    if b === nothing || size(b.s, 4) != n
+    if b === nothing || size(b.s, 4) != n || b.label != cv.label
         φk = _is_m2(cv) ? nothing : similar(batch, Complex{FloatType})
         fwd = φk === nothing ? nothing : plan_fft!(φk, (1, 2, 3))
         inv = φk === nothing ? nothing : plan_ifft!(φk, (1, 2, 3))
         z() = similar(batch, FloatType, 1, 1, 1, n)
-        b = BiasBuffers(φk, fwd, inv, z(), z(), z(), z(), Float64[], Float64[])
+        b = BiasBuffers(φk, fwd, inv, z(), z(), z(), z(), Float64[], Float64[], cv.label)
         ws.bias = b
     end
     if b.host_centers != centers || b.host_kappas != kappas

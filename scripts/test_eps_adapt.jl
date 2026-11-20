@@ -15,8 +15,8 @@ report(name, ok, detail="") = (@printf("%s  %-46s %s\n", ok ? "PASS" : "FAIL", n
                                ok ? (passed[] += 1) : (failed[] += 1))
 
 base = Dict("CVU_L" => "6", "CVU_Z" => "-1.0", "CVU_M2" => "-2.0", "CVU_KIND" => "shell",
-            "CVU_SHELL_Q" => "1.0", "CVU_WINDOWS" => "8", "CVU_SMIN" => "0.0",
-            "CVU_SMAX" => "0.4", "CVU_KAPPA" => "2000", "CVU_POWER" => "1.0",
+            "CVU_SHELL_Q" => "1.0", "CVU_WINDOWS" => "12", "CVU_SMIN" => "0.0",
+            "CVU_SMAX" => "0.3", "CVU_KAPPA" => "500", "CVU_POWER" => "1.0",
             "CVU_THERM" => "600", "CVU_MAX_THERM" => "20000", "CVU_MIN_RT" => "0.25",
             "CVU_MIN_SWAP" => "0.05", "CVU_SAMPLES" => "150", "CVU_SKIP" => "2",
             "CVU_CHECK_EVERY" => "200", "CVU_INIT" => "umbrella", "CVU_SEED" => "7",
@@ -48,7 +48,7 @@ if done1
            @sprintf("ε=[%.4f, %.4f]", extrema(d["eps"])...))
     report("collect ε frozen (header == checkpoint)", header_eps(out1) == d["eps"])
     lines = count(l -> !startswith(l, "#"), eachline(joinpath(out1, "statistics.csv"))) - 1
-    report("statistics rows = samples × windows", lines == 150 * 8, "rows=$lines")
+    report("statistics rows = samples × windows", lines == 150 * 12, "rows=$lines")
 end
 
 # 2. resume from a pre-adaptation checkpoint
