@@ -19,7 +19,7 @@ class SlurmBackendTest(unittest.TestCase):
             bindir = tmp / "bin"; bindir.mkdir()
             log = tmp / "sbatch.log"
             fake = bindir / "sbatch"   # runs the script synchronously, like an instant scheduler
-            fake.write_text(f'#!/bin/bash\necho "$1" >> {log}\nbash "$1"\n')
+            fake.write_text(f'#!/bin/bash\necho "${{@: -1}}" >> {log}\nbash "${{@: -1}}"\n')
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
             wd = tmp / "run"; done = wd / "complete.json"
             counter = tmp / "calls"
@@ -53,7 +53,7 @@ class SlurmBackendTest(unittest.TestCase):
     def test_continuation_cap(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp); bindir = tmp / "bin"; bindir.mkdir()
-            fake = bindir / "sbatch"; fake.write_text('#!/bin/bash\nbash "$1"\n')
+            fake = bindir / "sbatch"; fake.write_text('#!/bin/bash\nbash "${@: -1}"\n')
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
             wd = tmp / "run"
             cfg = sb.load_config(Path("/nonexistent"), {"modules": [], "max_continuations": 4})

@@ -77,9 +77,9 @@ def umbrella_row(stage, Z, q, L, m2, seed, smax=0.5, min_rt=0.3, max_therm=None,
     return row
 
 
-def lro_row(Z, q, L, m2, s0, seed, replicas=4, samples=3000, skip=5):
-    out = BASE / "lro" / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}"
-    row = {"stage": "lro", "L": L, "Z": f"{Z:.6f}", "m2": m2, "seed": seed, "out": str(out),
+def lro_row(Z, q, L, m2, s0, seed, replicas=4, samples=3000, skip=5, stage="lro"):
+    out = BASE / stage / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}"
+    row = {"stage": stage, "L": L, "Z": f"{Z:.6f}", "m2": m2, "seed": seed, "out": str(out),
            "CVU_L": L, "CVU_Z": f"{Z:.6f}", "CVU_M2": m2, "CVU_KIND": "shell",
            "CVU_SHELL_Q": f"{q:.6f}", "CVU_WINDOWS": replicas, "CVU_SMIN": s0, "CVU_SMAX": s0,
            "CVU_KAPPA": 0, "CVU_POWER": 1.0, "CVU_INIT": "umbrella",
@@ -94,8 +94,10 @@ def stage_rows(stage: str) -> list[dict]:
     if stage == "s2_zm2":
         # m_eq(L): -1.730 (L12), -1.835 (L18); reweighting covers +-0.3 around m2.
         return [umbrella_row(stage, -2.0, 1.0, 18, -1.83, 31, max_therm=250000),
-                umbrella_row(stage, -2.0, 1.0, 24, -1.88, 32, max_therm=400000),
-                umbrella_row(stage, -2.0, 1.0, 30, -1.90, 33, max_therm=600000)]
+                umbrella_row(stage, -2.0, 1.0, 24, -1.88, 32, max_therm=700000),
+                umbrella_row(stage, -2.0, 1.0, 30, -1.90, 33, max_therm=900000)]
+        # max_therm raised 400k/600k -> 700k/900k (2026-11-20): with the fixed step the
+        # L24/L30 chains were frozen; they resume with eps adaptation and reset transport.
     if stage == "s2_zm1172":
         # Pilot masses bracket the expected line (Hartree -1.62 shifted by the
         # Z=-2 lattice offset ~ -0.4); uniform order competes here, M is recorded.
@@ -109,6 +111,13 @@ def stage_rows(stage: str) -> list[dict]:
         for L in (12, 16, 20, 24, 32, 40):
             rows.append(lro_row(-4.0, 2.0, L, 0.0, 0.6, 60 + L))
         return rows
+    if stage == "lro2":
+        # Reruns of the lro points with L >= 24: with the fixed CVU_EPS their HMC
+        # acceptance was 0 (L >= 30) or 0.2 (L = 24), i.e. the fields never left the
+        # initial lamellae.  New seeds; eps adapts during thermalisation.  L <= 20 lro
+        # runs (acceptance 0.80-0.85) remain valid.
+        return ([lro_row(-2.0, 1.0, L, -3.0, 0.6, 150 + L, stage=stage) for L in (24, 30, 36)] +
+                [lro_row(-4.0, 2.0, L, 0.0, 0.6, 160 + L, stage=stage) for L in (24, 32, 40)])
     if stage == "s2_zm1172_prod":
         # From the L=16 pilots: chi_s peaks at m2 ~ -2.46..-2.52 (twopeak there, ordered
         # peak d_eff ~ 1.6, no uniform order).  The line moves down with L (Z=-2: -1.73 ->
@@ -161,7 +170,7 @@ def stage_rows(stage: str) -> list[dict]:
 ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297},
                  -0.90: {24: -2.384, 32: -2.388}, -0.95: {24: -2.487, 32: -2.490}}
 
-STAGES = ("s2_zm2", "s2_zm1172", "lro")
+STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot")
 
 
