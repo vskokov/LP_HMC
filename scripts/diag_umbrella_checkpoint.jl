@@ -16,7 +16,8 @@ include("../src/simulation.jl")
 include("structure_factor_observables.jl")
 include("../src/quadratic_cv.jl")
 
-const CV = make_cv(L, "shell"; shell_target=parse(Float64, get(ENV, "DIAG_SHELL_Q", "1.0")))
+const CV = make_cv(L, get(ENV, "DIAG_KIND", "shell"); shell_target=parse(Float64, get(ENV, "DIAG_SHELL_Q", "1.0")),
+                   mix=parse(Float64, get(ENV, "DIAG_MIX", "1.0")))
 
 for path in PATHS
     d = load(path)
@@ -28,10 +29,19 @@ for path in PATHS
     c = d["centers"]
     println("\n=== ", path)
     @printf("L=%d m2=%.4g phase=%s sweeps=%d windows=%d cv=%s\n", L, d["m2"], d["phase"], d["sweeps"], n, d["cv_label"])
-    println(" slot walker   center      s(P*)       M        Q/V    d_eff   trips")
+    println(" slot walker   center      s(CV)      M        Q/V    d_eff   trips   P_shell")
     for r in 1:n
-        @printf("%5d %6d %9.4f %10.5f %8.4f %8.4f %6.2f %6d\n", r, d["walker"][r], c[r], s[r], M[r], Q[r],
-                obs[r].d_eff, d["trips"][d["walker"][r]])
+        @printf("%5d %6d %9.4f %10.5f %8.4f %8.4f %6.2f %6d %9.5f\n", r, d["walker"][r], c[r], s[r], M[r], Q[r],
+                obs[r].d_eff, d["trips"][d["walker"][r]], obs[r].P_shell)
+    end
+    if haskey(d, "swap_att") && sum(d["swap_att"]) > 0
+        rate = d["swap_acc"] ./ max.(d["swap_att"], 1)
+        println("swap acceptance per pair (slot r <-> r+1), 10-slot blocks:")
+        for b in 1:10:length(rate)
+            e = min(b + 9, length(rate))
+            @printf("  %3d-%3d  s=%8.4f..%8.4f  min=%.2f mean=%.2f\n", b, e, s[b], s[e + 1],
+                    minimum(rate[b:e]), mean(rate[b:e]))
+        end
     end
     # summary: groups by sign/size of M
     groups = Dict("M>+0.2" => count(>(0.2), M), "M<-0.2" => count(<(-0.2), M),
