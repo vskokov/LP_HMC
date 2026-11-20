@@ -13,6 +13,9 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
                transition m2 ~ -2.5 (L=16).
   s2_zm2_ext   Z=-2: L=36 (two masses) + second seeds at L=24/30.
   p9_pilot     p=9 (Z=-0.9358) shell-CV pilots at L=18, four masses (meeting region).
+  p9_mixed     p=9 pilots on the mixed coordinate s = M^2 - 2 P_shell (L=18, four
+               masses): the shell ladder could not cross the uniform(P~0)/modulated gap
+               at m2 <= -2.5 (checkpoint diagnostic 2026-11-20).
   uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
                L=24/32, 3 masses x ordered/disordered starts (gate G1).
   validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
@@ -133,6 +136,18 @@ def stage_rows(stage: str) -> list[dict]:
         # lamellar line meet; the M^2 coordinate (uniform order) is recorded as well.
         return [umbrella_row(stage, Z_P9, Q_P9, 18, m2, 900 + i, smax=0.45, max_therm=300000)
                 for i, m2 in enumerate((-2.2, -2.35, -2.5, -2.65))]
+    if stage == "p9_mixed":
+        # Mixed CV s = M^2 - c P_shell, c = 2: monotone along the measured uniform ->
+        # modulated(+offset) -> lamellar path at m2 = -2.65 (M^2 0.53 -> 0, P 0 -> 0.44),
+        # so the ladder interpolates the gap the shell ladder skipped.  Uniform spacing,
+        # kappa as p9_pilot (window width ~0.004), ~2 widths per window -> 240 windows.
+        rows = []
+        for i, m2 in enumerate((-2.2, -2.35, -2.5, -2.65)):
+            r = umbrella_row(stage, Z_P9, Q_P9, 18, m2, 950 + i, smax=0.60, max_therm=600000,
+                             kind="mixed", therm=50000)
+            r.update({"CVU_MIX": 2.0, "CVU_SMIN": -0.95, "CVU_POWER": 1.0, "CVU_WINDOWS": 240})
+            rows.append(r)
+        return rows
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -162,7 +177,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
                  -0.90: {24: -2.384, 32: -2.388}, -0.95: {24: -2.487, 32: -2.490}}
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro")
-ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot")
+ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed")
 
 
 def manifest(stage: str) -> Path:
@@ -192,6 +207,7 @@ def main() -> int:
     ap.add_argument("--runtime-minutes", type=int, help="simulation budget per Slurm job")
     ap.add_argument("--lmin", type=int, default=0, help="only rows with L >= LMIN")
     ap.add_argument("--lmax", type=int, default=10**6, help="only rows with L <= LMAX")
+    ap.add_argument("--match", default="", help="only rows whose run directory contains this text")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare"); p.add_argument("--stage", nargs="+", default=list(STAGES))
     s = sub.add_parser("submit"); s.add_argument("--stage", nargs="+", default=list(STAGES))
@@ -211,7 +227,7 @@ def main() -> int:
             print(f"{stage}: wrote {manifest(stage)}")
             continue
         rows = [r for r in read_manifest(manifest(stage))
-                if args.lmin <= int(r["L"]) <= args.lmax]
+                if args.lmin <= int(r["L"]) <= args.lmax and args.match in r["out"]]
         print(stage, end=": ")
         if args.backend == "slurm":
             if args.cmd == "submit":
