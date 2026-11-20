@@ -287,8 +287,8 @@ function main()
                 save_state(st); write_json(DIAG, diagnostics(st, t0))
                 println("transport gate not met by max sweeps; checkpoint kept"); return 3
             end
-            st.chk_acc .= 0; st.chk_att = 0
             save_state(st); write_json(DIAG, diagnostics(st, t0))
+            st.chk_acc .= 0; st.chk_att = 0          # after the diagnostics are written
             out_of_time() && return 75
         end
     end
