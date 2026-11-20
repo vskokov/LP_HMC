@@ -195,6 +195,8 @@ def main() -> int:
     s = sub.add_parser("submit"); s.add_argument("--stage", nargs="+", default=list(STAGES))
     s.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("status"); t.add_argument("--stage", nargs="+", default=list(STAGES))
+    f = sub.add_parser("refresh", help="slurm: rewrite job.sh of incomplete rows from the manifest (no submit)")
+    f.add_argument("--stage", nargs="+", default=list(STAGES))
     args = ap.parse_args()
     cfg = slurm_backend.load_config(args.config, {"gpu_type": args.gpu,
                                                   "runtime_minutes": args.runtime_minutes})
@@ -215,6 +217,12 @@ def main() -> int:
                     command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT)],
                     label=label, cfg=cfg, dry_run=args.dry_run)
                 print(f"{n} job chains started")
+            elif args.cmd == "refresh":
+                n = slurm_backend.refresh_rows_slurm(
+                    rows, env_of=env_of, workdir_of=lambda r: Path(r["out"]), done_of=done_of,
+                    command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT)],
+                    label=label, cfg=cfg)
+                print(f"{n} job scripts refreshed")
             else:
                 slurm_backend.status_rows_slurm(rows, done_of=done_of, label=label)
         elif args.cmd == "submit":

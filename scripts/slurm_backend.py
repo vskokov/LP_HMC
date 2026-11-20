@@ -205,6 +205,38 @@ def resubmit_lines(cfg: dict) -> list[str]:
     return [f'  if (( n < MAXC )); then {sub}; else echo "continuation cap $MAXC reached"; fi']
 
 
+def write_job_script(row: dict, *, env_of, command, workdir_of, done_of, label, cfg) -> Path:
+    """(Re)write <out>/slurm/job.sh for one row from its manifest values."""
+    wd = workdir_of(row)
+    (wd / "slurm").mkdir(parents=True, exist_ok=True)
+    script = wd / "slurm" / "job.sh"
+    env = dict(env_of(row))
+    env["CVU_RUNTIME"] = str(int(cfg["runtime_minutes"]) * 60)
+    script.write_text(job_script(label=label(row), env=env, command=command, workdir=wd,
+                                 done_marker=done_of(row), cfg=cfg))
+    script.chmod(0o755)
+    return script
+
+
+def refresh_rows_slurm(rows: list[dict], *, env_of, command, workdir_of, done_of, label,
+                       cfg) -> int:
+    """Rewrite job.sh of every incomplete row without submitting.
+
+    A chain resubmits its own job.sh, so manifest edits reach a running chain only
+    through this: the running job keeps its environment, the next continuation
+    starts from the refreshed script.
+    """
+    n = 0
+    for row in rows:
+        if done_of(row).is_file():
+            continue
+        script = write_job_script(row, env_of=env_of, command=command, workdir_of=workdir_of,
+                                  done_of=done_of, label=label, cfg=cfg)
+        print(f"refresh  {label(row)}  -> {script}")
+        n += 1
+    return n
+
+
 def submit_rows_slurm(rows: list[dict], *, env_of: Callable[[dict], dict],
                       command: list[str], workdir_of: Callable[[dict], Path],
                       done_of: Callable[[dict], Path], label: Callable[[dict], str],
@@ -218,14 +250,8 @@ def submit_rows_slurm(rows: list[dict], *, env_of: Callable[[dict], dict],
         if lab in active:
             print(f"active   {lab}")
             continue
-        wd = workdir_of(row)
-        (wd / "slurm").mkdir(parents=True, exist_ok=True)
-        script = wd / "slurm" / "job.sh"
-        env = dict(env_of(row))
-        env["CVU_RUNTIME"] = str(int(cfg["runtime_minutes"]) * 60)
-        script.write_text(job_script(label=lab, env=env, command=command, workdir=wd,
-                                     done_marker=done_of(row), cfg=cfg))
-        script.chmod(0o755)
+        script = write_job_script(row, env_of=env_of, command=command, workdir_of=workdir_of,
+                                  done_of=done_of, label=label, cfg=cfg)
         if dry_run:
             print(f"dry-run  {lab}  -> {script}")
         else:
