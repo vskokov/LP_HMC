@@ -48,6 +48,8 @@ DEFAULTS = {
     "account": "",
     "exclude": "",
     "extra_sbatch": [],
+    "device": "gpu",                 # "cpu": no GPU request, threads = cpus_per_task
+    "cvu_env": {},                   # extra CVU_* overrides for every row (e.g. CVU_FP64)
 }
 
 
@@ -130,9 +132,10 @@ def pick_main(argv: list[str]) -> int:
 
 
 def gpu_sbatch_lines(cfg: dict, gpu: str | None = None) -> list[str]:
-    """--gres (and --exclude) lines for one concrete GPU type."""
-    gpu = gpu or gpu_types(cfg)[0]
-    lines = [f"#SBATCH --gres=gpu:{gpu}:1"]
+    """--gres (and --exclude) lines for one concrete GPU type; only --exclude on CPU."""
+    lines = []
+    if cfg.get("device", "gpu") != "cpu":
+        lines.append(f"#SBATCH --gres=gpu:{gpu or gpu_types(cfg)[0]}:1")
     if cfg.get("exclude"):
         lines.append(f"#SBATCH --exclude={cfg['exclude']}")
     return lines
@@ -169,10 +172,15 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
     if cfg.get("module_init"):
         lines.append(f"source {shlex.quote(cfg['module_init'])}")
     lines += [f"module load {shlex.quote(m)}" for m in cfg.get("modules", [])]
+    nthreads = int(cfg["cpus_per_task"]) if cfg.get("device") == "cpu" else 1
     lines += [f'export JULIA_DEPOT_PATH="{cfg["julia_depot_path"]}"',
-              "export JULIA_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 FFTW_NUM_THREADS=1"]
+              f"export JULIA_NUM_THREADS={nthreads} OPENBLAS_NUM_THREADS=1 FFTW_NUM_THREADS=1"]
     if cfg.get("julia_cpu_target"):
         lines.append(f"export JULIA_CPU_TARGET={shlex.quote(cfg['julia_cpu_target'])}")
+    env = dict(env)
+    if cfg.get("device") == "cpu":
+        env["CVU_GPU"] = "false"
+    env.update({k: str(v) for k, v in cfg.get("cvu_env", {}).items()})
     for k, v in env.items():
         lines.append(f"export {k}={shlex.quote(str(v))}")
     lines += [
@@ -182,7 +190,8 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
         f"MAXC={int(cfg['max_continuations'])}",
         '[[ -f "$DONE" ]] && { echo "already complete"; exit 0; }',
         'echo "host=$(hostname) job=${SLURM_JOB_ID:-} start=$(date -Is)"',
-        "nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader || true",
+        ("nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader || true"
+         if cfg.get("device") != "cpu" else 'echo "cpu threads=$JULIA_NUM_THREADS $(lscpu | grep \'Model name\')"'),
         f"cd {shlex.quote(str(ROOT))}",
         shlex.join(command),
         "rc=$?",
@@ -200,7 +209,7 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
 def resubmit_lines(cfg: dict) -> list[str]:
     """Bash lines that resubmit the chain; re-pick the GPU type if several are allowed."""
     types = gpu_types(cfg)
-    if len(types) == 1:
+    if cfg.get("device") == "cpu" or len(types) == 1:
         sub = 'sbatch "$SELF"'
     else:
         pick = (f"python3 {shlex.quote(str(Path(__file__).resolve()))} pick-gpu "
@@ -260,9 +269,13 @@ def submit_rows_slurm(rows: list[dict], *, env_of: Callable[[dict], dict],
         if dry_run:
             print(f"dry-run  {lab}  -> {script}")
         else:
-            gpu = pick_gpu_type(gpu_types(cfg), cfg["partition"], cfg.get("qos") or "")
-            subprocess.run(["sbatch", f"--gres=gpu:{gpu}:1", str(script)], check=True)
-            print(f"submit   {lab}  gpu={gpu}")
+            if cfg.get("device") == "cpu":
+                subprocess.run(["sbatch", str(script)], check=True)
+                print(f"submit   {lab}  cpu x{cfg['cpus_per_task']}")
+            else:
+                gpu = pick_gpu_type(gpu_types(cfg), cfg["partition"], cfg.get("qos") or "")
+                subprocess.run(["sbatch", f"--gres=gpu:{gpu}:1", str(script)], check=True)
+                print(f"submit   {lab}  gpu={gpu}")
         n += 1
     return n
 

@@ -190,6 +190,8 @@ def main() -> int:
     ap.add_argument("--config", type=Path, help="Slurm JSON config (default configs/hpc/hazel.json)")
     ap.add_argument("--gpu", help="Slurm GPU type or comma list, e.g. l40s or l40s,h100,h200")
     ap.add_argument("--runtime-minutes", type=int, help="simulation budget per Slurm job")
+    ap.add_argument("--lmin", type=int, default=0, help="only rows with L >= LMIN")
+    ap.add_argument("--lmax", type=int, default=10**6, help="only rows with L <= LMAX")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare"); p.add_argument("--stage", nargs="+", default=list(STAGES))
     s = sub.add_parser("submit"); s.add_argument("--stage", nargs="+", default=list(STAGES))
@@ -208,7 +210,8 @@ def main() -> int:
             write_manifest(manifest(stage), stage_rows(stage))
             print(f"{stage}: wrote {manifest(stage)}")
             continue
-        rows = read_manifest(manifest(stage))
+        rows = [r for r in read_manifest(manifest(stage))
+                if args.lmin <= int(r["L"]) <= args.lmax]
         print(stage, end=": ")
         if args.backend == "slurm":
             if args.cmd == "submit":

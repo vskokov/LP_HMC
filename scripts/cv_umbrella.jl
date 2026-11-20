@@ -9,7 +9,9 @@
 #   CVU_MIX                              c in M^2 - c P_* (mixed only)
 #   CVU_WINDOWS, CVU_SMIN, CVU_SMAX      umbrella ladder (centers smin + (smax-smin) u^power)
 #   CVU_KAPPA, CVU_POWER
-#   CVU_EPS, CVU_NLF                     HMC integrator
+#   CVU_EPS, CVU_NLF                     HMC integrator (CVU_EPS = initial step size)
+#   CVU_EPS_ADAPT=true|false             per-window ε adaptation during thermalisation
+#   CVU_ACC_TARGET, CVU_ADAPT_EVERY      target HMC acceptance (0.8), sweeps per update (50)
 #   CVU_THERM, CVU_MAX_THERM             minimum / maximum thermalisation sweeps
 #   CVU_MIN_RT, CVU_MIN_SWAP             transport gate: walker round-trip fraction, edge acceptance
 #   CVU_SAMPLES, CVU_SKIP                production samples per window, sweeps between samples
@@ -61,6 +63,15 @@ const SEED = parse(Int, env("CVU_SEED", "1"))
 const OUT = abspath(env("CVU_OUT"))
 const RUNTIME = parse(Float64, env("CVU_RUNTIME", "1e12"))
 const CHECK_EVERY = parse(Int, env("CVU_CHECK_EVERY", "200"))
+# Per-window step-size adaptation.  Only during thermalisation: ε is frozen when the
+# run enters the collect phase, so every window samples with a fixed, exact HMC kernel.
+const EPS_ADAPT = truthy(env("CVU_EPS_ADAPT", "true"))
+const ACC_TARGET = parse(Float64, env("CVU_ACC_TARGET", "0.8"))
+const ADAPT_EVERY = parse(Int, env("CVU_ADAPT_EVERY", "50"))
+const ADAPT_GAIN = 1.0                       # ε ← ε·exp(gain·(acc − target)) per block
+const EPS_MIN, EPS_MAX = Float64(ε) / 50, 1.5 * Float64(ε)
+const TAU = Float64(ε) * n_lf                # trajectory length kept for the median window
+const NLF_MAX = 8 * n_lf
 
 mkpath(OUT)
 const CKPT = joinpath(OUT, "checkpoint.jld2")
@@ -93,6 +104,7 @@ function initial_field(center, rng)
     return f
 end
 
+cpu && FFTW.set_num_threads(Threads.nthreads())   # before any plan is made
 const CV = make_cv(L, KIND; shell_target=SHELL_Q, mix=MIX)
 to_backend(x) = cpu ? x : CuArray(x)
 
@@ -110,6 +122,12 @@ mutable struct RunState
     phase::String              # "therm" or "collect"
     collected::Int
     phase_flip::Int
+    eps::Vector{Float64}       # per-window HMC step size
+    nlf::Int                   # leapfrog steps (common to all windows)
+    blk_acc::Vector{Int}       # acceptances in the current adaptation block
+    blk_att::Int
+    chk_acc::Vector{Int}       # acceptances since the last gate check
+    chk_att::Int
 end
 
 function save_state(st::RunState)
@@ -117,7 +135,7 @@ function save_state(st::RunState)
     jldsave(tmp, true; fields=Array(st.batch), walker=st.walker, stage=st.stage,
             trips=st.trips, swap_att=st.swap_att, swap_acc=st.swap_acc, hmc_att=st.hmc_att,
             hmc_acc=st.hmc_acc, sweeps=st.sweeps, phase=st.phase, collected=st.collected,
-            phase_flip=st.phase_flip, centers=centers, kappas=kappas, L=L, Z=Float64(Z),
+            phase_flip=st.phase_flip, eps=st.eps, nlf=st.nlf, centers=centers, kappas=kappas, L=L, Z=Float64(Z),
             m2=M2_VALUE, kind=KIND, cv_label=CV.label, seed=SEED)
     mv(tmp, CKPT; force=true)
 end
@@ -126,15 +144,41 @@ function load_state()
     d = load(CKPT)
     d["centers"] == centers && d["kappas"] == kappas || error("checkpoint ladder mismatch")
     d["m2"] == M2_VALUE && d["cv_label"] == CV.label || error("checkpoint parameter mismatch")
-    return RunState(to_backend(FloatType.(d["fields"])), d["walker"], d["stage"], d["trips"],
-                    d["swap_att"], d["swap_acc"], d["hmc_att"], d["hmc_acc"], d["sweeps"],
-                    d["phase"], d["collected"], d["phase_flip"])
+    # Checkpoints written before ε adaptation existed carry no "eps": start from CVU_EPS.
+    # A collect-phase run keeps the ε it was sampling with (scalar CVU_EPS in that case).
+    eps = haskey(d, "eps") ? Float64.(d["eps"]) : fill(Float64(ε), NW)
+    st = RunState(to_backend(FloatType.(d["fields"])), d["walker"], d["stage"], d["trips"],
+                  d["swap_att"], d["swap_acc"], d["hmc_att"], d["hmc_acc"], d["sweeps"],
+                  d["phase"], d["collected"], d["phase_flip"], eps,
+                  haskey(d, "nlf") ? Int(d["nlf"]) : n_lf, zeros(Int, NW), 0,
+                  zeros(Int, NW), 0)
+    if !haskey(d, "eps") && EPS_ADAPT && st.phase == "therm"
+        # First resume with adaptation: transport statistics gathered with the old ε are
+        # meaningless if HMC was frozen (swaps between unmoving, near-identical fields are
+        # accepted trivially and count as round trips).  Restart them; keep the fields.
+        st.trips .= 0; st.stage .= 0; st.swap_att .= 0; st.swap_acc .= 0
+        st.hmc_att = 0; st.hmc_acc .= 0
+        println("resume: ε adaptation enabled on a pre-adaptation checkpoint; transport statistics reset")
+    end
+    return st
 end
 
 function sweep!(st::RunState, ws, buffer, rng)
-    acc, _ = hmc_step_cv!(st.batch, Z, ε, n_lf, ws, CV, centers, kappas; rng=rng)
+    acc, _ = hmc_step_cv!(st.batch, Z, st.eps, st.nlf, ws, CV, centers, kappas; rng=rng)
     st.hmc_att += 1
     st.hmc_acc .+= acc
+    st.chk_att += 1
+    st.chk_acc .+= acc
+    if EPS_ADAPT && st.phase == "therm"
+        st.blk_att += 1
+        st.blk_acc .+= acc
+        if st.blk_att >= ADAPT_EVERY
+            rate = st.blk_acc ./ st.blk_att
+            st.eps .= clamp.(st.eps .* exp.(ADAPT_GAIN .* (rate .- ACC_TARGET)), EPS_MIN, EPS_MAX)
+            st.nlf = clamp(round(Int, TAU / median(st.eps)), 1, NLF_MAX)
+            st.blk_acc .= 0; st.blk_att = 0
+        end
+    end
     s = cv_values(CV, st.batch)
     for left in st.phase_flip:2:(NW - 1)
         r = left + 1
@@ -156,8 +200,13 @@ function sweep!(st::RunState, ws, buffer, rng)
     return s
 end
 
+# Transport gate.  With ε adaptation it also requires every window to have a working HMC
+# kernel over the last check interval (frozen windows make swaps and round trips
+# meaningless).
 gate(st) = (count(>(0), st.trips) / NW >= MIN_RT) &&
-           minimum(st.swap_acc ./ max.(st.swap_att, 1)) >= MIN_SWAP
+           minimum(st.swap_acc ./ max.(st.swap_att, 1)) >= MIN_SWAP &&
+           (!EPS_ADAPT || (st.chk_att >= 100 &&
+                           minimum(st.chk_acc) / st.chk_att >= 0.5 * ACC_TARGET))
 
 function diagnostics(st, t0)
     rate = st.swap_acc ./ max.(st.swap_att, 1)
@@ -167,7 +216,11 @@ function diagnostics(st, t0)
                 "hmc_acceptance_mean" => mean(st.hmc_acc) / max(st.hmc_att, 1),
                 "round_trip_walkers" => count(>(0), st.trips), "total_round_trips" => sum(st.trips),
                 "elapsed_s" => time() - t0, "cv" => CV.label, "L" => L, "Z" => Float64(Z),
-                "m2" => M2_VALUE, "windows" => NW)
+                "m2" => M2_VALUE, "windows" => NW, "eps_min" => minimum(st.eps),
+                "eps_median" => median(st.eps), "eps_max" => maximum(st.eps), "n_lf" => st.nlf,
+                "eps_adapt" => EPS_ADAPT && st.phase == "therm",
+                "hmc_recent_min" => minimum(st.chk_acc) / max(st.chk_att, 1),
+                "hmc_recent_mean" => mean(st.chk_acc) / max(st.chk_att, 1))
 end
 
 function write_json(path, d)
@@ -177,11 +230,12 @@ function write_json(path, d)
     mv(path * ".tmp", path; force=true)
 end
 
-function header(io)
+function header(io, st)
     for (k, v) in (("schema", "cv_umbrella_1"), ("L", L), ("Z", Float64(Z)), ("m2", M2_VALUE),
                    ("lambda", Float64(λ)), ("temperature", Float64(T)), ("cv", CV.label),
                    ("cv_kind", KIND), ("shell_q", CV.shell_q), ("mix", MIX),
-                   ("epsilon", Float64(ε)), ("n_lf", n_lf), ("windows", NW),
+                   ("epsilon", median(st.eps)), ("epsilons", join(st.eps, ";")),
+                   ("eps_adapted", EPS_ADAPT), ("n_lf", st.nlf), ("windows", NW),
                    ("samples_per_window", SAMPLES), ("skip", SKIP), ("seed", SEED),
                    ("float_type", string(FloatType)), ("device", cpu ? "cpu" : "cuda"),
                    ("centers", join(centers, ";")), ("kappas", join(kappas, ";")))
@@ -200,7 +254,8 @@ function main()
     else
         host = cat((initial_field(c, rng) for c in centers)...; dims=4)
         RunState(to_backend(FloatType.(host)), collect(1:NW), zeros(Int, NW), zeros(Int, NW),
-                 zeros(Int, NW - 1), zeros(Int, NW - 1), 0, zeros(Int, NW), 0, "therm", 0, 1)
+                 zeros(Int, NW - 1), zeros(Int, NW - 1), 0, zeros(Int, NW), 0, "therm", 0, 1,
+                 fill(Float64(ε), NW), n_lf, zeros(Int, NW), 0, zeros(Int, NW), 0)
     end
     # Re-seed after resume so continued chains do not replay random numbers.
     rng = MersenneTwister(hash((SEED, st.sweeps, st.collected)))
@@ -219,18 +274,20 @@ function main()
         end
         if st.sweeps % CHECK_EVERY == 0
             d = diagnostics(st, t0)
-            @printf("therm sweeps=%d min_swap=%.3f rt_walkers=%d/%d hmc=%.3f\n", st.sweeps,
-                    d["min_swap"], d["round_trip_walkers"], NW, d["hmc_acceptance_mean"])
+            @printf("therm sweeps=%d min_swap=%.3f rt_walkers=%d/%d hmc=%.3f recent_min=%.3f eps=[%.4g,%.4g,%.4g] nlf=%d\n",
+                    st.sweeps, d["min_swap"], d["round_trip_walkers"], NW, d["hmc_acceptance_mean"],
+                    d["hmc_recent_min"], d["eps_min"], d["eps_median"], d["eps_max"], st.nlf)
             if st.sweeps >= THERM && gate(st)
                 st.phase = "collect"
                 st.swap_att .= 0; st.swap_acc .= 0; st.hmc_att = 0; st.hmc_acc .= 0
                 st.trips .= 0; st.stage .= 0
                 isfile(STATS) && rm(STATS)
-                open(header, STATS, "w")
+                open(io -> header(io, st), STATS, "w")
             elseif st.sweeps >= MAX_THERM
                 save_state(st); write_json(DIAG, diagnostics(st, t0))
                 println("transport gate not met by max sweeps; checkpoint kept"); return 3
             end
+            st.chk_acc .= 0; st.chk_att = 0
             save_state(st); write_json(DIAG, diagnostics(st, t0))
             out_of_time() && return 75
         end
@@ -255,7 +312,11 @@ function main()
             st.collected += 1
             s = cv_values(CV, st.batch)
             stats = if cpu
-                [sufficient_statistics(view(st.batch, :, :, :, r)) for r in 1:NW]
+                v = Vector{NamedTuple{(:M, :Q, :G), NTuple{3, Float64}}}(undef, NW)
+                Threads.@threads for r in 1:NW
+                    v[r] = sufficient_statistics(view(st.batch, :, :, :, r))
+                end
+                v
             else
                 b = sufficient_statistics_batched(st.batch, ws.base)
                 [(M=b.M[r], Q=b.Q[r], G=b.G[r]) for r in 1:NW]

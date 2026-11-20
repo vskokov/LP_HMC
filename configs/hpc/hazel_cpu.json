@@ -1,0 +1,25 @@
+{
+  "_comment": "Hazel CPU profile (compute_partners/short, <=2 h, 768 cores per user): CV umbrella on CPU, threads over windows. Use with --config configs/hpc/hazel_cpu.json and --lmax for smaller L.",
+  "partition": "compute_partners",
+  "qos": "short",
+  "gpu_type": "none",
+  "time": "02:00:00",
+  "runtime_minutes": 90,
+  "mem": "32G",
+  "cpus_per_task": 64,
+  "max_continuations": 400,
+  "module_init": "",
+  "modules": [
+    "julia/1.12.6"
+  ],
+  "julia": "julia",
+  "julia_depot_path": "/usr/local/usrapps/${GROUP:-$(id -gn)}/$USER/julia_depot",
+  "account": "",
+  "exclude": "",
+  "extra_sbatch": [],
+  "julia_cpu_target": "x86-64-v3",
+  "device": "cpu",
+  "cvu_env": {
+    "CVU_FP64": "false"
+  }
+}

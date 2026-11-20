@@ -74,6 +74,10 @@ _ifft3(x) = ifft(x, (1, 2, 3))
 
 """CV value for every replica of a (L,L,L,n) batch (or a single (L,L,L) field)."""
 function cv_values(cv::QuadraticCV, batch)
+    if !cpu && cv.label == "M2" && ndims(batch) == 4      # s = M²: no FFT needed
+        M = Float64.(vec(Array(sum(batch; dims=(1, 2, 3))))) ./ Float64(L)^3
+        return M .^ 2
+    end
     φk = _fft3(batch)
     V = Float64(L)^3
     s = sum(cv.weights .* abs2.(φk); dims=(1, 2, 3))
@@ -92,6 +96,23 @@ end
 cv_energy(s, center, kappa) = 0.5 * Float64(kappa) * (Float64(s) - Float64(center))^2
 
 # ------------------------------------------------------------------ batched HMC
+"""
+Bias-force buffers, built once per workspace: cached in-place FFT plans (cuFFT on GPU,
+FFTW on CPU) and per-replica (1,1,1,n) vectors.  On the GPU the bias force then needs
+no host round-trip (no synchronisation, no allocation) inside the leapfrog loop.
+"""
+mutable struct BiasBuffers
+    φk::Any            # (L,L,L,n) complex work array
+    forward::Any       # plan_fft!(φk)
+    inverse::Any       # plan_ifft!(φk)  (normalised)
+    s::Any             # (1,1,1,n) CV values
+    coef::Any          # (1,1,1,n) -κ (s - c)
+    centers::Any       # (1,1,1,n)
+    kappas::Any        # (1,1,1,n)
+    host_centers::Vector{Float64}
+    host_kappas::Vector{Float64}
+end
+
 """Work buffers for CV-biased batched HMC (CPU or GPU)."""
 mutable struct CVWorkspace{A}
     base::Any          # BatchedHMCWorkspace on GPU, nothing on CPU
@@ -101,6 +122,7 @@ mutable struct CVWorkspace{A}
     laplacian::A
     grad::A
     masses::Vector{Float64}
+    bias::Any          # BiasBuffers (built lazily on first use)
 end
 
 function make_cv_workspace(batch, masses)
@@ -108,22 +130,131 @@ function make_cv_workspace(batch, masses)
     length(masses) == nrep || throw(ArgumentError("one mass per replica"))
     base = cpu ? nothing : make_batched_workspace(batch, masses)
     return CVWorkspace(base, similar(batch), similar(batch), similar(batch), similar(batch),
-                       similar(batch), Float64.(masses))
+                       similar(batch), Float64.(masses), nothing)
 end
 
-"""Physical + bias force for every replica; returns the CV values."""
-function cv_force!(F, batch, ws::CVWorkspace, Z_value, cv, centers, kappas)
+_is_m2(cv::QuadraticCV) = cv.label == "M2"
+
+function _bias_buffers!(ws::CVWorkspace, cv, batch, centers, kappas)
+    n = size(batch, 4)
+    b = ws.bias
+    if b === nothing || size(b.s, 4) != n
+        φk = _is_m2(cv) ? nothing : similar(batch, Complex{FloatType})
+        fwd = φk === nothing ? nothing : plan_fft!(φk, (1, 2, 3))
+        inv = φk === nothing ? nothing : plan_ifft!(φk, (1, 2, 3))
+        z() = similar(batch, FloatType, 1, 1, 1, n)
+        b = BiasBuffers(φk, fwd, inv, z(), z(), z(), z(), Float64[], Float64[])
+        ws.bias = b
+    end
+    if b.host_centers != centers || b.host_kappas != kappas
+        copyto!(b.centers, reshape(FloatType.(centers), 1, 1, 1, n))
+        copyto!(b.kappas, reshape(FloatType.(kappas), 1, 1, 1, n))
+        b.host_centers = Float64.(centers); b.host_kappas = Float64.(kappas)
+    end
+    return b
+end
+
+"""
+Bias force F += -κ (s - c) ∂s/∂φ for every replica; leaves s in `b.s` (1,1,1,n).
+M²:     s = M², ∂s/∂φ_x = 2M/V (no FFT).
+shell:  s = Σ w|φ̃|²/V², ∂s/∂φ = (2/V) Re IFFT(w φ̃), with cached in-place plans.
+GPU: whole-batch broadcasts on the device.  CPU: threaded over replicas.
+"""
+function _add_bias_force!(F, batch, ws::CVWorkspace, cv, centers, kappas)
+    b = _bias_buffers!(ws, cv, batch, centers, kappas)
+    V = FloatType(L)^3
+    n = size(batch, 4)
+    if _is_m2(cv)
+        if cpu
+            Threads.@threads for r in 1:n
+                @views b.s[1, 1, 1, r] = sum(batch[:, :, :, r]) / V     # M
+            end
+        else
+            sum!(b.s, batch); b.s ./= V                                  # M
+        end
+        b.coef .= -b.kappas .* (b.s .^ 2 .- b.centers) .* (FloatType(2) / V) .* b.s
+        if cpu
+            Threads.@threads for r in 1:n
+                @views F[:, :, :, r] .+= b.coef[1, 1, 1, r]
+            end
+        else
+            F .+= b.coef                                                 # constant per replica
+        end
+        b.s .= b.s .^ 2                                                  # s = M²
+        return b
+    end
     if cpu
-        for r in axes(batch, 4)
-            compute_force!(view(F, :, :, :, r), view(batch, :, :, :, r), ws.masses[r], Z_value)
+        Threads.@threads for r in 1:n
+            @views b.φk[:, :, :, r] .= batch[:, :, :, r]
         end
     else
-        compute_force_batched!(F, ws.laplacian, batch, ws.base.device_masses, Z_value, ws.base)
+        b.φk .= batch
     end
-    s = cv_values_and_gradient!(ws.grad, cv, batch)
-    coef = FloatType.(-Float64.(kappas) .* (s .- Float64.(centers)))
-    F .+= reshape(_to_dev(coef), 1, 1, 1, :) .* ws.grad
-    return s
+    b.forward * b.φk
+    if cpu
+        w = cv.weights
+        Threads.@threads for r in 1:n
+            acc = zero(FloatType)
+            @inbounds for I in CartesianIndices(w)
+                acc += w[I] * abs2(b.φk[I, r])
+            end
+            b.s[1, 1, 1, r] = acc / V^2
+            @views b.φk[:, :, :, r] .*= w
+        end
+    else
+        b.s .= sum(cv.weights .* abs2.(b.φk); dims=(1, 2, 3)) ./ V^2
+        b.φk .*= cv.weights
+    end
+    b.coef .= -b.kappas .* (b.s .- b.centers)
+    b.inverse * b.φk
+    if cpu
+        Threads.@threads for r in 1:n
+            c = b.coef[1, 1, 1, r] * FloatType(2) / V
+            @views F[:, :, :, r] .+= c .* real.(b.φk[:, :, :, r])
+        end
+    else
+        F .+= b.coef .* (FloatType(2) / V) .* real.(b.φk)
+    end
+    return b
+end
+
+# Physical force of one replica on the CPU: the same two-pass stencil as
+# compute_force! (∇²φ, then ∇²(∇²φ)), but serial and allocation-free, so that replicas
+# can run in parallel threads.
+function _force_replica_cpu!(F, lap, ϕ, m², Z)
+    @inbounds for x3 in 1:L, x2 in 1:L, x1 in 1:L
+        lap[x1,x2,x3] = (ϕ[NNp(x1),x2,x3] + ϕ[NNm(x1),x2,x3] +
+                         ϕ[x1,NNp(x2),x3] + ϕ[x1,NNm(x2),x3] +
+                         ϕ[x1,x2,NNp(x3)] + ϕ[x1,x2,NNm(x3)] - 6*ϕ[x1,x2,x3])
+    end
+    @inbounds for x3 in 1:L, x2 in 1:L, x1 in 1:L
+        l0 = lap[x1,x2,x3]
+        lap2 = (lap[NNp(x1),x2,x3] + lap[NNm(x1),x2,x3] +
+                lap[x1,NNp(x2),x3] + lap[x1,NNm(x2),x3] +
+                lap[x1,x2,NNp(x3)] + lap[x1,x2,NNm(x3)] - 6*l0)
+        v = ϕ[x1,x2,x3]
+        F[x1,x2,x3] = Z*l0 - lap2 - m²*v - λ*v^3
+    end
+    return nothing
+end
+
+"""
+Physical + bias force for every replica.  CPU: returns the CV values.  GPU: returns
+`nothing` (the values stay on the device; use `cv_values` when they are needed).
+"""
+function cv_force!(F, batch, ws::CVWorkspace, Z_value, cv, centers, kappas)
+    if cpu
+        Zt = FloatType(Z_value)
+        Threads.@threads for r in axes(batch, 4)
+            @views _force_replica_cpu!(F[:, :, :, r], ws.laplacian[:, :, :, r],
+                                       batch[:, :, :, r], FloatType(ws.masses[r]), Zt)
+        end
+        b = _add_bias_force!(F, batch, ws, cv, centers, kappas)
+        return Float64.(vec(b.s))
+    end
+    compute_force_batched!(F, ws.laplacian, batch, ws.base.device_masses, Z_value, ws.base)
+    _add_bias_force!(F, batch, ws, cv, centers, kappas)
+    return nothing
 end
 
 """Total Hamiltonian (field + bias + kinetic) per replica."""
@@ -131,9 +262,9 @@ function cv_hamiltonians(batch, momentum, ws::CVWorkspace, Z_value, cv, centers,
     nrep = size(batch, 4)
     H = zeros(Float64, nrep)
     if cpu
-        for r in 1:nrep
+        Threads.@threads for r in 1:nrep
             H[r] = Float64(calc_total_energy(view(batch, :, :, :, r), ws.masses[r], Z_value)) +
-                   0.5 * sum(abs2, Float64.(view(momentum, :, :, :, r)))
+                   0.5 * sum(x -> Float64(x)^2, view(momentum, :, :, :, r))
         end
     else
         batched_hamiltonians!(H, ws.base.site_energy, batch, momentum,
@@ -147,28 +278,60 @@ function cv_hamiltonians(batch, momentum, ws::CVWorkspace, Z_value, cv, centers,
 end
 
 function _accept_copy!(fields, proposal, accepted::Vector{Bool})
-    for r in findall(accepted)
-        copyto!(view(fields, :, :, :, r), view(proposal, :, :, :, r))
+    if cpu
+        Threads.@threads for r in findall(accepted)
+            copyto!(view(fields, :, :, :, r), view(proposal, :, :, :, r))
+        end
+    else                                   # one masked kernel instead of one copy per replica
+        mask = reshape(CuArray(accepted), 1, 1, 1, length(accepted))
+        fields .= ifelse.(mask, proposal, fields)
     end
 end
 
-"""One CV-biased HMC trajectory for every replica of the batch."""
+"""y .+= a .* x with a scalar or per-replica (1,1,1,n) `a`; threaded over replicas on CPU."""
+function _axpy!(y, a, x)
+    if cpu
+        Threads.@threads for r in axes(y, 4)
+            ar = a isa Real ? a : a[1, 1, 1, r]
+            @views y[:, :, :, r] .+= ar .* x[:, :, :, r]
+        end
+    else
+        y .+= a .* x
+    end
+    return y
+end
+
+"""Step size as a broadcastable value: a scalar, or one ε per replica shaped (1,1,1,n)."""
+_step(eps::Real, ::Int) = FloatType(eps)
+_step(eps::AbstractVector, nrep::Int) =
+    (length(eps) == nrep || throw(ArgumentError("one step size per replica"));
+     reshape(_to_dev(FloatType.(eps)), 1, 1, 1, nrep))
+
+"""
+One CV-biased HMC trajectory for every replica of the batch.
+
+`eps` is a scalar or a vector with one step size per replica (window).  Each replica
+is an independent HMC chain, so a per-replica ε that is held fixed while sampling
+keeps every window's kernel exact.
+"""
 function hmc_step_cv!(batch, Z_value, eps, nlf, ws::CVWorkspace, cv, centers, kappas;
                       rng=Random.default_rng())
     randn!(ws.momentum)
     H_old, _ = cv_hamiltonians(batch, ws.momentum, ws, Z_value, cv, centers, kappas)
     copyto!(ws.proposal, batch)
     ϕ, π_field, F = ws.proposal, ws.momentum, ws.force
+    e = _step(eps, size(batch, 4))
+    h = e isa Real ? e / 2 : e ./ 2
     cv_force!(F, ϕ, ws, Z_value, cv, centers, kappas)
-    π_field .+= FloatType(eps / 2) .* F
+    _axpy!(π_field, h, F)
     for _ in 1:(nlf - 1)
-        ϕ .+= FloatType(eps) .* π_field
+        _axpy!(ϕ, e, π_field)
         cv_force!(F, ϕ, ws, Z_value, cv, centers, kappas)
-        π_field .+= FloatType(eps) .* F
+        _axpy!(π_field, e, F)
     end
-    ϕ .+= FloatType(eps) .* π_field
+    _axpy!(ϕ, e, π_field)
     cv_force!(F, ϕ, ws, Z_value, cv, centers, kappas)
-    π_field .+= FloatType(eps / 2) .* F
+    _axpy!(π_field, h, F)
     H_new, _ = cv_hamiltonians(ϕ, π_field, ws, Z_value, cv, centers, kappas)
     ΔH = H_new .- H_old
     accepted = [d < 0 || rand(rng) < exp(-d / Float64(T)) for d in ΔH]
