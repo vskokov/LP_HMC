@@ -4,15 +4,18 @@
   "qos": "short_gpu",
   "gpu_type": "l40s,h100,h200",
   "time": "02:00:00",
-  "runtime_minutes": 100,
+  "runtime_minutes": 90,
   "mem": "16G",
   "cpus_per_task": 1,
   "max_continuations": 400,
   "module_init": "",
-  "modules": ["julia/1.12.6"],
+  "modules": [
+    "julia/1.12.6"
+  ],
   "julia": "julia",
   "julia_depot_path": "/usr/local/usrapps/${GROUP:-$(id -gn)}/$USER/julia_depot",
   "account": "",
   "exclude": "",
-  "extra_sbatch": []
+  "extra_sbatch": [],
+  "julia_cpu_target": "x86-64-v3"
 }

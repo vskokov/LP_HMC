@@ -42,6 +42,9 @@ DEFAULTS = {
     "modules": ["julia/1.12.6"],           # no cuda module: CUDA.jl ships its own runtime
     "julia": "julia",
     "julia_depot_path": "/usr/local/usrapps/${GROUP:-$(id -gn)}/$USER/julia_depot",
+    # One precompile cache valid on every node type (mixed Intel/AMD GPU and CPU nodes);
+    # without it, jobs on different CPUs invalidate each other's caches in the shared depot.
+    "julia_cpu_target": "x86-64-v3",
     "account": "",
     "exclude": "",
     "extra_sbatch": [],
@@ -168,6 +171,8 @@ def job_script(*, label: str, env: dict, command: list[str], workdir: Path,
     lines += [f"module load {shlex.quote(m)}" for m in cfg.get("modules", [])]
     lines += [f'export JULIA_DEPOT_PATH="{cfg["julia_depot_path"]}"',
               "export JULIA_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 FFTW_NUM_THREADS=1"]
+    if cfg.get("julia_cpu_target"):
+        lines.append(f"export JULIA_CPU_TARGET={shlex.quote(cfg['julia_cpu_target'])}")
     for k, v in env.items():
         lines.append(f"export {k}={shlex.quote(str(v))}")
     lines += [
@@ -299,6 +304,7 @@ def selftest_script(cfg: dict, out: Path) -> str:
     lines += [f"module load {shlex.quote(m)}" for m in cfg.get("modules", [])]
     j = shlex.quote(cfg["julia"])
     lines += [f'export JULIA_DEPOT_PATH="{cfg["julia_depot_path"]}"',
+              f"export JULIA_CPU_TARGET={shlex.quote(cfg.get('julia_cpu_target') or 'native')}",
               'mkdir -p "${JULIA_DEPOT_PATH%%:*}"',
               f"cd {shlex.quote(str(ROOT))}",
               "nvidia-smi", f"{j} --version",
