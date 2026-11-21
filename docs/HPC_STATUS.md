@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-21 08:09 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-21 08:25 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -32,7 +32,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p9358/L18/m2m2p2_s950 | PD h100 | therm | 431047 | 0 | 0.798 / 0.447 | 0.221 | 11 | 0.02767 | 2 |
 | Zm0p9358/L18/m2m2p35_s951 | PD h100 | therm | 424133 | 0 | 0.803 / 0.692 | 0.211 | 23 | 0.02767 | 2 |
 | Zm0p9358/L18/m2m2p5_s952 | PD l40s | therm | 439461 | 0 | 0.800 / 0.770 | 0.176 | 5 | 0.02712 | 2 |
-| Zm0p9358/L18/m2m2p65_s953 | R h100 | therm | 538000 | 0 | 0.799 / 0.779 | 0.129 | 2 | 0.02712 | 2 |
+| Zm0p9358/L18/m2m2p65_s953 | R h100 | therm | 574000 | 0 | 0.800 / 0.783 | 0.132 | 3 | 0.02712 | 2 |
 
 ### `p9_pilot` (2/4 complete)
 
@@ -60,7 +60,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm2/L24/m2m1p88_s132 | PD l40s | therm | 125263 | 0 | 0.803 / 0.749 | 0.399 | 37 | 0.02415 | 4 |
 | Zm2/L30/m2m1p9_s133 | PD l40s | therm | 83542 | 0 | 0.801 / 0.777 | 0.394 | 0 | 0.0204 | 4 |
-| Zm2/L36/m2m1p92_s134 | R h100 | therm | 35000 | 0 | 0.800 / 0.787 | 0.390 | 0 | 0.01745 | 2 |
+| Zm2/L36/m2m1p92_s134 | R h100 | therm | 37000 | 0 | 0.800 / 0.786 | 0.389 | 0 | 0.0178 | 2 |
 | Zm2/L36/m2m1p96_s135 | PD h100 | therm | 42417 | 0 | 0.800 / 0.751 | 0.396 | 0 | 0.0178 | 3 |
 
 ### `uline` (22/48 complete)
@@ -73,37 +73,37 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p8/L24/m2m2p195_s711_ordered | complete | collect | 237000 | 8000 | 0.798 / 0.687 | 0.380 | 0 | 0.02185 | 2 |
 | Zm0p8/L24/m2m2p175_s720_disordered | complete | collect | 210000 | 8000 | 0.800 / 0.703 | 0.389 | 0 | 0.02185 | 1 |
 | Zm0p8/L24/m2m2p175_s721_ordered | complete | collect | 272000 | 8000 | 0.807 / 0.708 | 0.387 | 0 | 0.02142 | 3 |
-| Zm0p8/L32/m2m2p22_s700_disordered | R rtx_6000_pro | therm | 97000 | 0 | 0.800 / 0.784 | 0.396 | 0 | 0.01761 | 2 |
-| Zm0p8/L32/m2m2p22_s701_ordered | R h200 | therm | 118000 | 0 | 0.800 / 0.787 | 0.395 | 0 | 0.01779 | 2 |
+| Zm0p8/L32/m2m2p22_s700_disordered | R rtx_6000_pro | therm | 106000 | 0 | 0.800 / 0.784 | 0.395 | 0 | 0.01761 | 2 |
+| Zm0p8/L32/m2m2p22_s701_ordered | PD h200 | therm | 120290 | 0 | 0.800 / 0.745 | 0.394 | 0 | 0.01761 | 3 |
 | Zm0p8/L32/m2m2p2_s710_disordered | PD l40s | therm | 101076 | 0 | 0.801 / 0.684 | 0.396 | 0 | 0.01761 | 3 |
-| Zm0p8/L32/m2m2p2_s711_ordered | R l40s | therm | 117000 | 0 | 0.800 / 0.781 | 0.394 | 0 | 0.01761 | 2 |
+| Zm0p8/L32/m2m2p2_s711_ordered | R l40s | therm | 125000 | 0 | 0.800 / 0.785 | 0.394 | 0 | 0.01761 | 2 |
 | Zm0p8/L32/m2m2p18_s720_disordered | PD l40s | therm | 138976 | 0 | 0.800 / 0.785 | 0.392 | 1 | 0.01761 | 3 |
-| Zm0p8/L32/m2m2p18_s721_ordered | R l40s | therm | 128000 | 0 | 0.800 / 0.784 | 0.394 | 1 | 0.01761 | 2 |
+| Zm0p8/L32/m2m2p18_s721_ordered | R l40s | therm | 137000 | 0 | 0.800 / 0.786 | 0.394 | 1 | 0.01761 | 2 |
 | Zm0p85/L24/m2m2p31_s700_disordered | complete | collect | 286000 | 8000 | 0.800 / 0.738 | 0.381 | 0 | 0.02185 | 1 |
 | Zm0p85/L24/m2m2p31_s701_ordered | complete | collect | 267000 | 8000 | 0.802 / 0.700 | 0.374 | 0 | 0.02185 | 2 |
 | Zm0p85/L24/m2m2p29_s710_disordered | complete | collect | 247000 | 8000 | 0.802 / 0.726 | 0.380 | 0 | 0.02185 | 1 |
 | Zm0p85/L24/m2m2p29_s711_ordered | complete | collect | 272000 | 8000 | 0.800 / 0.708 | 0.377 | 0 | 0.02185 | 1 |
 | Zm0p85/L24/m2m2p27_s720_disordered | complete | collect | 251000 | 8000 | 0.801 / 0.710 | 0.387 | 0 | 0.02185 | 1 |
 | Zm0p85/L24/m2m2p27_s721_ordered | complete | collect | 235000 | 8000 | 0.799 / 0.695 | 0.382 | 0 | 0.02185 | 1 |
-| Zm0p85/L32/m2m2p317_s700_disordered | R rtx_6000_pro | therm | 126000 | 0 | 0.800 / 0.781 | 0.384 | 0 | 0.01761 | 3 |
-| Zm0p85/L32/m2m2p317_s701_ordered | R rtx_6000_pro | therm | 136000 | 0 | 0.801 / 0.785 | 0.383 | 0 | 0.01761 | 3 |
-| Zm0p85/L32/m2m2p297_s710_disordered | R l40s | therm | 128000 | 0 | 0.800 / 0.783 | 0.389 | 0 | 0.01761 | 3 |
+| Zm0p85/L32/m2m2p317_s700_disordered | R rtx_6000_pro | therm | 135000 | 0 | 0.801 / 0.785 | 0.385 | 0 | 0.01761 | 3 |
+| Zm0p85/L32/m2m2p317_s701_ordered | R rtx_6000_pro | therm | 145000 | 0 | 0.800 / 0.786 | 0.383 | 0 | 0.01761 | 3 |
+| Zm0p85/L32/m2m2p297_s710_disordered | R l40s | therm | 137000 | 0 | 0.800 / 0.786 | 0.390 | 0 | 0.01761 | 3 |
 | Zm0p85/L32/m2m2p297_s711_ordered | PD h100 | therm | 123199 | 0 | 0.800 / 0.739 | 0.390 | 0 | 0.01761 | 3 |
-| Zm0p85/L32/m2m2p277_s720_disordered | R h200 | therm | 144000 | 0 | 0.800 / 0.785 | 0.391 | 1 | 0.01761 | 3 |
-| Zm0p85/L32/m2m2p277_s721_ordered | R rtx_6000_pro | therm | 86000 | 0 | 0.800 / 0.786 | 0.390 | 0 | 0.01761 | 2 |
+| Zm0p85/L32/m2m2p277_s720_disordered | R h200 | therm | 150000 | 0 | 0.800 / 0.783 | 0.391 | 1 | 0.01761 | 3 |
+| Zm0p85/L32/m2m2p277_s721_ordered | R rtx_6000_pro | therm | 95000 | 0 | 0.800 / 0.782 | 0.390 | 0 | 0.01761 | 2 |
 | Zm0p9/L24/m2m2p404_s700_disordered | complete | collect | 295000 | 8000 | 0.797 / 0.676 | 0.367 | 0 | 0.02229 | 1 |
 | Zm0p9/L24/m2m2p404_s701_ordered | complete | collect | 300000 | 8000 | 0.800 / 0.700 | 0.366 | 0 | 0.02185 | 1 |
 | Zm0p9/L24/m2m2p384_s710_disordered | complete | collect | 272000 | 8000 | 0.807 / 0.731 | 0.373 | 0 | 0.02142 | 1 |
 | Zm0p9/L24/m2m2p384_s711_ordered | complete | collect | 297000 | 8000 | 0.798 / 0.691 | 0.374 | 0 | 0.02185 | 1 |
 | Zm0p9/L24/m2m2p364_s720_disordered | complete | collect | 280000 | 8000 | 0.799 / 0.708 | 0.370 | 0 | 0.02207 | 1 |
 | Zm0p9/L24/m2m2p364_s721_ordered | complete | collect | 265000 | 8000 | 0.798 / 0.719 | 0.377 | 0 | 0.02207 | 1 |
-| Zm0p9/L32/m2m2p408_s700_disordered | R rtx_6000_pro | therm | 98000 | 0 | 0.799 / 0.782 | 0.376 | 0 | 0.01761 | 2 |
-| Zm0p9/L32/m2m2p408_s701_ordered | R rtx_6000_pro | therm | 100338 | 0 | 0.798 / 0.760 | 0.374 | 0 | 0.01761 | 2 |
-| Zm0p9/L32/m2m2p388_s710_disordered | R rtx_6000_pro | therm | 68471 | 0 | 0.800 / 0.775 | 0.379 | 0 | 0.01761 | 2 |
-| Zm0p9/L32/m2m2p388_s711_ordered | R l40s | therm | 91000 | 0 | 0.800 / 0.783 | 0.377 | 0 | 0.01761 | 2 |
+| Zm0p9/L32/m2m2p408_s700_disordered | R rtx_6000_pro | therm | 108000 | 0 | 0.800 / 0.785 | 0.376 | 0 | 0.01761 | 2 |
+| Zm0p9/L32/m2m2p408_s701_ordered | R rtx_6000_pro | therm | 109000 | 0 | 0.800 / 0.780 | 0.375 | 0 | 0.01761 | 2 |
+| Zm0p9/L32/m2m2p388_s710_disordered | R rtx_6000_pro | therm | 77000 | 0 | 0.800 / 0.784 | 0.379 | 0 | 0.01761 | 2 |
+| Zm0p9/L32/m2m2p388_s711_ordered | R l40s | therm | 99000 | 0 | 0.800 / 0.787 | 0.377 | 0 | 0.01761 | 2 |
 | Zm0p9/L32/m2m2p368_s720_disordered | PD l40s | therm | 83000 | 0 | 0.800 / 0.786 | 0.382 | 0 | 0.01797 | 2 |
 | Zm0p9/L32/m2m2p368_s721_ordered | PD h100 | therm | 91793 | 0 | 0.800 / 0.782 | 0.380 | 0 | 0.01797 | 2 |
-| Zm0p95/L24/m2m2p507_s700_disordered | PD h200 | therm | 328093 | 0 | 0.799 / 0.677 | 0.356 | 48 | 0.02185 | 2 |
+| Zm0p95/L24/m2m2p507_s700_disordered | R h200 | therm | 341000 | 0 | 0.800 / 0.786 | 0.356 | 54 | 0.02229 | 2 |
 | Zm0p95/L24/m2m2p507_s701_ordered | PD h100 | collect | 359906 | 5453 | 0.802 / 0.716 | 0.352 | 0 | 0.02185 | 2 |
 | Zm0p95/L24/m2m2p487_s710_disordered | complete | collect | 328000 | 8000 | 0.797 / 0.677 | 0.364 | 0 | 0.02185 | 1 |
 | Zm0p95/L24/m2m2p487_s711_ordered | complete | collect | 342000 | 8000 | 0.801 / 0.724 | 0.355 | 0 | 0.02185 | 1 |
@@ -112,7 +112,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p95/L32/m2m2p51_s700_disordered | PD l40s | therm | 82900 | 0 | 0.800 / 0.784 | 0.366 | 0 | 0.01797 | 2 |
 | Zm0p95/L32/m2m2p51_s701_ordered | PD h200 | therm | 96670 | 0 | 0.799 / 0.776 | 0.367 | 0 | 0.01761 | 2 |
 | Zm0p95/L32/m2m2p49_s710_disordered | PD l40 | therm | 68534 | 0 | 0.800 / 0.766 | 0.362 | 0 | 0.01761 | 2 |
-| Zm0p95/L32/m2m2p49_s711_ordered | R rtx_6000_pro | therm | 87000 | 0 | 0.800 / 0.784 | 0.371 | 0 | 0.01761 | 2 |
+| Zm0p95/L32/m2m2p49_s711_ordered | R rtx_6000_pro | therm | 97000 | 0 | 0.801 / 0.784 | 0.369 | 0 | 0.01761 | 2 |
 | Zm0p95/L32/m2m2p47_s720_disordered | PD l40s | therm | 98189 | 0 | 0.800 / 0.730 | 0.372 | 0 | 0.01797 | 2 |
 | Zm0p95/L32/m2m2p47_s721_ordered | PD l40s | therm | 82100 | 0 | 0.798 / 0.660 | 0.372 | 0 | 0.01797 | 2 |
 
@@ -123,12 +123,6 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm2/L12/m2m1p73_s121 | complete | collect | 24000 | 4000 | 0.811 / 0.798 | 0.393 | 9 | | 0 |
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
-
-## 2026-11-20 18:43 UTC
-- p9_mixed jobs (2001840 2001842 2001841 2003039 ) waiting ~5 h; Nice=300 on 43 other pending cvu jobs until they start (auto reset).
-
-## 2026-11-20 21:24 UTC
-- COMPLETE uline/Zm0p85/L24/m2m2p27_s720_disordered (see report).
 
 ## 2026-11-20 22:44 UTC
 - COMPLETE uline/Zm0p85/L24/m2m2p27_s721_ordered.
@@ -183,4 +177,10 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-21 08:06 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/uline/Zm0p95/L24/m2m2p467_s721_ordered
+
+## 2026-11-21 08:09 UTC
+- merged origin/phase-diagram-paper (run plan r2) into hazel-ops (merge, not rebase: no force-push); conflict in cv_campaign.py STAGES resolved (lro2 + p9_mixed). Added scripts/hpc_status_report.py -> docs/HPC_STATUS.md, pushed hourly by ops/push_status.sh. Noted r2 process rule: future sampling-code changes -> escalate + propose on hazel-ops before deploying.
+
+## 2026-11-21 08:25 UTC
+- pulled run plan r3/r4 (merged into hazel-ops). First hpc_sync push via xfer job 2016159 (servxfer, 34 s): share /rsstu/users/v/vskokov/gluon/2026/lp_hmc_sync verified: cv_umbrella/{p9_mixed,p9_pilot,s2_zm1172_prod,s2_zm2_ext,uline,validate}, OPS_JOURNAL.md, HPC_STATUS.md, LAST_PUSH 'servxfer 2026-11-21T03:24:55'; 4.5G; 0 checkpoints. LP_HMC_SHARE default path is correct. Hourly: status report + git push + xfer sync job (ops/push_status.sh).
 
