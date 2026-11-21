@@ -32,9 +32,9 @@ Commands, with `LP_HMC_RUNS` set as in HPC_AGENT.md §1:
 
 ```bash
 git pull --ff-only
-python3 scripts/cv_campaign.py prepare --stage uline s2_zm1172_prod s2_zm2_ext p9_pilot   # only stages never prepared before
-python3 scripts/cv_campaign.py submit  --stage uline s2_zm1172_prod s2_zm2_ext p9_pilot
-python3 scripts/cv_campaign.py status  --stage uline s2_zm1172_prod s2_zm2_ext p9_pilot
+python3 scripts/cv_campaign.py prepare --stage uline s2_zm1172_prod s2_zm2_ext p9_mixed   # only stages never prepared before
+python3 scripts/cv_campaign.py submit  --stage uline s2_zm1172_prod s2_zm2_ext p9_mixed
+python3 scripts/cv_campaign.py status  --stage uline s2_zm1172_prod s2_zm2_ext p9_mixed
 ```
 
 `prepare` must not be rerun for a stage that already has runs (HPC_AGENT.md §3). When a later revision adds rows to an existing stage, the revision says explicitly how to add them.
@@ -45,7 +45,7 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 
 - every completed row, giving its label, wall-clock time from first submission, number of continuations and final `diagnostics.json` (min_swap, round_trip_walkers, hmc_acceptance_mean);
 - when a stage completes, stating it explicitly ("stage X complete"); the user then copies it to the workstation for analysis;
-- for `p9_pilot`, also run `python3 scripts/analyze_cv_umbrella.py --dir $LP_HMC_RUNS/cv_umbrella/p9_pilot/Zm0p9358/L18 --bootstrap 20 --span 0.3` and report the `summary` block. Do not interpret it beyond reporting.
+- for `p9_pilot` and `p9_mixed`, also run `python3 scripts/analyze_cv_umbrella.py --dir $LP_HMC_RUNS/cv_umbrella/p9_pilot/Zm0p9358/L18 --bootstrap 20 --span 0.3` and report the `summary` block. Do not interpret it beyond reporting.
 
 ## Revision log
 
