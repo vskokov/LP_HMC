@@ -1,0 +1,37 @@
+{
+  "dir": "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm2/L30",
+  "L": 30,
+  "Z": -2.0,
+  "masses": [
+    -1.9
+  ],
+  "cv": "shell(q=1)",
+  "runs": [
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm2/L30/m2m1p9_s33/statistics.csv"
+  ],
+  "summary": {
+    "n_good": 104,
+    "chi_s_max": 633.0151790462476,
+    "m_chi_s_max": -1.8599999999999999,
+    "chi_at_edge": false,
+    "n_twopeak": 20,
+    "coexistence": {
+      "m_eq": -1.860718628180752,
+      "barrier": 19.315822669120188,
+      "s_lo": 0.007638689033149062,
+      "s_hi": 0.3131862503591116,
+      "s_min": 0.09930295743093781,
+      "latent_q": 0.04274233571416658,
+      "deff_ordered": 1.0010675157552826
+    }
+  },
+  "errors": {
+    "chi_s_max": 6.150259975990987,
+    "m_chi_s_max": 0.0006038073644246543,
+    "coexistence_fraction": 1.0,
+    "m_eq": 0.0004720904616956634,
+    "barrier": 0.16471156221406633,
+    "latent_q": 0.00028522162528541893
+  },
+  "elapsed_s": 2340.563458919525
+}

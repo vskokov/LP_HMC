@@ -1,0 +1,38 @@
+{
+  "dir": "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm2/L24",
+  "L": 24,
+  "Z": -2.0,
+  "masses": [
+    -1.88
+  ],
+  "cv": "shell(q=1)",
+  "runs": [
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm2/L24/m2m1p88_s132/statistics.csv",
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm2/L24/m2m1p88_s32/statistics.csv"
+  ],
+  "summary": {
+    "n_good": 166,
+    "chi_s_max": 311.24245380183424,
+    "m_chi_s_max": -1.855,
+    "chi_at_edge": false,
+    "n_twopeak": 50,
+    "coexistence": {
+      "m_eq": -1.8584272733336564,
+      "barrier": 11.835834914426261,
+      "s_lo": 0.007664478788429218,
+      "s_hi": 0.314243630325598,
+      "s_min": 0.10735286756105877,
+      "latent_q": 0.04212590577137943,
+      "deff_ordered": 1.0021478201991791
+    }
+  },
+  "errors": {
+    "chi_s_max": 1.1965540005312314,
+    "m_chi_s_max": 0.000742888290943187,
+    "coexistence_fraction": 1.0,
+    "m_eq": 0.0006837641076994765,
+    "barrier": 0.125482299715807,
+    "latent_q": 0.00012503180234986794
+  },
+  "elapsed_s": 2690.296740293503
+}

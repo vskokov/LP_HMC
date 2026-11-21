@@ -1,0 +1,27 @@
+{
+  "dir": "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm1p1716/L24",
+  "L": 24,
+  "Z": -1.1715730428695679,
+  "masses": [
+    -2.55,
+    -2.49
+  ],
+  "cv": "shell(q=0.5857864376)",
+  "runs": [
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm1p1716/L24/m2m2p49_s824/statistics.csv",
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/combined/Zm1p1716/L24/m2m2p55_s834/statistics.csv"
+  ],
+  "summary": {
+    "n_good": 132,
+    "chi_s_max": 1.1151434829063163,
+    "m_chi_s_max": -2.6159999999999997,
+    "chi_at_edge": true,
+    "n_twopeak": 54
+  },
+  "errors": {
+    "chi_s_max": 0.19204072832247918,
+    "m_chi_s_max": 0.008900005401899813,
+    "coexistence_fraction": 0.0
+  },
+  "elapsed_s": 2789.5385847091675
+}

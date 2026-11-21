@@ -1,0 +1,43 @@
+{
+  "dir": "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/p9_mixed/Zm0p9358/L18",
+  "L": 18,
+  "Z": -0.9358220100402832,
+  "masses": [
+    -2.65,
+    -2.5,
+    -2.35,
+    -2.2
+  ],
+  "cv": "mixed(q=0.4679111138,c=2)",
+  "runs": [
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/p9_mixed/Zm0p9358/L18/m2m2p2_s950/statistics.csv",
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/p9_mixed/Zm0p9358/L18/m2m2p35_s951/statistics.csv",
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/p9_mixed/Zm0p9358/L18/m2m2p5_s952/statistics.csv",
+    "/home/vskokov/Binder/LP_HMC/runs/cv_umbrella/p9_mixed/Zm0p9358/L18/m2m2p65_s953/statistics.csv"
+  ],
+  "summary": {
+    "n_good": 218,
+    "chi_s_max": 300.22290590921625,
+    "m_chi_s_max": -2.453125,
+    "chi_at_edge": false,
+    "n_twopeak": 38,
+    "coexistence": {
+      "m_eq": -2.4493032384140845,
+      "barrier": 5.072519523816277,
+      "s_lo": -0.017068519480453848,
+      "s_hi": 0.4499151768774551,
+      "s_min": 0.29425394475815214,
+      "latent_q": 0.05144609456374819,
+      "deff_ordered": 2.1291405058658865
+    }
+  },
+  "errors": {
+    "chi_s_max": 4.024761293805532,
+    "m_chi_s_max": 0.0018453857910876875,
+    "coexistence_fraction": 1.0,
+    "m_eq": 0.002264824442663185,
+    "barrier": 0.19241787157219398,
+    "latent_q": 0.0013443505895556383
+  },
+  "elapsed_s": 2975.6032474040985
+}
