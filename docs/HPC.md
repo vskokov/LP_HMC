@@ -86,7 +86,16 @@ Per-run logs are in `<run>/slurm/*.out`. The number of continuations so far is i
 
 ## 4. Copying results back
 
-Analysis and the paper figures run on the workstation. Copy everything except the checkpoints:
+Analysis and the paper figures run on the workstation. The preferred route is the
+research-storage share, mounted on Hazel as `/rsstu/users/v/vskokov/gluon` and on the
+workstation as `/hpc` (exchange directory `2026/lp_hmc_sync/`):
+
+```bash
+python3 scripts/hpc_sync.py push     # on Hazel (the operator does this every pass)
+python3 scripts/hpc_sync.py pull     # on the workstation; LOCAL stages are never pulled
+```
+
+Alternatively, copy everything except the checkpoints over ssh:
 
 ```bash
 rsync -av --exclude 'checkpoint.jld2' hazel:/share/$GROUP/$USER/lp_hmc_runs/cv_umbrella/ runs/cv_umbrella/

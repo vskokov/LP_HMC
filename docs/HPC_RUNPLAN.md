@@ -1,6 +1,6 @@
 # Hazel run plan — which stages to run
 
-**Revision:** 3 (2026-11-21). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
+**Revision:** 4 (2026-11-21). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
 
 **GPU budget:** unlimited. Throughput is limited only by the queue, so keep every ACTIVE stage fully submitted. Escalation for failures, wrong-looking data, or a run hitting its caps still applies.
 
@@ -50,5 +50,6 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 ## Revision log
 
 - **r1 (2026-11-19):** initial plan. ACTIVE: `uline`, `s2_zm1172_prod`, `s2_zm2_ext`, `p9_pilot`.
+- **r4 (2026-11-21):** data exchange through research storage: run `python3 scripts/hpc_status_report.py && python3 scripts/hpc_sync.py push` at the end of every pass (HPC_AGENT.md §2). Push once right away after pulling this revision.
 - **r3 (2026-11-21):** `p9_mixed` (approved on Hazel 2026-11-20) recorded as ACTIVE; `p9_pilot` rows −2.50/−2.65 superseded. The trial on the `gpu` partition (4 h jobs) for long-pole rows is approved; revert to `short_gpu` if those jobs do not start within a few hours. Validation re-check on the workstation: m_eq −1.7280(40) vs −1.7297(39), barrier 1.114(55) vs 1.261(56) (1.9σ), latent 0.0288(6) vs 0.0297(4). Passes.
 - **r2 (2026-11-20):** the workstation reviewed and merged the `hazel-ops` commits up to 07a7441 (ε adaptation, device-side bias force, GPU-type list, x86-64-v3 target) into `phase-diagram-paper`; all CPU/GPU tests pass on the A6000 too. From now on, pull `phase-diagram-paper` and rebase `hazel-ops` on it. The workstation found the same frozen-HMC problem in its own L ≥ 24 runs: new LOCAL stage `lro2`; local `s2_zm2` L24/L30 resume with adaptation. No change to the ACTIVE list. The agent changed `cv_umbrella.jl` sampling code, which §4 of HPC_AGENT.md forbids; this time the change was correct and needed. Next time, stop and escalate first, and propose the change on `hazel-ops` without deploying it to production runs.

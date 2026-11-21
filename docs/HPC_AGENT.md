@@ -48,6 +48,14 @@ For every row that is **IDLE**, meaning not complete and with no job queued or r
 3. Restart chains with `python3 scripts/cv_campaign.py submit --stage <stage> [--gpu TYPE]`. This is idempotent: it only starts rows that are incomplete and not queued.
 4. Record what you saw and did in the journal (§6).
 
+At the end of every pass, publish the data and the report to the shared research storage
+(`/rsstu/users/v/vskokov/gluon`, which the workstation mounts as `/hpc`):
+
+```bash
+python3 scripts/hpc_status_report.py          # refresh docs/HPC_STATUS.md
+python3 scripts/hpc_sync.py push              # cv_umbrella without checkpoints + journal + status
+```
+
 Also check these on every pass:
 
 - **Progress.** `sweeps` (thermalization) or `collected` (production) in `diagnostics.json` must increase between passes for every active run.
