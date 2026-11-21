@@ -1,6 +1,6 @@
 # Hazel run plan — which stages to run
 
-**Revision:** 2 (2026-11-20). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
+**Revision:** 3 (2026-11-21). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
 
 **GPU budget:** unlimited. Throughput is limited only by the queue, so keep every ACTIVE stage fully submitted. Escalation for failures, wrong-looking data, or a run hitting its caps still applies.
 
@@ -21,7 +21,8 @@ Submit ACTIVE stages in the order listed. When the queue is congested, earlier r
 | 2 | `uline` | **ACTIVE** | 48 | whether the symmetric→uniform line turns first order near its end (gate G1) | M² coordinate; Z = −0.80, −0.85, −0.90, −0.95; L = 24, 32; 3 masses × ordered/disordered starts. L=32 rows are ~35-job chains. |
 | 3 | `s2_zm1172_prod` | **ACTIVE** | 6 | symmetric→lamellar line and barrier scaling at Z = −1.1716 (p=8) | L = 16, 24, 32, two masses each. Transport is slow at this Z (pilots: 0–1 round-trip walkers). Expect `exit=3` at the thermalization cap; follow the §3 rule in HPC_AGENT.md (raise `CVU_MAX_THERM` ×1.5 if round trips are still increasing). |
 | 4 | `s2_zm2_ext` | **ACTIVE** | 4 | barrier ∝ L² test at Z = −2 | L=36 (two masses) and second seeds at L=24/30. These complement, not duplicate, the LOCAL `s2_zm2` runs; seeds differ. |
-| 5 | `p9_pilot` | **ACTIVE** | 4 | where the uniform and lamellar lines meet (Z = −0.9358, p=9) | L=18 shell-coordinate pilots, m² = −2.20, −2.35, −2.50, −2.65. Short (hours). Report when all four are complete; production masses follow in a later revision. |
+| 5 | `p9_pilot` | DONE (2 of 4) | 4 | — | m² = −2.20, −2.35 complete. −2.50 and −2.65 cannot cross the uniform/modulated gap on the shell CV, so they are superseded by `p9_mixed`. Keep their checkpoints and do not resubmit them. |
+| 6 | `p9_mixed` | **ACTIVE** | 4 | meeting region at p=9: uniform vs modulated vs symmetric along s = M² − 2 P_shell | L=18, m² = −2.20 … −2.65, 240 windows. When complete, run `analyze_cv_umbrella.py` on it, as for `p9_pilot`, and report. |
 | — | `s2_zm2` | LOCAL | 3 | — | L=18 done; L=24/30 were frozen, now resuming on the workstation with ε adaptation (caps 700k/900k) |
 | — | `lro` | LOCAL / DONE | 11 | — | L ≥ 24 rows invalid (frozen HMC with fixed ε); superseded by `lro2` |
 | — | `lro2` | LOCAL | 6 | — | reruns of the L ≥ 24 `lro` points with ε adaptation, on the workstation |
@@ -49,4 +50,5 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 ## Revision log
 
 - **r1 (2026-11-19):** initial plan. ACTIVE: `uline`, `s2_zm1172_prod`, `s2_zm2_ext`, `p9_pilot`.
+- **r3 (2026-11-21):** `p9_mixed` (approved on Hazel 2026-11-20) recorded as ACTIVE; `p9_pilot` rows −2.50/−2.65 superseded. The trial on the `gpu` partition (4 h jobs) for long-pole rows is approved; revert to `short_gpu` if those jobs do not start within a few hours. Validation re-check on the workstation: m_eq −1.7280(40) vs −1.7297(39), barrier 1.114(55) vs 1.261(56) (1.9σ), latent 0.0288(6) vs 0.0297(4). Passes.
 - **r2 (2026-11-20):** the workstation reviewed and merged the `hazel-ops` commits up to 07a7441 (ε adaptation, device-side bias force, GPU-type list, x86-64-v3 target) into `phase-diagram-paper`; all CPU/GPU tests pass on the A6000 too. From now on, pull `phase-diagram-paper` and rebase `hazel-ops` on it. The workstation found the same frozen-HMC problem in its own L ≥ 24 runs: new LOCAL stage `lro2`; local `s2_zm2` L24/L30 resume with adaptation. No change to the ACTIVE list. The agent changed `cv_umbrella.jl` sampling code, which §4 of HPC_AGENT.md forbids; this time the change was correct and needed. Next time, stop and escalate first, and propose the change on `hazel-ops` without deploying it to production runs.
