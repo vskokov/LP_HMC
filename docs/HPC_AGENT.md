@@ -56,6 +56,13 @@ python3 scripts/hpc_status_report.py          # refresh docs/HPC_STATUS.md
 python3 scripts/hpc_sync.py push              # cv_umbrella without checkpoints + journal + status
 ```
 
+First time only:
+1. Check that the share is visible with `ls /rsstu/users/v/vskokov/gluon`. If it is mounted elsewhere, find it with `findmnt -t nfs,nfs4 | grep -i gluon` or `df -h | grep rsstu`, then `export LP_HMC_SHARE=<path>` in every shell, as you do for `LP_HMC_RUNS`. Put the export in the job-free environment setup of §1; jobs never need it.
+2. After the first push, verify it with `ls $LP_HMC_SHARE/2026/lp_hmc_sync/cv_umbrella` and `cat .../LAST_PUSH`, and record the path in the journal.
+3. If the share cannot be found or written, escalate. Data stay safe on `/share`; the user can fall back to rsync over ssh.
+
+The push is incremental (rsync), so running it every pass is cheap. Never write anywhere else on the share. `2026/lp_hmc_sync/` is the only exchange directory.
+
 Also check these on every pass:
 
 - **Progress.** `sweeps` (thermalization) or `collected` (production) in `diagnostics.json` must increase between passes for every active run.

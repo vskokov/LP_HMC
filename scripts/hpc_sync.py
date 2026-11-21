@@ -29,7 +29,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARE_HAZEL = Path("/rsstu/users/v/vskokov/gluon")
+SHARE_HAZEL = Path(os.environ.get("LP_HMC_SHARE", "/rsstu/users/v/vskokov/gluon"))
 SHARE_LOCAL = Path("/hpc")
 SUBDIR = Path("2026") / "lp_hmc_sync"
 LOCAL_STAGES = {"s2_zm2", "s2_zm1172", "lro", "lro2", "pilot", "s2"}   # never pulled
@@ -47,7 +47,11 @@ def rsync(src: Path, dst: Path, extra: list[str], dry: bool) -> None:
 
 def push(args) -> int:
     runs = Path(os.environ["LP_HMC_RUNS"])
-    dst = (args.share or SHARE_HAZEL) / SUBDIR
+    share = args.share or SHARE_HAZEL
+    if not share.is_dir():
+        raise SystemExit(f"share {share} not mounted here; find it with `findmnt -t nfs,nfs4 | grep -i gluon` "
+                         "or `df -h | grep rsstu` and set LP_HMC_SHARE (or --share)")
+    dst = share / SUBDIR
     rsync(runs / "cv_umbrella", dst / "cv_umbrella", [], args.dry_run)
     for f in (runs / "OPS_JOURNAL.md", ROOT / "docs" / "HPC_STATUS.md"):
         if f.is_file() and not args.dry_run:
