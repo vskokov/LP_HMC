@@ -39,12 +39,19 @@ function nearest_shell_q(L::Int, target::Float64)
 end
 
 """
-    make_cv(L, kind; shell_target=NaN, mix=1.0)
+    make_cv(L, kind; shell_target=NaN, mix=1.0, band=(NaN, NaN))
 
 kind = "M2" (w = δ_{k0}), "shell" (w = 1 on the k̂² shell nearest `shell_target`),
-or "mixed" (w = δ_{k0} − mix·shell).
+"mixed" (w = δ_{k0} − mix·shell), "band" (w = 1 on every mode k ≠ 0 with
+band[1] ≤ k̂² ≤ band[2]) or "mixedband" (w = δ_{k0} − mix·band).
+
+The band coordinates do not fix the modulation wavevector in advance: fluctuations
+renormalize Z, so the preferred k̂² differs from the bare −Z/2 that the single-shell
+coordinate assumes.  For them `shell_target` only picks the shell used for the
+lamellar initial fields (`shell_q`); shell observables run over the whole band.
 """
-function make_cv(L::Int, kind::AbstractString; shell_target::Float64=NaN, mix::Float64=1.0)
+function make_cv(L::Int, kind::AbstractString; shell_target::Float64=NaN, mix::Float64=1.0,
+                 band::Tuple{Float64,Float64}=(NaN, NaN))
     w = zeros(Float64, L, L, L)
     modes = CartesianIndex{3}[]
     pairs = Vector{CartesianIndex{3}}[]
@@ -59,13 +66,32 @@ function make_cv(L::Int, kind::AbstractString; shell_target::Float64=NaN, mix::F
         for m in modes
             w[m] = kind == "shell" ? 1.0 : -mix
         end
+    elseif kind in ("band", "mixedband")
+        lo, hi = band
+        isfinite(lo) && isfinite(hi) && 0 < lo <= hi ||
+            throw(ArgumentError("band CV needs 0 < band[1] <= band[2]"))
+        geometry = momentum_shells(L)
+        inband = findall(x -> lo - 1e-9 <= x <= hi + 1e-9, geometry.q)
+        isempty(inband) && throw(ArgumentError("no lattice shell with $lo <= k̂² <= $hi at L=$L"))
+        for index in inband
+            append!(modes, geometry.members[index])
+            append!(pairs, geometry.pair_groups[index])
+        end
+        dirs = [Float64.(lattice_momentum_direction(first(p), L)) for p in pairs]
+        for m in modes
+            w[m] = kind == "band" ? 1.0 : -mix
+        end
+        target = isfinite(shell_target) ? shell_target : (lo + hi) / 2
+        q = geometry.q[inband[argmin(abs.(geometry.q[inband] .- target))]]
     end
-    if kind in ("M2", "mixed")
+    if kind in ("M2", "mixed", "mixedband")
         w[1, 1, 1] = 1.0
     end
-    kind in ("M2", "shell", "mixed") || throw(ArgumentError("unknown CV kind $kind"))
+    kind in ("M2", "shell", "mixed", "band", "mixedband") || throw(ArgumentError("unknown CV kind $kind"))
     label = kind == "M2" ? "M2" : kind == "shell" ? @sprintf("shell(q=%.10g)", q) :
-            @sprintf("mixed(q=%.10g,c=%.6g)", q, mix)
+            kind == "mixed" ? @sprintf("mixed(q=%.10g,c=%.6g)", q, mix) :
+            kind == "band" ? @sprintf("band(%.6g,%.6g)", band...) :
+            @sprintf("mixedband(%.6g,%.6g,c=%.6g)", band..., mix)
     return QuadraticCV(_to_dev(FloatType.(w)), label, q, modes, pairs, dirs)
 end
 

@@ -41,8 +41,8 @@ function bias_reference(cv, host)
     return out, s
 end
 
-for kind in ("M2", "shell")
-    cv = make_cv(L, kind; shell_target=1.0)
+for kind in ("M2", "shell", "mixedband")
+    cv = make_cv(L, kind; shell_target=1.0, band=(0.5, 2.1), mix=0.7)
     ws = make_cv_workspace(batch, fill(-2.0, n))
     Fphys = similar(batch); F = similar(batch)
     compute_force_batched!(Fphys, ws.laplacian, batch, ws.base.device_masses, FloatType(-1), ws.base)
