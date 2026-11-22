@@ -256,6 +256,25 @@ of $p$.  The condition $4\sin^2(\pi/p)=\qs^2=-Z/2$ gives
 The values used below are $Z_4=-4$, $Z_6=-2$, $Z_8\simeq-1.1716$, and
 $Z_9\simeq-0.9358$.
 
+This construction must be read with care.  The optimal momentum
+$\qs^2=-Z/2$ is a property of the bare dispersion, that is, of mean-field
+theory.  Fluctuations renormalize $Z$ (Sec.~\ref{sec:model},
+``Bare and renormalized couplings''), and they move the peak of the structure
+factor, which is what selects the modulation in the interacting theory.  In
+the symmetric phase near the lamellar transition we find the peak at
+$\khat\simeq0.88$--$0.91$ for $Z=-2$ instead of the bare $1$, and at
+$\khat\simeq0.41$--$0.46$ for $Z=Z_8$ instead of $0.586$
+(Sec.~\ref{sec:results}).  A lattice that is commensurate with the bare
+period is therefore not commensurate with the preferred period of the
+interacting system.  Where the mismatch is small, as at $Z=-2$, it only
+strains the lamellae slightly.  Where it is large, the system can prefer a
+lamella with a different wavevector, for instance one oriented along a
+lattice diagonal, and an analysis that assumes the bare wavevector then
+misidentifies the competing states.  For this reason our umbrella
+coordinates for the modulated phase measure the power in a band of momenta
+around the renormalized peak rather than on a single shell
+(Sec.~\ref{sec:methods}).
+
 %======================================================================
 \section{Mean-field theory}
 \label{sec:mf}
@@ -583,13 +602,13 @@ zero-energy tilts, and smectic elasticity survives at harmonic order.  Second,
 for commensurate wavevectors $\qs=2\pi/p$ the lattice breaks the continuous
 translation symmetry of the layers.  Umklapp terms of order $A^p$ in the
 energy, such as $\sum_x\cos^4$ for $p=4$, then pin the layer phase $u$.
-Beyond a pinning length they restore true long-range order, strongly for
-$p=4$ and weakly for $p=6$.  Either way the difference from true LRO is only
-a few percent on accessible volumes.  The numerical test of
-Sec.~\ref{sec:results} therefore distinguishes an ordered lamellar phase, in
-which $P_*$ is independent of $L$ up to such corrections, from a disordered
-one, in which $P_*\propto1/V$.  It cannot distinguish QLRO with
-$\eta\approx0.03$ from LRO.
+Beyond a pinning length they restore true long-range order.  Deep in the
+ordered phase, where the amplitude is large, pinning is strong for $p=4$ and
+still effective for $p=6$; it weakens rapidly with growing period and
+shrinking amplitude.  A test of the Landau--Peierls effect therefore requires
+long periods close to the transition, or a wavevector that the lattice
+cannot pin; on commensurate lattices deep in the lamellar phase one expects,
+and we find (Sec.~\ref{sec:results}), true long-range order.
 
 \subsection{Finite-size signatures}
 \label{sec:fss}
