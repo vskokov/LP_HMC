@@ -225,9 +225,21 @@ only part kept in the Hartree approximation of Sec.~\ref{sec:fluct}, shifts
 the mass alone; a momentum-dependent self-energy appears first at two loops.
 
 Even without a renormalization of $Z$, fluctuations act differently on the two
-kinds of order.  A moat makes the modulated modes fluctuate much more strongly
-than the uniform ones, which delays the onset of modulated order
-(Sec.~\ref{sec:braz}).  Both effects work in the same direction: what is a
+kinds of order, because the size of the mass shift depends on how many modes
+are soft.  In the Hartree approximation the shift is proportional to
+$G_0=\int_k (r+\varepsilon_k)^{-1}$, where $r$ is the renormalized mass.  For $Z>0$
+the soft modes sit near the single point $k=0$, and $G_0$ stays finite as
+the symmetric phase approaches its instability.  For $Z=0$, where
+$\varepsilon_k\propto k^4$, it diverges as $(r-r_{\min})^{-1/4}$, and for
+$Z<0$, where a whole shell of momenta is soft, it diverges as
+$(r-r_{\min})^{-1/2}$.  The symmetric phase can then never reach its
+instability, ordering occurs by a first-order jump to a state of finite
+amplitude (Sec.~\ref{sec:braz}), and the onset of modulated order is pushed
+to much more negative $m^2$ than the onset of uniform order.  The
+first-order character and the shift of the junction away from $Z=0$
+therefore have a common origin, the phase space of soft fluctuations, which
+is effectively one-dimensional on a moat shell and three-dimensional near
+$k=0$.  Both this effect and a positive shift $Z_\eff-Z$ work in the same direction: what is a
 moat at the mean-field level, for small negative $Z$, may still order
 uniformly.  In mean-field theory the symmetric phase orders directly into the
 uniform phase only for $Z\ge0$.  Already in the Hartree approximation the
@@ -492,7 +504,14 @@ $Z\simeq-1$.  The uniform and lamellar ordering lines cross at
 \end{equation}
 where the uniform--lamellar coexistence line also ends.  Within the Hartree
 approximation all three lines are first order, so their junction is a triple
-point, i.e., a point where three phases coexist.  For the reason given above,
+point, i.e., a point where three phases coexist.  It is not a Lifshitz point.
+Because the Hartree self-energy does not depend on momentum, the lamellar
+condensate keeps its bare wavevector, and at the junction it is still finite,
+$\qs^2=-Z/2\simeq0.41$.  The junction moves away from $Z=0$ only because the
+mass shifts of the competing phases differ, not because the moat closes.  This
+agrees with the evidence, reviewed in Sec.~\ref{sec:intro}, that an isotropic
+LP of a one-component field does not survive fluctuations in three
+dimensions.  For the reason given above,
 however, the approximation cannot decide the order of the uniform line near
 the junction.
 
