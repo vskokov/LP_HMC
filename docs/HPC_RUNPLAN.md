@@ -1,6 +1,6 @@
 # Hazel run plan — which stages to run
 
-**Revision:** 6 (2026-11-22). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
+**Revision:** 7 (2026-11-22). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
 
 **GPU budget:** unlimited. Throughput is limited only by the queue, so keep every ACTIVE stage fully submitted. Escalation for failures, wrong-looking data, or a run hitting its caps still applies.
 
@@ -22,6 +22,7 @@ Submit ACTIVE stages in the order listed. When the queue is congested, earlier r
 | 3 | `s2_zm2_ext` | **ACTIVE** | 4 | barrier ∝ L² test at Z = −2 | L=36 (two masses) and second seeds at L=24/30. These complement, not duplicate, the LOCAL `s2_zm2` runs; seeds differ. |
 | 4 | `p8_mixed` | **HOLD (r6)** | 6 | p=8 (Z = −1.1716): does uniform order pre-empt the lamellar phase? | Mixed CV s = M² − 2 P_shell over s ∈ [−1.2, 0.75]; L=16 (252 windows) and L=24 (460 windows); m² = −2.6, −2.8, −3.0. Gate 15% round-trip walkers, min swap 0.1; caps 1.5M (L16) / 3M (L24). |
 | 5 | `p8_shift` | **HOLD (r6)** | 5 | p=8 symmetric→lamellar coexistence and barrier at the corrected masses | Shell CV as `s2_zm1172_prod`; L=24 m² = −2.75, −2.85; L=32 m² = −2.78, −2.86, −2.94. Slow transport expected; §3 rule for `exit=3` applies. |
+| 5a | `zeff` | **ACTIVE (new, r7)** | 171 | renormalized Z: G⁻¹(k) = 1/S(k) in the symmetric phase on a (Z, m²) grid | Plain HMC, 8 independent replicas per row, **no umbrella, no swaps, no transport gate**; script `scripts/sk_symmetric.jl` (env `SK_*`), selected by `cv_campaign.py` automatically. L=48 (115 rows), L=64 (42), L=32 (14). One job per row (L=64 may need one continuation, exit 75 as usual). Output `sk.csv`, `obs.csv` (no `statistics.csv`). Expected: some rows close to m²_c order from the disordered start; that is a result, not a failure. |
 | 6 | `p9_L27` | **ACTIVE (new, r5)** | 2 | second size for the p=9 symmetric→uniform coexistence (barrier vs L) | Mixed CV, L=27, m² = −2.42, −2.47, s ∈ [−0.6, 0.6], 340 windows. Gate 15%, min swap 0.1, cap 3M. |
 | — | `s2_zm1172_prod` | DONE (4 of 6); **L=32 rows CANCELLED (r5)** | 6 | — | L=16/24 complete. The two L=32 rows (m² = −2.51, −2.57) sit above the transition (r5 log): `scancel` their jobs, do not resubmit them, keep their checkpoints. Superseded by `p8_shift`. |
 | — | `p9_pilot` | DONE (2 of 4) | 4 | — | m² = −2.20, −2.35 complete; −2.50/−2.65 superseded by `p9_mixed`. Keep checkpoints, do not resubmit. |
@@ -35,8 +36,9 @@ Commands, with `LP_HMC_RUNS` set as in HPC_AGENT.md §1:
 
 ```bash
 git pull --ff-only
-python3 scripts/cv_campaign.py submit  --stage uline s2_zm2_ext p9_L27
-python3 scripts/cv_campaign.py status  --stage uline s2_zm2_ext p8_mixed p8_shift p9_L27 s2_zm1172_prod
+python3 scripts/cv_campaign.py prepare --stage zeff        # once (r7)
+python3 scripts/cv_campaign.py submit  --stage uline s2_zm2_ext zeff p9_L27
+python3 scripts/cv_campaign.py status  --stage uline s2_zm2_ext zeff p9_L27
 ```
 
 `prepare` must not be rerun for a stage that already has runs (HPC_AGENT.md §3). When a later revision adds rows to an existing stage, the revision says explicitly how to add them.
@@ -51,6 +53,12 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 - (done) for `p9_pilot` and `p9_mixed`, also run `python3 scripts/analyze_cv_umbrella.py --dir $LP_HMC_RUNS/cv_umbrella/p9_pilot/Zm0p9358/L18 --bootstrap 20 --span 0.3` and report the `summary` block. Do not interpret it beyond reporting.
 
 ## Revision log
+
+- **r7 (2026-11-22):** approved by the user. New ACTIVE stage `zeff`: 171 short unbiased runs measuring the fluctuation-renormalized dispersion (Z_eff, peak k̂²*) across Z = −2 … 0, which sets the momentum bands and box sizes of the coming modulated-phase stages.
+  - `prepare --stage zeff` once, then `submit`. Priority after `s2_zm2_ext`, before `p9_L27`.
+  - **Diagnostics differ from the umbrella stages:** `diagnostics.json` has `sweeps`, `collected`, `phase`, `hmc_acceptance_mean/min` (collect phase), `eps_median`; there are no swap or round-trip fields, and the §3 transport rules do not apply. HMC acceptance should be 0.7–0.9.
+  - A row is complete when `complete.json` exists; `hpc_sync.py push` carries the stage like any other (sk.csv ≈ 0.5–1 MB per row).
+  - When the stage completes, report it; no analysis on the cluster.
 
 - **r6 (2026-11-22):** approved by the user.
   - **Why:** fluctuations renormalize Z, so the preferred modulation momentum is not the bare k̂² = −Z/2 that the "commensurate" Z_p and the single-shell coordinate assume. Measured in the disordered windows: k̂²* ≈ 0.88–0.91 at Z = −2 (bare 1.0), ≈ 0.41–0.46 at Z = −1.1716 (bare 0.586). At p = 8, L = 16, the low-shell-power windows hold an ordered (111) lamella on k̂² = 0.457, so the p = 8 shell coordinate mislabels the phases.

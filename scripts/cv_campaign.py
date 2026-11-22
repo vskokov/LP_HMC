@@ -19,6 +19,8 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
   p8_shift     r5: p=8 shell CV at L=24/32 at the corrected (lower) masses.
   p8_mixed     r5: p=8 mixed CV (L=16/24, m2=-2.6..-3.0): uniform vs lamellar vs symmetric.
   p9_L27       r5: p=9 mixed CV at L=27 (second size for the L=18 coexistence).
+  zeff         r7: unbiased symmetric-phase S(k) (scripts/sk_symmetric.jl) on a (Z, m2) grid
+               approaching the transitions, L=48 (+32/64 near m2_c): Z_eff(Z, m2), k2*.
   uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
                L=24/32, 3 masses x ordered/disordered starts (gate G1).
   validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
@@ -52,6 +54,8 @@ from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit
 
 BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
+SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
+SCRIPT_OF = {"zeff": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -61,6 +65,15 @@ Q_P9 = 4 * math.sin(math.pi / 9) ** 2            # 0.467911
 def hmc(L: int) -> dict:
     eps = 0.039 * (12 / L) ** 0.75
     return {"CVU_EPS": f"{eps:.4f}", "CVU_NLF": str(max(10, round(1.0 / eps)))}
+
+
+def sk_row(stage, Z, L, m2, seed, samples=4000, skip=5, therm=20000, reps=8, kmax=3.0):
+    out = BASE / stage / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}"
+    eps = 0.039 * (12 / L) ** 0.75
+    return {"stage": stage, "L": L, "Z": f"{Z:.6f}", "m2": m2, "seed": seed, "out": str(out),
+            "SK_L": L, "SK_Z": f"{Z:.6f}", "SK_M2": m2, "SK_REPS": reps, "SK_EPS": f"{eps:.4f}",
+            "SK_NLF": max(10, round(1.0 / eps)), "SK_THERM": therm, "SK_SAMPLES": samples,
+            "SK_SKIP": skip, "SK_KMAX": kmax, "SK_SEED": seed, "SK_OUT": str(out), "SK_GPU": "true"}
 
 
 def ladder(L: int) -> dict:
@@ -197,6 +210,31 @@ def stage_rows(stage: str) -> list[dict]:
             r.update({"CVU_MIX": 2.0, "CVU_SMIN": -0.6, "CVU_POWER": 1.0, "CVU_WINDOWS": nwin})
             rows.append(r)
         return rows
+    if stage == "zeff":
+        # Renormalized dispersion G^-1(k) = 1/S(k) in the symmetric phase, approached from
+        # above.  m2_c estimates: uniform line (reports/transition_order, Z >= -0.95),
+        # lamellar line (Z=-2: -1.861; p=8 symmetric windows order near -2.0..-2.1);
+        # unknown in between, so the -1.1..-1.0 grid is wide.  Points that order (from the
+        # disordered start) are flagged by the analysis and mark the ordering onset.
+        mc = {-2.0: -1.86, -1.75: -1.90, -1.5: -1.95, -1.3: -2.0, -1.171573: -2.05,
+              -0.95: -2.485, -0.9: -2.383, -0.8: -2.194, -0.6: -1.872, -0.4: -1.61, 0.0: -1.216}
+        grid = {Z: [round(m + d, 3) for d in (0.75, 0.6, 0.45, 0.3, 0.2, 0.12, 0.06, 0.02)]
+                for Z, m in mc.items()}
+        for Z in (-1.1, -1.05, -1.0):
+            grid[Z] = [round(-1.8 - 0.1 * i, 3) for i in range(9)]      # -1.8 .. -2.6
+        rows, seed = [], 6000
+        for Z in sorted(grid):
+            ms = grid[Z]
+            for i, m2 in enumerate(ms):
+                Ls = [48]
+                if i >= len(ms) - 3:
+                    Ls += [64]
+                if i == len(ms) - 3:
+                    Ls += [32]
+                for L in Ls:
+                    seed += 1
+                    rows.append(sk_row(stage, Z, L, m2, seed))
+        return rows
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -227,7 +265,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
-                       "p8_shift", "p8_mixed", "p9_L27")
+                       "p8_shift", "p8_mixed", "p9_L27", "zeff")
 
 
 def manifest(stage: str) -> Path:
@@ -235,7 +273,7 @@ def manifest(stage: str) -> Path:
 
 
 def env_of(row: dict) -> dict:
-    env = {k: v for k, v in row.items() if k.startswith("CVU_") and v != ""}
+    env = {k: v for k, v in row.items() if k.startswith(("CVU_", "SK_")) and v != ""}
     env["CVU_GPU"] = "true"
     return env
 
@@ -283,19 +321,19 @@ def main() -> int:
             if args.cmd == "submit":
                 n = slurm_backend.submit_rows_slurm(
                     rows, env_of=env_of, workdir_of=lambda r: Path(r["out"]), done_of=done_of,
-                    command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT)],
+                    command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT_OF.get(stage, SCRIPT))],
                     label=label, cfg=cfg, dry_run=args.dry_run)
                 print(f"{n} job chains started")
             elif args.cmd == "refresh":
                 n = slurm_backend.refresh_rows_slurm(
                     rows, env_of=env_of, workdir_of=lambda r: Path(r["out"]), done_of=done_of,
-                    command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT)],
+                    command=[cfg["julia"], "--startup-file=no", f"--project={ROOT}", str(SCRIPT_OF.get(stage, SCRIPT))],
                     label=label, cfg=cfg)
                 print(f"{n} job scripts refreshed")
             else:
                 slurm_backend.status_rows_slurm(rows, done_of=done_of, label=label)
         elif args.cmd == "submit":
-            submit_rows(rows, command=lambda r: julia_command(SCRIPT, env=env_of(r)),
+            submit_rows(rows, command=lambda r: julia_command(SCRIPT_OF.get(stage, SCRIPT), env=env_of(r)),
                         is_complete=is_complete, label=label, dry_run=args.dry_run)
         else:
             status_rows(rows, is_complete=is_complete, label=label)
