@@ -808,6 +808,36 @@ scaling; latent $Q/V$; comparison with Hartree.}
 \pending{$d_\eff$ in the ordered peak; $P_*(L)$ at $(Z,m^2)=(-2,-3),(-4,0)$
 vs Eq.~\eqref{eq:caille}.}
 
+\begin{figure*}[t]
+ \centering
+ \includegraphics[width=\textwidth]{figures/lamellar_profiles}
+ \caption{(a) Lamellar condensate $\bar\phi(x)$ along the modulation
+ direction at $(Z,m^2)=(-2,-3)$, deep in the lamellar phase of every
+ treatment, over two periods ($p=6$).  Open circles and dotted line: single-mode
+ approximation, $A\cos(\pi x/3)$ with $A^2=4|r_0|/3\lambda$; squares: exact
+ lattice mean field (unconstrained minimum of $H$); triangles and dashed line:
+ Hartree condensate (single harmonic with Gaussian fluctuations, infinite
+ volume); diamonds: simulation, the plane average of the field over the two
+ directions transverse to the modulation, averaged over replicas and periods
+ at $L=24$, $30$ and $36$ (errors smaller than the symbols).  The lines through
+ the lattice points only guide the eye.  (b) Harmonic content: amplitude
+ $A_1$ of the fundamental ($k=\pi/3$) and five times the magnitude of the
+ third harmonic $A_3$ ($k=\pi$, the only other independent harmonic on a
+ period-6 lattice).}
+ \label{fig:profiles}
+\end{figure*}
+
+Figure~\ref{fig:profiles} compares the shape of the lamellar condensate in
+the four treatments.  In all of them the maximum sits on a lattice site, the
+phase that the lattice pins.  The single-mode approximation is a pure cosine.
+Exact mean field adds the third harmonic with the sign that flattens the
+profile toward a square wave, $A_3/A_1=-0.11$, and raises the fundamental
+from $1.155$ to $1.268$.  The simulation shows the same square-wave tendency,
+$A_3/A_1=-0.086$, but fluctuations reduce both harmonics: $A_1=1.139$, between
+the Hartree value $1.040$ and the mean-field values.  The simulated profile
+is independent of $L$ between $12$ and $36$ to within $0.01$, consistent with
+long-range lamellar order pinned by the lattice.
+
 \subsection{Uniform--lamellar boundary}
 \pending{Thermodynamic integration on commensurate lattices and direct
 validation with the mixed coordinate.}
