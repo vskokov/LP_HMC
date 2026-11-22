@@ -16,6 +16,9 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
   p9_mixed     p=9 pilots on the mixed coordinate s = M^2 - 2 P_shell (L=18, four
                masses): the shell ladder could not cross the uniform(P~0)/modulated gap
                at m2 <= -2.5 (checkpoint diagnostic 2026-11-20).
+  p8_shift     r5: p=8 shell CV at L=24/32 at the corrected (lower) masses.
+  p8_mixed     r5: p=8 mixed CV (L=16/24, m2=-2.6..-3.0): uniform vs lamellar vs symmetric.
+  p9_L27       r5: p=9 mixed CV at L=27 (second size for the L=18 coexistence).
   uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
                L=24/32, 3 masses x ordered/disordered starts (gate G1).
   validate     cluster acceptance run: the local reference s2 point (Z=-2, L=12,
@@ -66,14 +69,14 @@ def ladder(L: int) -> dict:
 
 
 def umbrella_row(stage, Z, q, L, m2, seed, smax=0.5, min_rt=0.3, max_therm=None, samples=4000,
-                 kind="shell", init="umbrella", therm=16000):
+                 kind="shell", init="umbrella", therm=16000, min_swap=0.2):
     suffix = "" if init == "umbrella" else f"_{init}"
     out = BASE / stage / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}{suffix}"
     row = {"stage": stage, "L": L, "Z": f"{Z:.6f}", "m2": m2, "seed": seed, "out": str(out),
            "CVU_L": L, "CVU_Z": f"{Z:.6f}", "CVU_M2": m2, "CVU_KIND": kind, "CVU_INIT": init,
            "CVU_SHELL_Q": f"{q:.6f}", "CVU_SMIN": 0.0, "CVU_SMAX": smax, "CVU_POWER": 1.3,
            "CVU_THERM": therm, "CVU_MAX_THERM": max_therm or int(4000 * L ** 1.5 / 3),
-           "CVU_MIN_RT": min_rt, "CVU_MIN_SWAP": 0.2, "CVU_SAMPLES": samples, "CVU_SKIP": 2,
+           "CVU_MIN_RT": min_rt, "CVU_MIN_SWAP": min_swap, "CVU_SAMPLES": samples, "CVU_SKIP": 2,
            "CVU_CHECK_EVERY": 1000, "CVU_SEED": seed, "CVU_OUT": str(out)}
     row.update(hmc(L))
     row.update(ladder(L))
@@ -157,6 +160,43 @@ def stage_rows(stage: str) -> list[dict]:
             r.update({"CVU_MIX": 2.0, "CVU_SMIN": -0.95, "CVU_POWER": 1.0, "CVU_WINDOWS": 240})
             rows.append(r)
         return rows
+    if stage == "p8_shift":
+        # Run plan r5.  Workstation analysis of s2_zm1172(+_prod): m_eq = -2.65(2) at L=16
+        # but < -2.70 at L=24 (disordered still ahead by ~9 kT at -2.70), so the L=24/32
+        # prod masses (-2.49..-2.57) miss the transition.  Shell CV as s2_zm1172_prod.
+        rows = []
+        for L, masses, mt in ((24, (-2.75, -2.85), 750000), (32, (-2.78, -2.86, -2.94), 1200000)):
+            for k, m2 in enumerate(masses):
+                rows.append(umbrella_row(stage, Z_P8, Q_P8, L, m2, 860 + 10 * k + L,
+                                         smax=0.5, max_therm=mt))
+        return rows
+    if stage == "p8_mixed":
+        # Run plan r5.  Mixed CV s = M^2 - 2 P_shell at p=8: does uniform order (extrapolated
+        # line m2 ~ -2.9..-3.0 at this Z) pre-empt the lamellar phase?  Window spacing as
+        # p9_mixed in units of the window width (spacing ~ L^-1.5); gate as approved for
+        # the deep p9_mixed rows (15% round-trip walkers, min swap 0.1).
+        rows = []
+        for L, mt in ((16, 1500000), (24, 3000000)):
+            nwin = int(round(1.95 / (0.0065 * (18 / L) ** 1.5) / 4) * 4)
+            for i, m2 in enumerate((-2.6, -2.8, -3.0)):
+                r = umbrella_row(stage, Z_P8, Q_P8, L, m2, 1000 + 10 * i + L, smax=0.75,
+                                 max_therm=mt, kind="mixed", therm=50000, min_rt=0.15,
+                                 min_swap=0.1)
+                r.update({"CVU_MIX": 2.0, "CVU_SMIN": -1.2, "CVU_POWER": 1.0, "CVU_WINDOWS": nwin})
+                rows.append(r)
+        return rows
+    if stage == "p9_L27":
+        # Run plan r5.  Second size for the p=9 symmetric->uniform coexistence
+        # (L=18: m_eq = -2.449(2), barrier 5.1(2) kT, lamellar >= 15 kT higher).
+        # Mixed CV on a reduced range (lamellar side down to s = -0.6).
+        rows = []
+        nwin = int(round(1.2 / (0.0065 * (18 / 27) ** 1.5) / 4) * 4)
+        for i, m2 in enumerate((-2.42, -2.47)):
+            r = umbrella_row(stage, Z_P9, Q_P9, 27, m2, 1100 + i, smax=0.60, max_therm=3000000,
+                             kind="mixed", therm=50000, min_rt=0.15, min_swap=0.1)
+            r.update({"CVU_MIX": 2.0, "CVU_SMIN": -0.6, "CVU_POWER": 1.0, "CVU_WINDOWS": nwin})
+            rows.append(r)
+        return rows
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -186,7 +226,8 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
                  -0.90: {24: -2.384, 32: -2.388}, -0.95: {24: -2.487, 32: -2.490}}
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
-ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed")
+ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
+                       "p8_shift", "p8_mixed", "p9_L27")
 
 
 def manifest(stage: str) -> Path:
