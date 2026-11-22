@@ -38,7 +38,7 @@ def fit(q, S, err):
     return coef, chi2 / max(len(q) - 3, 1)
 
 
-def analyze(run: Path, kfit: float, thr: float, nboot: int, rng) -> dict | None:
+def analyze(run: Path, root: Path, kfit: float, thr: float, nboot: int, rng) -> dict | None:
     if not (run / "complete.json").is_file():
         return None
     sk = pd.read_csv(run / "sk.csv", comment="#")
@@ -65,7 +65,7 @@ def analyze(run: Path, kfit: float, thr: float, nboot: int, rng) -> dict | None:
     k2s = -bc[:, 1] / (2 * bc[:, 2])
     meta = json.loads((run / "diagnostics.json").read_text())
     pd.DataFrame({"q": q, "S": S, "S_err": err, "invS_fit": coef[0] + coef[1] * q + coef[2] * q**2}) \
-        .to_csv(out_dir(run) / "spectrum.csv", index=False)
+        .to_csv(out_dir(run, root) / "spectrum.csv", index=False)
     return dict(Z=meta["Z"], L=meta["L"], m2=meta["m2"], replicas_used=meta["replicas"] - len(ordered),
                 ordered=len(ordered), units=n, Zeff=coef[1] / coef[2], Zeff_err=zeff.std(ddof=1),
                 k2_star=-coef[1] / (2 * coef[2]), k2_star_err=k2s.std(ddof=1), c=coef[2],
@@ -73,26 +73,29 @@ def analyze(run: Path, kfit: float, thr: float, nboot: int, rng) -> dict | None:
                 acc=meta["hmc_acceptance_mean"])
 
 
-def out_dir(run: Path) -> Path:
-    d = ROOT / "reports" / "sk_symmetric" / run.relative_to(ROOT / "runs" / "sk_symmetric")
+def out_dir(run: Path, root: Path) -> Path:
+    d = ROOT / "reports" / "sk_symmetric" / root.name / run.relative_to(root)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--root", type=Path, default=ROOT / "runs" / "sk_symmetric")
+    ap.add_argument("--root", type=Path, nargs="+",
+                    default=[ROOT / "runs" / "sk_symmetric", ROOT / "runs" / "cv_umbrella" / "zeff"],
+                    help="local scan and the Hazel zeff stage (pulled by hpc_sync.py)")
     ap.add_argument("--kfit", type=float, default=3.0)
     ap.add_argument("--order-threshold", type=float, default=20.0)
     ap.add_argument("--bootstrap", type=int, default=200)
     args = ap.parse_args()
     rng = np.random.default_rng(1)
     rows = []
-    for run in sorted(p.parent for p in args.root.glob("*/L*/*/complete.json")):
-        r = analyze(run, args.kfit, args.order_threshold, args.bootstrap, rng)
-        if r:
-            r["run"] = str(run.relative_to(args.root))
-            rows.append(r)
+    for root in args.root:
+        for run in sorted(p.parent for p in root.glob("*/L*/*/complete.json")):
+            r = analyze(run, root, args.kfit, args.order_threshold, args.bootstrap, rng)
+            if r:
+                r["run"] = f"{root.name}/{run.relative_to(root)}"
+                rows.append(r)
     t = pd.DataFrame(rows)
     if t.empty:
         print("no complete runs")
