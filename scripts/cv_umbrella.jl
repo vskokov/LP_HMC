@@ -4,8 +4,10 @@
 #
 # Configuration by environment variables (all CVU_*):
 #   CVU_L, CVU_Z, CVU_M2                 lattice size and couplings
-#   CVU_KIND=shell|mixed|M2              collective variable
-#   CVU_SHELL_Q                          target k̂² (nearest allowed shell is used)
+#   CVU_KIND=shell|mixed|M2|band|mixedband  collective variable
+#   CVU_SHELL_Q                          target k̂² (nearest allowed shell is used); for the
+#                                        band kinds only the shell of the lamellar start fields
+#   CVU_BAND_LO, CVU_BAND_HI             k̂² band (band kinds): all modes k≠0 in [lo, hi]
 #   CVU_MIX                              c in M^2 - c P_* (mixed only)
 #   CVU_WINDOWS, CVU_SMIN, CVU_SMAX      umbrella ladder (centers smin + (smax-smin) u^power)
 #   CVU_KAPPA, CVU_POWER
@@ -47,6 +49,7 @@ const M2_VALUE = parse(Float64, env("CVU_M2"))
 const KIND = env("CVU_KIND", "shell")
 const SHELL_Q = parse(Float64, env("CVU_SHELL_Q", "NaN"))
 const MIX = parse(Float64, env("CVU_MIX", "1.0"))
+const BAND = (parse(Float64, env("CVU_BAND_LO", "NaN")), parse(Float64, env("CVU_BAND_HI", "NaN")))
 const NW = parse(Int, env("CVU_WINDOWS"))
 const SMIN = parse(Float64, env("CVU_SMIN", "0.0"))
 const SMAX = parse(Float64, env("CVU_SMAX"))
@@ -91,10 +94,10 @@ function initial_field(center, rng)
         return f .+ sqrt(max(-M2_VALUE / λ, 0.05))
     end
     # umbrella: field whose CV is near the window centre
-    if KIND == "M2" || (KIND == "mixed" && center >= 0)
+    if KIND == "M2" || (KIND in ("mixed", "mixedband") && center >= 0)
         return f .+ sqrt(max(center, 0.0))
     end
-    target = KIND == "shell" ? center : -center / MIX
+    target = KIND in ("shell", "band") ? center : -center / MIX
     A = sqrt(2 * max(target, 0.0))
     n = round(Int, L * asin(sqrt(CV.shell_q) / 2) / π)   # axis mode nearest the shell
     axis = rand(rng, 1:3)
@@ -105,7 +108,7 @@ function initial_field(center, rng)
 end
 
 cpu && FFTW.set_num_threads(Threads.nthreads())   # before any plan is made
-const CV = make_cv(L, KIND; shell_target=SHELL_Q, mix=MIX)
+const CV = make_cv(L, KIND; shell_target=SHELL_Q, mix=MIX, band=BAND)
 to_backend(x) = cpu ? x : CuArray(x)
 
 # ------------------------------------------------------------------ state
@@ -233,7 +236,7 @@ end
 function header(io, st)
     for (k, v) in (("schema", "cv_umbrella_1"), ("L", L), ("Z", Float64(Z)), ("m2", M2_VALUE),
                    ("lambda", Float64(λ)), ("temperature", Float64(T)), ("cv", CV.label),
-                   ("cv_kind", KIND), ("shell_q", CV.shell_q), ("mix", MIX),
+                   ("cv_kind", KIND), ("shell_q", CV.shell_q), ("mix", MIX), ("band", join(BAND, ";")),
                    ("epsilon", median(st.eps)), ("epsilons", join(st.eps, ";")),
                    ("eps_adapted", EPS_ADAPT), ("n_lf", st.nlf), ("windows", NW),
                    ("samples_per_window", SAMPLES), ("skip", SKIP), ("seed", SEED),

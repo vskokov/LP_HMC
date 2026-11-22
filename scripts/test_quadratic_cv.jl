@@ -53,7 +53,8 @@ if cpu
           @sprintf("max=%.2e", maximum(abs.(F1[:, :, :, 1] .- F2))))
 
     # 2. Finite-difference force for shell and mixed CVs (physical + bias).
-    for (kind, kw) in (("shell", (shell_target=1.0,)), ("mixed", (shell_target=1.0, mix=0.7)))
+    for (kind, kw) in (("shell", (shell_target=1.0,)), ("mixed", (shell_target=1.0, mix=0.7)),
+                       ("band", (band=(0.5, 2.1),)), ("mixedband", (band=(0.5, 2.1), mix=0.7)))
         cv = make_cv(L, kind; kw...)
         c, k = 0.02, 5000.0
         Fb = similar(batch)
@@ -68,6 +69,14 @@ if cpu
             push!(errs, abs(fd - Fb[site, 1]) / max(abs(fd), 1e-8))
         end
         check("FD force ($kind)", maximum(errs) < 1e-5, @sprintf("max_rel=%.2e  q=%.4f", maximum(errs), cv.shell_q))
+        if kind == "band"
+            # band value == sum of the single-shell values over the shells in the band
+            g = momentum_shells(L)
+            parts = sum(cv_values(make_cv(L, "shell"; shell_target=q), ϕ)[1]
+                        for q in g.q if 0.5 - 1e-9 <= q <= 2.1 + 1e-9)
+            check("band value == sum of shell values", abs(cv_values(cv, ϕ)[1] - parts) < 1e-12,
+                  @sprintf("diff=%.2e", cv_values(cv, ϕ)[1] - parts))
+        end
     end
 
     # 3. Energy conservation and reversibility for a biased trajectory (3 replicas).

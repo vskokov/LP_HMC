@@ -76,7 +76,7 @@ Also check these on every pass:
 |---|---|---|
 | Log ends `exit=75` but no follow-up job in `squeue` | `sbatch` from the compute node failed (transient) or the chain was cancelled | `submit` the stage again |
 | `exit=3`, log says "transport gate not met by max sweeps" | Thermalization reached `CVU_MAX_THERM` before walkers made round trips | If `round_trip_walkers` and `min_swap` are still rising (compare with the journal), raise `CVU_MAX_THERM` for that row in the manifest by ×1.5, at most twice, then `submit`. The checkpoint resumes. If they are flat, **escalate**: the ladder needs redesign. |
-| `ERROR: checkpoint ladder mismatch` / `parameter mismatch` | The manifest row was changed in a ladder field (`CVU_WINDOWS`, `CVU_SMIN/SMAX`, `CVU_KAPPA`, `CVU_POWER`, `CVU_M2`, `CVU_KIND`, `CVU_SHELL_Q`) after the run started | Restore the original values (git or the journal). Never delete the checkpoint to "fix" this. |
+| `ERROR: checkpoint ladder mismatch` / `parameter mismatch` | The manifest row was changed in a ladder field (`CVU_WINDOWS`, `CVU_SMIN/SMAX`, `CVU_KAPPA`, `CVU_POWER`, `CVU_M2`, `CVU_KIND`, `CVU_SHELL_Q`, `CVU_MIX`, `CVU_BAND_LO/HI`) after the run started | Restore the original values (git or the journal). Never delete the checkpoint to "fix" this. |
 | `hmc_recent_min` < 0.4 late in thermalization, or any window's acceptance collapsing in `collect` | ε adaptation (per window, therm only) not converging | During thermalization: halve `CVU_EPS` (the initial ε) in that row, `refresh`, resubmit. In `collect` ε is frozen: **escalate**. |
 | CUDA error, `CUDA_ERROR_*`, `illegal address`, node-specific crash | Bad node or driver | Resubmit. If the same node fails twice, add it to `"exclude"` in `configs/hpc/hazel.json` (comma list) and resubmit. |
 | `Out of memory` / `oom-kill` (host) | `--mem` too small | Set `"mem"` in the config to `"32G"` and resubmit. |
@@ -93,7 +93,7 @@ Edit manifests directly in the CSV, and only in the fields named above. **Do not
 ## 4. Never do these
 
 - Delete or overwrite `checkpoint.jld2`, `statistics.csv` or `complete.json`. Never `rm -r` a run directory. To restart a run from scratch, create a new run with a new seed, which means a new directory, and only when the user agrees.
-- Change the physics of a started run: `CVU_Z`, `CVU_M2`, `CVU_L`, `CVU_KIND`, the ladder, `CVU_SAMPLES`, `CVU_SKIP`. A higher `CVU_SAMPLES` before completion is the one exception, and needs user approval.
+- Change the physics of a started run: `CVU_Z`, `CVU_M2`, `CVU_L`, `CVU_KIND`, `CVU_BAND_LO/HI`, the ladder, `CVU_SAMPLES`, `CVU_SKIP`. A higher `CVU_SAMPLES` before completion is the one exception, and needs user approval.
 - Add stages, masses or lattice sizes, or start runs beyond the ACTIVE stages in `docs/HPC_RUNPLAN.md`.
 - Touch the files listed under "What NOT to touch" in `CLAUDE.md`, or add dependencies.
 - Change `src/` physics code, force/HMC kernels, or `cv_umbrella.jl` semantics. Bug fixes in the Python drivers (`slurm_backend.py`, `cv_campaign.py`) are fine if they don't change what is simulated. Commit them (§6).
