@@ -20,13 +20,17 @@ Submit ACTIVE stages in the order listed. When the queue is congested, earlier r
 | 1 | `validate` | DONE | 1 | cluster reproduces the workstation | passed 2026-11-19 |
 | 2 | `uline` | **ACTIVE** | 48 | whether the symmetric→uniform line turns first order near its end (gate G1) | M² coordinate; Z = −0.80, −0.85, −0.90, −0.95; L = 24, 32; 3 masses × ordered/disordered starts. L=24 complete; L=32 rows are the long pole. |
 | 3 | `s2_zm2_ext` | **ACTIVE** | 4 | barrier ∝ L² test at Z = −2 | L=36 (two masses) and second seeds at L=24/30. These complement, not duplicate, the LOCAL `s2_zm2` runs; seeds differ. |
-| 4 | `p8_mixed` | **HOLD (r6)** | 6 | p=8 (Z = −1.1716): does uniform order pre-empt the lamellar phase? | Mixed CV s = M² − 2 P_shell over s ∈ [−1.2, 0.75]; L=16 (252 windows) and L=24 (460 windows); m² = −2.6, −2.8, −3.0. Gate 15% round-trip walkers, min swap 0.1; caps 1.5M (L16) / 3M (L24). |
-| 5 | `p8_shift` | **HOLD (r6)** | 5 | p=8 symmetric→lamellar coexistence and barrier at the corrected masses | Shell CV as `s2_zm1172_prod`; L=24 m² = −2.75, −2.85; L=32 m² = −2.78, −2.86, −2.94. Slow transport expected; §3 rule for `exit=3` applies. |
 | 5a | `zeff` | **ACTIVE (new, r7)** | 171 | renormalized Z: G⁻¹(k) = 1/S(k) in the symmetric phase on a (Z, m²) grid | Plain HMC, 8 independent replicas per row, **no umbrella, no swaps, no transport gate**; script `scripts/sk_symmetric.jl` (env `SK_*`), selected by `cv_campaign.py` automatically. L=48 (115 rows), L=64 (42), L=32 (14). One job per row (L=64 may need one continuation, exit 75 as usual). Output `sk.csv`, `obs.csv` (no `statistics.csv`). Expected: some rows close to m²_c order from the disordered start; that is a result, not a failure. |
+| 5b | `zeff2` | **ACTIVE (new, r8)** | 11 | follow the S(k) peak down to the ordering onset at Z = −1.5, −1.3, −1.1716 | Same as `zeff` (plain HMC, `sk_symmetric.jl`, L=48). Rows that order from the disordered start are a result. |
+| 5c | `b8` | **ACTIVE (new, r8)** | 6 | p=8-region symmetric→lamellar coexistence and barrier vs L, orientation-independent | **Band CV** `CVU_KIND=band`, k̂² ∈ [0.36, 0.62] (all modes, any orientation); Z = −1.1716; L = 20 (m² −2.50, −2.60), 28 (−2.55, −2.65), 32 (−2.58, −2.68); s ∈ [0, 0.5]; caps 0.4M / 0.9M / 1.3M. Gate and §3 rules as `s2_zm1172_prod`. |
+| 5d | `b13` | **ACTIVE (new, r8)** | 6 | same at Z = −1.3 (moat still well defined, closer to the meeting region) | Band k̂² ∈ [0.37, 0.70]; L = 20 (m² −2.39, −2.49), 28 (−2.44, −2.54), 32 (−2.47, −2.57). Otherwise as `b8`. |
+| 5e | `uline_ext` | **ACTIVE (new, r8)** | 24 | does the uniform line continue to Z = −1.0, −1.05, where the renormalized moat closes? | M² CV, profile as `uline`; Z = −1.0 (m² −2.63, −2.60, −2.57), −1.05 (−2.71, −2.68, −2.65); L = 24, 32; ordered/disordered starts; cap 0.9M. |
+| 5f | `b8_mixed` | **ACTIVE (new, r8)** | 4 | uniform vs lamellar deep in the ordered region at Z = −1.1716 (replaces `p8_mixed`) | `CVU_KIND=mixedband`, s = M² − 2 P_band, band [0.36, 0.62], s ∈ [−1.2, 0.75]; L = 20 (352 windows), 28 (584); m² = −2.7, −2.9. Gate 15% round-trip walkers, min swap 0.1; caps 2M / 3.5M. Lowest priority. |
 | 6 | `p9_L27` | **ACTIVE (new, r5)** | 2 | second size for the p=9 symmetric→uniform coexistence (barrier vs L) | Mixed CV, L=27, m² = −2.42, −2.47, s ∈ [−0.6, 0.6], 340 windows. Gate 15%, min swap 0.1, cap 3M. |
 | — | `s2_zm1172_prod` | DONE (4 of 6); **L=32 rows CANCELLED (r5)** | 6 | — | L=16/24 complete. The two L=32 rows (m² = −2.51, −2.57) sit above the transition (r5 log): `scancel` their jobs, do not resubmit them, keep their checkpoints. Superseded by `p8_shift`. |
 | — | `p9_pilot` | DONE (2 of 4) | 4 | — | m² = −2.20, −2.35 complete; −2.50/−2.65 superseded by `p9_mixed`. Keep checkpoints, do not resubmit. |
 | — | `p9_mixed` | DONE | 4 | — | complete 2026-11-21; analysed on the workstation (r5 log). |
+| — | `p8_mixed`, `p8_shift` | **SUPERSEDED (r8)** | 11 | — | On hold since r6; replaced by `b8` / `b8_mixed`. Do not resubmit; keep checkpoints and data. |
 | — | `s2_zm2` | LOCAL / DONE | 3 | — | L=18/24/30 complete on the workstation |
 | — | `lro` | LOCAL / DONE | 11 | — | L ≥ 24 rows invalid (frozen HMC with fixed ε); superseded by `lro2` |
 | — | `lro2` | LOCAL / DONE | 6 | — | reruns of the L ≥ 24 `lro` points with ε adaptation; complete |
@@ -37,8 +41,9 @@ Commands, with `LP_HMC_RUNS` set as in HPC_AGENT.md §1:
 ```bash
 git pull --ff-only
 python3 scripts/cv_campaign.py prepare --stage zeff        # once (r7)
-python3 scripts/cv_campaign.py submit  --stage uline s2_zm2_ext zeff p9_L27
-python3 scripts/cv_campaign.py status  --stage uline s2_zm2_ext zeff p9_L27
+python3 scripts/cv_campaign.py prepare --stage zeff2 b8 b13 uline_ext b8_mixed   # once (r8)
+python3 scripts/cv_campaign.py submit  --stage uline s2_zm2_ext zeff zeff2 b8 b13 uline_ext p9_L27 b8_mixed
+python3 scripts/cv_campaign.py status  --stage uline s2_zm2_ext zeff zeff2 b8 b13 uline_ext p9_L27 b8_mixed
 ```
 
 `prepare` must not be rerun for a stage that already has runs (HPC_AGENT.md §3). When a later revision adds rows to an existing stage, the revision says explicitly how to add them.
@@ -54,6 +59,7 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 
 ## Revision log
 
+- **r8 (2026-11-23):** approved by the user. From the S(k) analysis (local + first 93 `zeff` rows): for Z ≤ −1.17 the renormalized peak lies below the bare −Z/2 and drifts down toward the transition (Z8: 0.43–0.48 vs 0.586); for −1.1 ≤ Z ≤ −0.9 it slides to k → 0 as m² approaches the transition. `p9_mixed` s ≈ 0 states are uniform-phase slabs/domain walls. New ACTIVE stages `zeff2`, `b8`, `b13`, `uline_ext`, `b8_mixed` (band coordinates, `CVU_BAND_LO/HI`). `p8_shift`/`p8_mixed` are SUPERSEDED (keep their data). Submit order as in the table; `b8_mixed` last.
 - **r7 (2026-11-22):** approved by the user. New ACTIVE stage `zeff`: 171 short unbiased runs measuring the fluctuation-renormalized dispersion (Z_eff, peak k̂²*) across Z = −2 … 0, which sets the momentum bands and box sizes of the coming modulated-phase stages.
   - `prepare --stage zeff` once, then `submit`. Priority after `s2_zm2_ext`, before `p9_L27`.
   - **Diagnostics differ from the umbrella stages:** `diagnostics.json` has `sweeps`, `collected`, `phase`, `hmc_acceptance_mean/min` (collect phase), `eps_median`; there are no swap or round-trip fields, and the §3 transport rules do not apply. HMC acceptance should be 0.7–0.9.
