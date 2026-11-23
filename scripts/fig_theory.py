@@ -60,6 +60,11 @@ def main() -> int:
     ok = neg & np.isfinite(um)
     ax.plot(Z[ok], um[ok], "--", lw=0.9, color=C_UM)
     ax.plot([0, Z.max()], [0, 0], "--", lw=0.9, color=C_UNI)
+    # ---- single-mode approximation (dotted): phi = A cos(q.x) on the moat, no harmonics.
+    # Its symmetric-lamellar (m2 = Z^2/4) and symmetric-uniform (m2 = 0) lines coincide with
+    # the exact lattice mean field; only the uniform-lamellar line differs.
+    zsm = np.linspace(-3.0, 0.0, 301)
+    ax.plot(zsm, -(2 + math.sqrt(6)) * zsm**2 / 4, ":", lw=1.1, color=C_UM)
     ax.plot([0], [0], "o", ms=3.5, mfc="white", mec="k", mew=0.8, zorder=5)
 
     # ---- Hartree (solid), only the thermodynamically relevant branch of each line
@@ -89,7 +94,8 @@ def main() -> int:
     ax.annotate("LP (MF)", (0, 0), (0.3, 0.55), fontsize=7,
                 arrowprops=dict(arrowstyle="-", lw=0.5))
     from matplotlib.lines import Line2D
-    handles = [Line2D([], [], ls="--", lw=0.9, color="k", label="mean field"),
+    handles = [Line2D([], [], ls=":", lw=1.1, color="k", label="single mode"),
+               Line2D([], [], ls="--", lw=0.9, color="k", label="lattice mean field"),
                Line2D([], [], ls="-", lw=1.4, color="k", label="Hartree")]
     ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=7)
     fig.tight_layout(pad=0.3)

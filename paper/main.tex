@@ -225,9 +225,21 @@ only part kept in the Hartree approximation of Sec.~\ref{sec:fluct}, shifts
 the mass alone; a momentum-dependent self-energy appears first at two loops.
 
 Even without a renormalization of $Z$, fluctuations act differently on the two
-kinds of order.  A moat makes the modulated modes fluctuate much more strongly
-than the uniform ones, which delays the onset of modulated order
-(Sec.~\ref{sec:braz}).  Both effects work in the same direction: what is a
+kinds of order, because the size of the mass shift depends on how many modes
+are soft.  In the Hartree approximation the shift is proportional to
+$G_0=\int_k (r+\varepsilon_k)^{-1}$, where $r$ is the renormalized mass.  For $Z>0$
+the soft modes sit near the single point $k=0$, and $G_0$ stays finite as
+the symmetric phase approaches its instability.  For $Z=0$, where
+$\varepsilon_k\propto k^4$, it diverges as $(r-r_{\min})^{-1/4}$, and for
+$Z<0$, where a whole shell of momenta is soft, it diverges as
+$(r-r_{\min})^{-1/2}$.  The symmetric phase can then never reach its
+instability, ordering occurs by a first-order jump to a state of finite
+amplitude (Sec.~\ref{sec:braz}), and the onset of modulated order is pushed
+to much more negative $m^2$ than the onset of uniform order.  The
+first-order character and the shift of the junction away from $Z=0$
+therefore have a common origin, the phase space of soft fluctuations, which
+is effectively one-dimensional on a moat shell and three-dimensional near
+$k=0$.  Both this effect and a positive shift $Z_\eff-Z$ work in the same direction: what is a
 moat at the mean-field level, for small negative $Z$, may still order
 uniformly.  In mean-field theory the symmetric phase orders directly into the
 uniform phase only for $Z\ge0$.  Already in the Hartree approximation the
@@ -262,9 +274,10 @@ theory.  Fluctuations renormalize $Z$ (Sec.~\ref{sec:model},
 ``Bare and renormalized couplings''), and they move the peak of the structure
 factor, which is what selects the modulation in the interacting theory.  In
 the symmetric phase near the lamellar transition we find the peak at
-$\khat\simeq0.88$--$0.91$ for $Z=-2$ instead of the bare $1$, and at
-$\khat\simeq0.41$--$0.46$ for $Z=Z_8$ instead of $0.586$
-(Sec.~\ref{sec:results}).  A lattice that is commensurate with the bare
+$\khat\simeq0.89$--$0.94$ for $Z=-2$ instead of the bare $1$, and at
+$\khat\simeq0.42$--$0.52$ for $Z=Z_8$ instead of $0.586$; for
+$Z\gtrsim-1.05$ the peak moves to $k\to0$ as the transition is approached
+(Sec.~\ref{sec:sk}).  A lattice that is commensurate with the bare
 period is therefore not commensurate with the preferred period of the
 interacting system.  Where the mismatch is small, as at $Z=-2$, it only
 strains the lamellae slightly.  Where it is large, the system can prefer a
@@ -318,9 +331,10 @@ at $m^2=Z^2/4$.  The uniform and lamellar free energies are equal on the line
 \end{equation}
 across which the system jumps from one type of order to the other, a
 first-order transition.  This line is tangent to the order--disorder line at
-the mean-field LP $(Z,m^2)=(0,0)$~\cite{Michelson1977}.  The resulting
-mean-field phase diagram is shown by the dashed lines in
-Fig.~\ref{fig:theory}.
+the mean-field LP $(Z,m^2)=(0,0)$~\cite{Michelson1977}.  This single-mode
+phase diagram, the classic mean-field picture of a Lifshitz point, is shown
+by the dotted line in Fig.~\ref{fig:theory}, together with the order--disorder
+lines $m^2=0$ and $m^2=Z^2/4$, which are exact in mean field.
 
 \subsection{Exact lattice mean field}
 
@@ -335,7 +349,11 @@ $f_{\rm sq}=-0.512$, $f_{\rm cub}=-0.553$, and $f_u=-0.5625$ for the lamellar,
 square, cubic, and uniform states.  The higher harmonics, which turn the
 cosine profile into a more square-wave-like one, lower $f_\ell$ appreciably
 below its single-mode value $-0.667$.  As a consequence, the
-uniform--lamellar line moves below Eq.~\eqref{eq:mf-um}.
+uniform--lamellar line moves below Eq.~\eqref{eq:mf-um}; compare the dashed
+and dotted lines in Fig.~\ref{fig:theory}.  Close to the LP, where the
+amplitude is small and the harmonics are weak, the two agree, and the
+single-mode approximation is the controlled leading term.  They separate as
+$Z$ approaches $-2$, for the lattice reason explained next.
 
 The lattice also introduces a qualitatively new feature that has no continuum
 analog.  Consider a sharp wall between domains with $\phi=+a$ and $\phi=-a$,
@@ -487,7 +505,14 @@ $Z\simeq-1$.  The uniform and lamellar ordering lines cross at
 \end{equation}
 where the uniform--lamellar coexistence line also ends.  Within the Hartree
 approximation all three lines are first order, so their junction is a triple
-point, i.e., a point where three phases coexist.  For the reason given above,
+point, i.e., a point where three phases coexist.  It is not a Lifshitz point.
+Because the Hartree self-energy does not depend on momentum, the lamellar
+condensate keeps its bare wavevector, and at the junction it is still finite,
+$\qs^2=-Z/2\simeq0.41$.  The junction moves away from $Z=0$ only because the
+mass shifts of the competing phases differ, not because the moat closes.  This
+agrees with the evidence, reviewed in Sec.~\ref{sec:intro}, that an isotropic
+LP of a one-component field does not survive fluctuations in three
+dimensions.  For the reason given above,
 however, the approximation cannot decide the order of the uniform line near
 the junction.
 
@@ -500,8 +525,11 @@ Eq.~\eqref{eq:commensurate}.
 \begin{figure}[t]
  \centering
  \includegraphics[width=\columnwidth]{figures/theory_phase_diagram}
- \caption{Mean-field (dashed) and Hartree (solid; infinite volume, exact
- lattice spectrum) phase diagrams of Eq.~\eqref{eq:H} at $\lambda=4$.  Blue:
+ \caption{Phase diagrams of Eq.~\eqref{eq:H} at $\lambda=4$ in the
+ single-mode approximation (dotted, Eq.~\eqref{eq:mf-um}), exact lattice
+ mean field (dashed), and the Hartree approximation (solid; infinite volume,
+ exact lattice spectrum).  The order--disorder lines $m^2=0$ and
+ $m^2=Z^2/4$ are common to both mean-field treatments.  Blue:
  symmetric--uniform transition; orange: symmetric--lamellar; black:
  uniform--lamellar.  The open circle is the mean-field Lifshitz point and the
  square the Hartree junction, Eq.~\eqref{eq:hartree-meet}.  The exact
@@ -787,7 +815,66 @@ starts signals incomplete equilibration and is treated as a diagnostic.
 \section{Results}
 \label{sec:results}
 
+\subsection{Renormalized dispersion in the symmetric phase}
+\label{sec:sk}
+
+Before locating the transitions we measure how fluctuations reshape the
+propagator itself.  In the symmetric phase the static structure factor
+$S(k)=\langle|\tilde\phi_k|^2\rangle/V$ equals the full propagator $G(k)$,
+so $1/S(k)$ is the inverse propagator $m^2+\varepsilon_k+\Sigma(k)$ of
+Sec.~\ref{sec:model}.  We sample it with plain HMC (eight independent
+chains per point, no bias) at $L=32$, $48$, and $64$, on a grid of masses
+approaching the ordering lines from the symmetric side, for
+$-2\le Z\le-0.6$.  None of the chains used here leaves the symmetric phase.
+We take the position $\khat_*$ of the maximum of $S$ from a local parabola in
+$\khat$ through $1/S$ at the five momenta nearest its minimum; this does not
+assume a functional form for $\Sigma(k)$.  Results at $L=48$ and $64$
+agree, so the peak positions are not finite-size effects.
+
+Figure~\ref{fig:sk} shows two regimes.  For $Z\le Z_8$ the moat survives:
+$1/S$ has a clear minimum at finite momentum, and a global fit
+$1/S=a+b\,\khat+c\,\widehat{k}^{4}$ describes the data (changing the fit
+range moves $Z_\eff=b/c$ by at most $0.02$).  The peak lies below the bare
+value $-Z/2$ and moves further down as $m^2$ decreases toward the transition.
+For example $\khat_*$ falls from $0.94$ to $0.89$ at $Z=-2$ (bare $1$) and
+from $0.52$ to $0.42$ at $Z=Z_8$ (bare $0.586$), which corresponds to
+$Z_\eff-Z\simeq0.2$--$0.3$.  Fluctuations thus make the moat shallower and
+move it toward $k=0$, as anticipated in Sec.~\ref{sec:model}.
+
+For $Z\gtrsim-1.05$ the behavior is different.  Far from the
+transition the peak is still at finite momentum, but as $m^2$ decreases it
+slides continuously toward $k=0$.  At $Z=-0.95$ and $-0.8$ it reaches the
+smallest momenta of the box ($\khat_*\simeq0.04$) close to the transition,
+and $1/S$ becomes nearly flat at small $k$ [Fig.~\ref{fig:sk}(b)].  The same
+happens at $Z=-0.6$ and $-0.4$, where the peak moves from
+$\khat_*\simeq0.25$ and $0.18$ far from the transition to $k=0$ at it.  A
+peak at finite momentum deep in the symmetric phase therefore does not by
+itself signal modulated order: what matters is where the peak is when the
+symmetric phase becomes unstable.  There
+the polynomial fit fails, so a single number $Z_\eff$ is no longer a useful
+description.  In this range of bare $Z<0$, then, the fluctuations that drive
+the ordering are long-wavelength, as they are on the uniform side.  The
+renormalized moat closes near $Z\approx-1.0$, close to the end of the
+direct symmetric--uniform line ($Z_*\approx-0.95$, Sec.~\ref{sec:uline}).
+It also explains why lattices built to be commensurate with the bare period
+do not select the relevant states in this region: at $Z_9$, for example, the
+intermediate states of the mixed-coordinate runs at $L=18$ are slabs of the
+two uniform phases separated by domain walls, not lamellae of period $9$.
+
+\begin{figure*}[t]
+\includegraphics[width=\textwidth]{figures/sk_peak}
+\caption{Fluctuation-renormalized dispersion in the symmetric phase.
+(a) Position $\khat_*$ of the maximum of $S(k)$ versus $m^2$ for several bare
+$Z$ (largest available $L$ at each point, $L=48$ or $64$); dotted lines mark
+the bare moat $-Z/2$.  Filled symbols: the moat survives ($Z\le Z_8$); open
+symbols: the peak slides to $k\to0$ as the transition is approached.
+(b) $1/S(k)$ at two masses for $Z=Z_8$ (minimum at finite $k$) and
+$Z=-0.95$ (minimum moves to $k\approx0$).}
+\label{fig:sk}
+\end{figure*}
+
 \subsection{Symmetric--uniform line}
+\label{sec:uline}
 \pending{Binder crossings, $\chi_{\max}$ and $\Delta F$ vs $L$ for
 $-0.95\le Z\le2$; small-$L$ three-peak structure that vanishes with $L$;
 termination bracket $Z_*$.}
@@ -799,6 +886,36 @@ scaling; latent $Q/V$; comparison with Hartree.}
 \subsection{Rank and long-range order of the modulated phase}
 \pending{$d_\eff$ in the ordered peak; $P_*(L)$ at $(Z,m^2)=(-2,-3),(-4,0)$
 vs Eq.~\eqref{eq:caille}.}
+
+\begin{figure*}[t]
+ \centering
+ \includegraphics[width=\textwidth]{figures/lamellar_profiles}
+ \caption{(a) Lamellar condensate $\bar\phi(x)$ along the modulation
+ direction at $(Z,m^2)=(-2,-3)$, deep in the lamellar phase of every
+ treatment, over two periods ($p=6$).  Open circles and dotted line: single-mode
+ approximation, $A\cos(\pi x/3)$ with $A^2=4|r_0|/3\lambda$; squares: exact
+ lattice mean field (unconstrained minimum of $H$); triangles and dashed line:
+ Hartree condensate (single harmonic with Gaussian fluctuations, infinite
+ volume); diamonds: simulation, the plane average of the field over the two
+ directions transverse to the modulation, averaged over replicas and periods
+ at $L=24$, $30$ and $36$ (errors smaller than the symbols).  The lines through
+ the lattice points only guide the eye.  (b) Harmonic content: amplitude
+ $A_1$ of the fundamental ($k=\pi/3$) and five times the magnitude of the
+ third harmonic $A_3$ ($k=\pi$, the only other independent harmonic on a
+ period-6 lattice).}
+ \label{fig:profiles}
+\end{figure*}
+
+Figure~\ref{fig:profiles} compares the shape of the lamellar condensate in
+the four treatments.  In all of them the maximum sits on a lattice site, the
+phase that the lattice pins.  The single-mode approximation is a pure cosine.
+Exact mean field adds the third harmonic with the sign that flattens the
+profile toward a square wave, $A_3/A_1=-0.11$, and raises the fundamental
+from $1.155$ to $1.268$.  The simulation shows the same square-wave tendency,
+$A_3/A_1=-0.086$, but fluctuations reduce both harmonics: $A_1=1.139$, between
+the Hartree value $1.040$ and the mean-field values.  The simulated profile
+is independent of $L$ between $12$ and $36$ to within $0.01$, consistent with
+long-range lamellar order pinned by the lattice.
 
 \subsection{Uniform--lamellar boundary}
 \pending{Thermodynamic integration on commensurate lattices and direct

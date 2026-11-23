@@ -19,6 +19,11 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
   p8_shift     r5: p=8 shell CV at L=24/32 at the corrected (lower) masses.
   p8_mixed     r5: p=8 mixed CV (L=16/24, m2=-2.6..-3.0): uniform vs lamellar vs symmetric.
   p9_L27       r5: p=9 mixed CV at L=27 (second size for the L=18 coexistence).
+  b8, b13      r8: band-CV symmetric->lamellar umbrellas at Z=-1.1716 (band 0.36-0.62) and
+               Z=-1.3 (band 0.37-0.70), L=20/28/32, bands from the measured S(k) peak.
+  b8_mixed     r8: mixedband s = M^2 - 2 P_band at Z=-1.1716, L=20/28: uniform vs lamellar.
+  uline_ext    r8: M^2 CV at Z=-1.0, -1.05 (renormalized moat closes), L=24/32.
+  zeff2        r8: deeper unbiased S(k) points at Z=-1.5, -1.3, -1.1716 (L=48).
   zeff         r7: unbiased symmetric-phase S(k) (scripts/sk_symmetric.jl) on a (Z, m2) grid
                approaching the transitions, L=48 (+32/64 near m2_c): Z_eff(Z, m2), k2*.
   uline        uniform-line gap fill near the termination (M^2 CV): Z=-0.80..-0.95,
@@ -55,7 +60,7 @@ from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit
 BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
-SCRIPT_OF = {"zeff": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
+SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -235,6 +240,70 @@ def stage_rows(stage: str) -> list[dict]:
                     seed += 1
                     rows.append(sk_row(stage, Z, L, m2, seed))
         return rows
+    if stage in ("b8", "b13"):
+        # Run plan r8.  Band CV: total power of all modes with khat^2 in [lo, hi] (any
+        # orientation), so the (111)-vs-axis lamella ambiguity of the p=8 shell CV is gone.
+        # Bands bracket the renormalized S(k) peak (reports/sk_symmetric: Z8 0.43-0.48,
+        # Z=-1.3 0.51-0.58, drifting down toward the transition).  L chosen for dense
+        # shells inside the band and an axis mode in it for the lamellar start fields.
+        # Masses: two per L around the expected line (Z8 L16 chi_s peak -2.46..-2.52,
+        # line moves down with L; Z=-1.3 interpolated towards Z=-2).
+        Z, band, q0, base = ((Z_P8, (0.36, 0.62), 0.44, -2.50) if stage == "b8"
+                             else (-1.3, (0.37, 0.70), 0.50, -2.39))
+        rows = []
+        for j, (L, dm, mt) in enumerate(((20, 0.0, 400000), (28, -0.05, 900000),
+                                         (32, -0.08, 1300000))):
+            for k, off in enumerate((0.0, -0.10)):
+                m2 = round(base + dm + off, 3)
+                r = umbrella_row(stage, Z, q0, L, m2, (1200 if stage == "b8" else 1300) + 10 * k + L,
+                                 smax=0.5, max_therm=mt, kind="band")
+                r.update({"CVU_BAND_LO": band[0], "CVU_BAND_HI": band[1]})
+                rows.append(r)
+        return rows
+    if stage == "b8_mixed":
+        # Run plan r8, replaces p8_mixed: s = M^2 - 2 P_band, uniform vs lamellar deep in
+        # the ordered region at Z8.  Window spacing as p8_mixed.
+        rows = []
+        for L, mt in ((20, 2000000), (28, 3500000)):
+            nwin = int(round(1.95 / (0.0065 * (18 / L) ** 1.5) / 4) * 4)
+            for i, m2 in enumerate((-2.7, -2.9)):
+                r = umbrella_row(stage, Z_P8, 0.44, L, m2, 1400 + 10 * i + L, smax=0.75,
+                                 max_therm=mt, kind="mixedband", therm=50000, min_rt=0.15,
+                                 min_swap=0.1)
+                r.update({"CVU_MIX": 2.0, "CVU_SMIN": -1.2, "CVU_POWER": 1.0, "CVU_WINDOWS": nwin,
+                          "CVU_BAND_LO": 0.36, "CVU_BAND_HI": 0.62})
+                rows.append(r)
+        return rows
+    if stage == "uline_ext":
+        # Run plan r8.  The renormalized S(k) peak slides to k -> 0 near the transition
+        # for Z >= -1.05 (Z=-1.0, m2=-2.6: m2_eff ~ 0.002 at L=48), so the uniform
+        # coordinate is the relevant one there.  Profile as uline; check the window
+        # states for slabs/interfaces (scripts/cv_state_profiles.jl).
+        rows = []
+        for iz, (Z, mc) in enumerate(((-1.0, -2.60), (-1.05, -2.68))):
+            for L in (24, 32):
+                for k, dm in enumerate((-0.03, 0.0, 0.03)):
+                    m2 = round(mc + dm, 4)
+                    for init in ("disordered", "ordered"):
+                        seed = 1500 + 100 * iz + L + 10 * k + 1000 * (init == "ordered")
+                        r = umbrella_row(stage, Z, 0.0, L, m2, seed,
+                                         smax=0.55, min_rt=0.3, max_therm=900000,
+                                         samples=8000, kind="M2", init=init, therm=20000)
+                        r.pop("CVU_SHELL_Q")
+                        r["CVU_WINDOWS"] = str(int(round(int(r["CVU_WINDOWS"]) * 1.1 / 4) * 4))
+                        rows.append(r)
+        return rows
+    if stage == "zeff2":
+        # Run plan r8.  The zeff m2_c guesses for -1.5 <= Z <= -1.17 were too high (the
+        # deepest points still have m2_eff 0.2-0.45); follow the peak down to ordering.
+        grid = {-1.5: (-2.05, -2.15, -2.25), -1.3: (-2.1, -2.2, -2.3, -2.4),
+                Z_P8: (-2.15, -2.25, -2.35, -2.45)}
+        rows, seed = [], 6500
+        for Z, ms in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed))
+        return rows
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -265,7 +334,8 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
-                       "p8_shift", "p8_mixed", "p9_L27", "zeff")
+                       "p8_shift", "p8_mixed", "p9_L27", "zeff",
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2")
 
 
 def manifest(stage: str) -> Path:
