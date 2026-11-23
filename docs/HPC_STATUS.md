@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-23 09:12 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-23 10:00 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -29,7 +29,7 @@ Generated 2026-11-23 09:12 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `uline_ext` | 0/24 | 24 | 0 |
 | `validate` | 1/1 | 0 | 0 |
 | `zeff` | 152/171 | 19 | 0 |
-| `zeff2` | 2/11 | 9 | 0 |
+| `zeff2` | 4/11 | 7 | 0 |
 
 Running GPUs: l40s 4
 
@@ -42,21 +42,21 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
 | Zm1p3/L20/m2m2p39_s1320 | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1p3/L20/m2m2p49_s1330 | PD l40s | not started | | | | | | | 0 |
+| Zm1p3/L20/m2m2p49_s1330 | R l40s | therm | 87000 | 0 | 0.801 / 0.789 | 0.396 | 0 | 0.02607 | 0 |
 | Zm1p3/L28/m2m2p44_s1328 | PD h100 | not started | | | | | | | 0 |
 | Zm1p3/L28/m2m2p54_s1338 | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p3/L32/m2m2p47_s1332 | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1p3/L32/m2m2p57_s1342 | PD l40s | not started | | | | | | | 0 |
+| Zm1p3/L32/m2m2p57_s1342 | R l40s | therm | 11000 | 0 | 0.799 / 0.786 | 0.381 | 0 | 0.01833 | 0 |
 
 ### `b8` (0/6 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
-| Zm1p1716/L20/m2m2p5_s1220 | R l40s | therm | 11000 | 0 | 0.800 / 0.786 | 0.391 | 0 | 0.02556 | 0 |
+| Zm1p1716/L20/m2m2p5_s1220 | R l40s | therm | 120000 | 0 | 0.801 / 0.786 | 0.406 | 15 | 0.02607 | 0 |
 | Zm1p1716/L20/m2m2p6_s1230 | PD h100 | not started | | | | | | | 0 |
 | Zm1p1716/L28/m2m2p55_s1228 | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p1716/L28/m2m2p65_s1238 | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1p1716/L32/m2m2p58_s1232 | R l40s | not started | | | | | | | 0 |
+| Zm1p1716/L32/m2m2p58_s1232 | R l40s | therm | 14000 | 0 | 0.800 / 0.784 | 0.389 | 0 | 0.01797 | 0 |
 | Zm1p1716/L32/m2m2p68_s1242 | PD rtx_6000_pro | not started | | | | | | | 0 |
 
 ### `b8_mixed` (0/4 complete)
@@ -398,7 +398,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Z0/L48/m2m1p196_s6170 | complete | collect | 40000 | 4000 | 0.819 / 0.782 | nan |  | 0.012 | 0 |
 | Z0/L64/m2m1p196_s6171 | complete | collect | 40000 | 4000 | 0.787 / 0.735 | nan |  | 0.01067 | 0 |
 
-### `zeff2` (2/11 complete)
+### `zeff2` (4/11 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
@@ -406,21 +406,15 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p5/L48/m2m2p15_s6502 | complete | collect | 40000 | 4000 | 0.806 / 0.777 | nan |  | 0.0138 | 0 |
 | Zm1p5/L48/m2m2p25_s6503 | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p3/L48/m2m2p1_s6504 | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1p3/L48/m2m2p2_s6505 | R l40s | collect | 30000 | 2000 | 0.804 / 0.785 | nan |  | 0.01339 | 0 |
+| Zm1p3/L48/m2m2p2_s6505 | complete | collect | 40000 | 4000 | 0.804 / 0.786 | nan |  | 0.01339 | 0 |
 | Zm1p3/L48/m2m2p3_s6506 | PD h100 | not started | | | | | | | 0 |
 | Zm1p3/L48/m2m2p4_s6507 | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p1716/L48/m2m2p15_s6508 | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1p1716/L48/m2m2p25_s6509 | R l40s | collect | 28000 | 1600 | 0.803 / 0.766 | nan |  | 0.01313 | 0 |
+| Zm1p1716/L48/m2m2p25_s6509 | complete | collect | 40000 | 4000 | 0.804 / 0.775 | nan |  | 0.01313 | 0 |
 | Zm1p1716/L48/m2m2p35_s6510 | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p1716/L48/m2m2p45_s6511 | PD rtx_6000_pro | not started | | | | | | | 0 |
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
-
-## 2026-11-23 03:09 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p9/L48/m2m2p083_s6115
-
-## 2026-11-23 03:09 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p9/L48/m2m2p323_s6120
 
 ## 2026-11-23 03:28 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p8/L32/m2m2p074_s6131
@@ -475,4 +469,10 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-23 09:11 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p5/L48/m2m2p15_s6502
+
+## 2026-11-23 09:30 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p1716/L48/m2m2p25_s6509
+
+## 2026-11-23 09:30 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p3/L48/m2m2p2_s6505
 
