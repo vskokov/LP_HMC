@@ -274,9 +274,10 @@ theory.  Fluctuations renormalize $Z$ (Sec.~\ref{sec:model},
 ``Bare and renormalized couplings''), and they move the peak of the structure
 factor, which is what selects the modulation in the interacting theory.  In
 the symmetric phase near the lamellar transition we find the peak at
-$\khat\simeq0.88$--$0.91$ for $Z=-2$ instead of the bare $1$, and at
-$\khat\simeq0.41$--$0.46$ for $Z=Z_8$ instead of $0.586$
-(Sec.~\ref{sec:results}).  A lattice that is commensurate with the bare
+$\khat\simeq0.89$--$0.94$ for $Z=-2$ instead of the bare $1$, and at
+$\khat\simeq0.42$--$0.52$ for $Z=Z_8$ instead of $0.586$; for
+$Z\gtrsim-1.05$ the peak moves to $k\to0$ as the transition is approached
+(Sec.~\ref{sec:sk}).  A lattice that is commensurate with the bare
 period is therefore not commensurate with the preferred period of the
 interacting system.  Where the mismatch is small, as at $Z=-2$, it only
 strains the lamellae slightly.  Where it is large, the system can prefer a
@@ -814,7 +815,61 @@ starts signals incomplete equilibration and is treated as a diagnostic.
 \section{Results}
 \label{sec:results}
 
+\subsection{Renormalized dispersion in the symmetric phase}
+\label{sec:sk}
+
+Before locating the transitions we measure how fluctuations reshape the
+propagator itself.  In the symmetric phase the static structure factor
+$S(k)=\langle|\tilde\phi_k|^2\rangle/V$ equals the full propagator $G(k)$,
+so $1/S(k)$ is the inverse propagator $m^2+\varepsilon_k+\Sigma(k)$ of
+Sec.~\ref{sec:model}.  We sample it with plain HMC (eight independent
+chains per point, no bias) at $L=32$, $48$, and $64$, on a grid of masses
+approaching the ordering lines from the symmetric side, for
+$-2\le Z\le-0.6$.  None of the chains used here leaves the symmetric phase.
+We take the position $\khat_*$ of the maximum of $S$ from a local parabola in
+$\khat$ through $1/S$ at the five momenta nearest its minimum; this does not
+assume a functional form for $\Sigma(k)$.  Results at $L=48$ and $64$
+agree, so the peak positions are not finite-size effects.
+
+Figure~\ref{fig:sk} shows two regimes.  For $Z\le Z_8$ the moat survives:
+$1/S$ has a clear minimum at finite momentum, and a global fit
+$1/S=a+b\,\khat+c\,\widehat{k}^{4}$ describes the data (changing the fit
+range moves $Z_\eff=b/c$ by at most $0.02$).  The peak lies below the bare
+value $-Z/2$ and moves further down as $m^2$ decreases toward the transition.
+For example $\khat_*$ falls from $0.94$ to $0.89$ at $Z=-2$ (bare $1$) and
+from $0.52$ to $0.42$ at $Z=Z_8$ (bare $0.586$), which corresponds to
+$Z_\eff-Z\simeq0.2$--$0.3$.  Fluctuations thus make the moat shallower and
+move it toward $k=0$, as anticipated in Sec.~\ref{sec:model}.
+
+For $-1.05\lesssim Z\lesssim-0.8$ the behavior is different.  Far from the
+transition the peak is still at finite momentum, but as $m^2$ decreases it
+slides continuously toward $k=0$.  At $Z=-0.95$ and $-0.8$ it reaches the
+smallest momenta of the box ($\khat_*\simeq0.04$) close to the transition,
+and $1/S$ becomes nearly flat at small $k$ [Fig.~\ref{fig:sk}(b)].  There
+the polynomial fit fails, so a single number $Z_\eff$ is no longer a useful
+description.  In this range of bare $Z<0$, then, the fluctuations that drive
+the ordering are long-wavelength, as they are on the uniform side.  The
+renormalized moat closes near $Z\approx-1.0$, close to the end of the
+direct symmetric--uniform line ($Z_*\approx-0.95$, Sec.~\ref{sec:uline}).
+It also explains why lattices built to be commensurate with the bare period
+do not select the relevant states in this region: at $Z_9$, for example, the
+intermediate states of the mixed-coordinate runs at $L=18$ are slabs of the
+two uniform phases separated by domain walls, not lamellae of period $9$.
+
+\begin{figure*}[t]
+\includegraphics[width=\textwidth]{figures/sk_peak}
+\caption{Fluctuation-renormalized dispersion in the symmetric phase.
+(a) Position $\khat_*$ of the maximum of $S(k)$ versus $m^2$ for several bare
+$Z$ (largest available $L$ at each point, $L=48$ or $64$); dotted lines mark
+the bare moat $-Z/2$.  Filled symbols: the moat survives ($Z\le Z_8$); open
+symbols: the peak slides to $k\to0$ as the transition is approached.
+(b) $1/S(k)$ at two masses for $Z=Z_8$ (minimum at finite $k$) and
+$Z=-0.95$ (minimum moves to $k\approx0$).}
+\label{fig:sk}
+\end{figure*}
+
 \subsection{Symmetric--uniform line}
+\label{sec:uline}
 \pending{Binder crossings, $\chi_{\max}$ and $\Delta F$ vs $L$ for
 $-0.95\le Z\le2$; small-$L$ three-peak structure that vanishes with $L$;
 termination bracket $Z_*$.}
