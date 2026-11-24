@@ -862,7 +862,10 @@ so $1/S(k)$ is the inverse propagator $m^2+\varepsilon_k+\Sigma(k)$ of
 Sec.~\ref{sec:model}.  We sample it with plain HMC (eight independent
 chains per point, no bias) at $L=32$, $48$, and $64$, on a grid of masses
 approaching the ordering lines from the symmetric side, for
-$-2\le Z\le-0.6$.  None of the chains used here leaves the symmetric phase.
+$-2\le Z\le-0.6$.  At the deepest masses some chains nucleate the ordered
+phase (Sec.~\ref{sec:sk-nucl}); we identify them from the largest
+finite-momentum shell power and exclude them, so every spectrum shown
+is that of the symmetric phase.
 We take the position $\khat_*$ of the maximum of $S$ from a local parabola in
 $\khat$ through $1/S$ at the five momenta nearest its minimum; this does not
 assume a functional form for $\Sigma(k)$.  Results at $L=48$ and $64$
@@ -871,10 +874,12 @@ agree, so the peak positions are not finite-size effects.
 Figure~\ref{fig:sk} shows two regimes.  For $Z\le Z_8$ the moat survives:
 $1/S$ has a clear minimum at finite momentum, and a global fit
 $1/S=a+b\,\khat+c\,\widehat{k}^{4}$ describes the data (changing the fit
-range moves $Z_\eff=b/c$ by at most $0.02$).  The peak lies below the bare
+range moves $Z_\eff=b/c$ by at most $0.03$).  The peak lies below the bare
 value $-Z/2$ and moves further down as $m^2$ decreases toward the transition.
-For example $\khat_*$ falls from $0.94$ to $0.89$ at $Z=-2$ (bare $1$) and
-from $0.52$ to $0.42$ at $Z=Z_8$ (bare $0.586$), which corresponds to
+For example $\khat_*$ falls from $0.94$ to $0.89$ at $Z=-2$ (bare $1$),
+from $0.69$ to $0.59$ at $Z=-1.5$ (bare $0.75$), and
+from $0.52$ to $0.42$ at $Z=Z_8$ (bare $0.586$), where it levels off at
+$0.43$ over the last $0.25$ in $m^2$.  This corresponds to
 $Z_\eff-Z\simeq0.2$--$0.3$.  Fluctuations thus make the moat shallower and
 move it toward $k=0$, as anticipated in Sec.~\ref{sec:model}.
 
@@ -897,6 +902,24 @@ It also explains why lattices built to be commensurate with the bare period
 do not select the relevant states in this region: at $Z_9$, for example, the
 intermediate states of the mixed-coordinate runs at $L=18$ are slabs of the
 two uniform phases separated by domain walls, not lamellae of period $9$.
+
+\paragraph*{Nucleated chains.}\label{sec:sk-nucl}
+The chains that left the symmetric phase are themselves informative,
+because nothing biased them toward a particular state.  At $Z=-1.3$,
+$m^2=-2.40$ ($L=48$), six of eight chains nucleated lamellae within the run;
+all six chose the axis-aligned wave vector with $\khat=0.586$ (period $8$),
+not the neighboring allowed value $0.429$ that is closer to the
+symmetric-phase peak ($\khat_*\simeq0.45$ at $m^2=-2.30$).  At $m^2=-2.30$
+no chain ordered, so at this size the lamellar phase becomes
+accessible between these two masses.  At $Z=-1.1$ ($m^2=-2.4$ to $-2.6$,
+$L=32$--$64$) the nucleated states are also lamellae ($M^2\approx0$),
+with $\khat\simeq0.27$--$0.41$, well below the bare $0.55$.  At $Z=-1.0$,
+$m^2=-2.6$, the chains instead develop power in the lowest shell of the
+box ($\khat\approx0.02$), i.e., slabs of the two uniform phases, as at
+$Z_9$.  Lamellar order is
+therefore reached directly from the symmetric phase down to at least
+$Z=-1.1$, consistent with the renormalized moat closing between $-1.1$ and
+$-1.05$.
 
 \begin{figure*}[t]
 \includegraphics[width=\textwidth]{figures/sk_peak}

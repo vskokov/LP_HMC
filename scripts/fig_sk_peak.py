@@ -48,6 +48,7 @@ def local_peak(sp: pd.DataFrame, rng, ndraw: int = 200) -> tuple[float, float]:
 
 def load() -> pd.DataFrame:
     t = pd.read_csv(REP / "summary.csv")
+    t = t[t.replicas_used > 0]                      # runs in which every replica ordered
     rng = np.random.default_rng(1)
     rows = []
     for _, r in t.iterrows():
