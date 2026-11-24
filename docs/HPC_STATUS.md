@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-24 00:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-24 01:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -31,7 +31,7 @@ Generated 2026-11-24 00:04 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `zeff` | 152/171 | 19 | 0 |
 | `zeff2` | 5/11 | 6 | 0 |
 
-Running GPUs: h200 1
+Running GPUs: none
 
 During thermalization the HMC columns show the last check interval (ε adapts per window); for completed/collecting rows they show the whole collect phase. Round-trip walkers reset when collection starts.
 
@@ -131,7 +131,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm2/L24/m2m1p88_s132 | complete | collect | 160000 | 4000 | 0.796 / 0.713 | 0.388 | 0 | 0.02415 | 4 |
 | Zm2/L30/m2m1p9_s133 | complete | collect | 355000 | 4000 | 0.799 / 0.710 | 0.372 | 0 | 0.02 | 11 |
-| Zm2/L36/m2m1p92_s134 | R h200 | therm | 246000 | 0 | 0.800 / 0.786 | 0.399 | 0 | 0.0178 | 13 |
+| Zm2/L36/m2m1p92_s134 | PD h100 | therm | 252386 | 0 | 0.799 / 0.769 | 0.400 | 0 | 0.01745 | 14 |
 | Zm2/L36/m2m1p96_s135 | PD rtx_6000_pro | therm | 288768 | 0 | 0.800 / 0.780 | 0.400 | 0 | 0.0178 | 12 |
 
 ### `uline` (37/48 complete)
