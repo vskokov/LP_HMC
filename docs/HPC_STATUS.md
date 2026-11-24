@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-24 08:05 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-24 09:05 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -33,7 +33,7 @@ Generated 2026-11-24 08:05 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `zeff` | 171/171 | 0 | 0 |
 | `zeff2` | 11/11 | 0 | 0 |
 
-Running GPUs: h200 2, rtx_6000_pro 2
+Running GPUs: h200 2, rtx_6000_pro 5
 
 During thermalization the HMC columns show the last check interval (ε adapts per window); for completed/collecting rows they show the whole collect phase. Round-trip walkers reset when collection starts.
 
@@ -45,9 +45,9 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm1p3/L20/m2m2p39_s1320 | complete | collect | 223000 | 4000 | 0.800 / 0.727 | 0.383 | 0 | 0.02607 | 0 |
 | Zm1p3/L20/m2m2p49_s1330 | PD l40s | therm | 206402 | 0 | 0.800 / 0.766 | 0.398 | 35 | 0.02607 | 1 |
-| Zm1p3/L28/m2m2p44_s1328 | R h200 | therm | 46000 | 0 | 0.800 / 0.790 | 0.399 | 0 | 0.02009 | 1 |
+| Zm1p3/L28/m2m2p44_s1328 | R h200 | therm | 72000 | 0 | 0.800 / 0.786 | 0.401 | 0 | 0.02029 | 1 |
 | Zm1p3/L28/m2m2p54_s1338 | PD h200 | therm | 51197 | 0 | 0.800 / 0.726 | 0.397 | 0 | 0.02029 | 1 |
-| Zm1p3/L32/m2m2p47_s1332 | R rtx_6000_pro | therm | 1000 | 0 | 0.799 / 0.789 | 0.354 | 0 | 0.01833 | 0 |
+| Zm1p3/L32/m2m2p47_s1332 | R rtx_6000_pro | therm | 26000 | 0 | 0.801 / 0.784 | 0.394 | 0 | 0.01833 | 0 |
 | Zm1p3/L32/m2m2p57_s1342 | PD l40s | therm | 28603 | 0 | 0.800 / 0.778 | 0.392 | 0 | 0.01797 | 1 |
 
 ### `b8` (1/6 complete)
@@ -193,12 +193,12 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
-| Zm1/L24/m2m2p63_s1524_disordered | R rtx_6000_pro | therm | 6000 | 0 | 0.800 / 0.784 | 0.344 | 0 | 0.02185 | 0 |
-| Zm1/L24/m2m2p63_s2524_ordered | PD rtx_6000_pro | not started | | | | | | | 0 |
+| Zm1/L24/m2m2p63_s1524_disordered | R rtx_6000_pro | therm | 172000 | 0 | 0.800 / 0.787 | 0.340 | 2 | 0.02229 | 0 |
+| Zm1/L24/m2m2p63_s2524_ordered | R rtx_6000_pro | therm | 157000 | 0 | 0.800 / 0.787 | 0.338 | 0 | 0.02185 | 0 |
 | Zm1/L24/m2m2p6_s1534_disordered | PD l40s | therm | 226215 | 0 | 0.799 / 0.740 | 0.345 | 15 | 0.02185 | 1 |
 | Zm1/L24/m2m2p6_s2534_ordered | PD h100 | not started | | | | | | | 0 |
-| Zm1/L24/m2m2p57_s1544_disordered | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1/L24/m2m2p57_s2544_ordered | PD rtx_6000_pro | not started | | | | | | | 0 |
+| Zm1/L24/m2m2p57_s1544_disordered | R rtx_6000_pro | therm | 160000 | 0 | 0.800 / 0.787 | 0.354 | 6 | 0.02185 | 0 |
+| Zm1/L24/m2m2p57_s2544_ordered | R rtx_6000_pro | therm | 157000 | 0 | 0.799 / 0.785 | 0.350 | 7 | 0.02185 | 0 |
 | Zm1/L32/m2m2p63_s1532_disordered | PD l40s | therm | 51087 | 0 | 0.798 / 0.655 | 0.351 | 0 | 0.01761 | 1 |
 | Zm1/L32/m2m2p63_s2532_ordered | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1/L32/m2m2p6_s1542_disordered | PD rtx_6000_pro | not started | | | | | | | 0 |
@@ -215,7 +215,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L32/m2m2p71_s2632_ordered | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p05/L32/m2m2p68_s1642_disordered | PD l40s | not started | | | | | | | 0 |
 | Zm1p05/L32/m2m2p68_s2642_ordered | PD rtx_6000_pro | not started | | | | | | | 0 |
-| Zm1p05/L32/m2m2p65_s1652_disordered | R h200 | therm | 44000 | 0 | 0.800 / 0.784 | 0.355 | 0 | 0.01797 | 1 |
+| Zm1p05/L32/m2m2p65_s1652_disordered | R h200 | therm | 69000 | 0 | 0.800 / 0.784 | 0.353 | 0 | 0.01761 | 1 |
 | Zm1p05/L32/m2m2p65_s2652_ordered | PD l40s | not started | | | | | | | 0 |
 
 ### `validate` (1/1 complete)
