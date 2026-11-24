@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-24 04:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-24 05:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -28,10 +28,10 @@ Generated 2026-11-24 04:04 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `uline` | 37/48 | 11 | 0 |
 | `uline_ext` | 0/24 | 24 | 0 |
 | `validate` | 1/1 | 0 | 0 |
-| `zeff` | 163/171 | 8 | 0 |
+| `zeff` | 168/171 | 3 | 0 |
 | `zeff2` | 6/11 | 5 | 0 |
 
-Running GPUs: h200 2
+Running GPUs: h200 2, rtx_6000_pro 1
 
 During thermalization the HMC columns show the last check interval (ε adapts per window); for completed/collecting rows they show the whole collect phase. Round-trip walkers reset when collection starts.
 
@@ -222,7 +222,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm2/L12/m2m1p73_s121 | complete | collect | 24000 | 4000 | 0.811 / 0.798 | 0.393 | 9 | | 0 |
 
-### `zeff` (163/171 complete)
+### `zeff` (168/171 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
@@ -334,7 +334,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p95/L64/m2m2p365_s6106 | complete | collect | 40000 | 4000 | 0.793 / 0.748 | nan |  | 0.01067 | 0 |
 | Zm0p95/L32/m2m2p365_s6107 | complete | collect | 40000 | 4000 | 0.813 / 0.783 | nan |  | 0.01726 | 0 |
 | Zm0p95/L48/m2m2p425_s6108 | complete | collect | 40000 | 4000 | 0.791 / 0.748 | nan |  | 0.01366 | 0 |
-| Zm0p95/L64/m2m2p425_s6109 | R h200 | therm | 4000 | 0 | 0.000 / 0.000 | nan |  | 0.01025 | 0 |
+| Zm0p95/L64/m2m2p425_s6109 | complete | collect | 40000 | 4000 | 0.792 / 0.675 | nan |  | 0.01046 | 0 |
 | Zm0p95/L48/m2m2p465_s6110 | complete | collect | 40000 | 4000 | 0.795 / 0.765 | nan |  | 0.01326 | 0 |
 | Zm0p95/L64/m2m2p465_s6111 | complete | collect | 40000 | 4000 | 0.787 / 0.739 | nan |  | 0.01099 | 0 |
 | Zm0p9/L48/m2m1p633_s6112 | complete | collect | 40000 | 4000 | 0.792 / 0.761 | nan |  | 0.01339 | 0 |
@@ -342,7 +342,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p9/L48/m2m1p933_s6114 | complete | collect | 40000 | 4000 | 0.795 / 0.762 | nan |  | 0.01353 | 0 |
 | Zm0p9/L48/m2m2p083_s6115 | complete | collect | 40000 | 4000 | 0.790 / 0.737 | nan |  | 0.01339 | 0 |
 | Zm0p9/L48/m2m2p183_s6116 | complete | collect | 40000 | 4000 | 0.783 / 0.740 | nan |  | 0.0138 | 0 |
-| Zm0p9/L48/m2m2p263_s6117 | R h200 | therm | 8000 | 0 | 0.000 / 0.000 | nan |  | 0.01394 | 0 |
+| Zm0p9/L48/m2m2p263_s6117 | complete | collect | 40000 | 4000 | 0.784 / 0.736 | nan |  | 0.01353 | 0 |
 | Zm0p9/L64/m2m2p263_s6118 | complete | collect | 40000 | 4000 | 0.786 / 0.753 | nan |  | 0.01099 | 0 |
 | Zm0p9/L32/m2m2p263_s6119 | complete | collect | 40000 | 4000 | 0.793 / 0.758 | nan |  | 0.01833 | 0 |
 | Zm0p9/L48/m2m2p323_s6120 | complete | collect | 40000 | 4000 | 0.808 / 0.771 | nan |  | 0.013 | 0 |
@@ -350,7 +350,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p9/L48/m2m2p363_s6122 | complete | collect | 40000 | 4000 | 0.781 / 0.735 | nan |  | 0.01353 | 0 |
 | Zm0p9/L64/m2m2p363_s6123 | complete | collect | 40000 | 4000 | 0.807 / 0.761 | nan |  | 0.01035 | 0 |
 | Zm0p8/L48/m2m1p444_s6124 | complete | collect | 40000 | 4000 | 0.805 / 0.769 | nan |  | 0.01313 | 0 |
-| Zm0p8/L48/m2m1p594_s6125 | PD h200 | not started | | | | | | | 0 |
+| Zm0p8/L48/m2m1p594_s6125 | complete | collect | 40000 | 4000 | 0.789 / 0.749 | nan |  | 0.01353 | 0 |
 | Zm0p8/L48/m2m1p744_s6126 | complete | collect | 40000 | 4000 | 0.773 / 0.750 | nan |  | 0.01436 | 0 |
 | Zm0p8/L48/m2m1p894_s6127 | complete | collect | 40000 | 4000 | 0.801 / 0.729 | nan |  | 0.01249 | 0 |
 | Zm0p8/L48/m2m1p994_s6128 | complete | collect | 40000 | 4000 | 0.805 / 0.718 | nan |  | 0.01287 | 0 |
@@ -358,7 +358,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p8/L64/m2m2p074_s6130 | complete | collect | 40000 | 4000 | 0.794 / 0.751 | nan |  | 0.01066 | 0 |
 | Zm0p8/L32/m2m2p074_s6131 | complete | collect | 40000 | 4000 | 0.783 / 0.752 | nan |  | 0.01851 | 0 |
 | Zm0p8/L48/m2m2p134_s6132 | complete | collect | 40000 | 4000 | 0.817 / 0.749 | nan |  | 0.01238 | 0 |
-| Zm0p8/L64/m2m2p134_s6133 | PD h200 | not started | | | | | | | 0 |
+| Zm0p8/L64/m2m2p134_s6133 | complete | collect | 40000 | 4000 | 0.796 / 0.751 | nan |  | 0.01088 | 0 |
 | Zm0p8/L48/m2m2p174_s6134 | complete | collect | 40000 | 4000 | 0.797 / 0.703 | nan |  | 0.01274 | 0 |
 | Zm0p8/L64/m2m2p174_s6135 | complete | collect | 40000 | 4000 | 0.801 / 0.760 | nan |  | 0.01045 | 0 |
 | Zm0p6/L48/m2m1p122_s6136 | complete | collect | 40000 | 4000 | 0.800 / 0.752 | nan |  | 0.01339 | 0 |
@@ -366,7 +366,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p6/L48/m2m1p422_s6138 | complete | collect | 40000 | 4000 | 0.804 / 0.772 | nan |  | 0.013 | 0 |
 | Zm0p6/L48/m2m1p572_s6139 | complete | collect | 40000 | 4000 | 0.810 / 0.767 | nan |  | 0.01262 | 0 |
 | Zm0p6/L48/m2m1p672_s6140 | complete | collect | 40000 | 4000 | 0.791 / 0.659 | nan |  | 0.01261 | 0 |
-| Zm0p6/L48/m2m1p752_s6141 | PD h200 | not started | | | | | | | 0 |
+| Zm0p6/L48/m2m1p752_s6141 | complete | collect | 40000 | 4000 | 0.801 / 0.750 | nan |  | 0.01353 | 0 |
 | Zm0p6/L64/m2m1p752_s6142 | complete | collect | 40000 | 4000 | 0.812 / 0.782 | nan |  | 0.01025 | 0 |
 | Zm0p6/L32/m2m1p752_s6143 | complete | collect | 40000 | 4000 | 0.792 / 0.753 | nan |  | 0.01797 | 0 |
 | Zm0p6/L48/m2m1p812_s6144 | complete | collect | 40000 | 4000 | 0.792 / 0.728 | nan |  | 0.01287 | 0 |
@@ -374,7 +374,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p6/L48/m2m1p852_s6146 | complete | collect | 40000 | 4000 | 0.819 / 0.789 | nan |  | 0.01262 | 0 |
 | Zm0p6/L64/m2m1p852_s6147 | complete | collect | 40000 | 4000 | 0.786 / 0.720 | nan |  | 0.01066 | 0 |
 | Zm0p4/L48/m2m0p86_s6148 | complete | collect | 40000 | 4000 | 0.816 / 0.723 | nan |  | 0.01236 | 0 |
-| Zm0p4/L48/m2m1p01_s6149 | PD h200 | not started | | | | | | | 0 |
+| Zm0p4/L48/m2m1p01_s6149 | R h200 | therm | 14000 | 0 | 0.000 / 0.000 | nan |  | 0.01261 | 0 |
 | Zm0p4/L48/m2m1p16_s6150 | complete | collect | 40000 | 4000 | 0.808 / 0.769 | nan |  | 0.013 | 0 |
 | Zm0p4/L48/m2m1p31_s6151 | complete | collect | 40000 | 4000 | 0.812 / 0.788 | nan |  | 0.01274 | 0 |
 | Zm0p4/L48/m2m1p41_s6152 | complete | collect | 40000 | 4000 | 0.817 / 0.762 | nan |  | 0.01249 | 0 |
@@ -382,7 +382,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p4/L64/m2m1p49_s6154 | complete | collect | 40000 | 4000 | 0.779 / 0.720 | nan |  | 0.01102 | 0 |
 | Zm0p4/L32/m2m1p49_s6155 | complete | collect | 40000 | 4000 | 0.790 / 0.747 | nan |  | 0.01761 | 0 |
 | Zm0p4/L48/m2m1p55_s6156 | complete | collect | 40000 | 4000 | 0.802 / 0.749 | nan |  | 0.01261 | 0 |
-| Zm0p4/L64/m2m1p55_s6157 | PD h200 | not started | | | | | | | 0 |
+| Zm0p4/L64/m2m1p55_s6157 | R h200 | not started | | | | | | | 0 |
 | Zm0p4/L48/m2m1p59_s6158 | complete | collect | 40000 | 4000 | 0.798 / 0.694 | nan |  | 0.01261 | 0 |
 | Zm0p4/L64/m2m1p59_s6159 | complete | collect | 40000 | 4000 | 0.787 / 0.736 | nan |  | 0.01088 | 0 |
 | Z0/L48/m2m0p466_s6160 | complete | collect | 40000 | 4000 | 0.798 / 0.761 | nan |  | 0.01249 | 0 |
@@ -405,7 +405,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p5/L48/m2m2p05_s6501 | complete | collect | 40000 | 4000 | 0.788 / 0.732 | nan |  | 0.01437 | 0 |
 | Zm1p5/L48/m2m2p15_s6502 | complete | collect | 40000 | 4000 | 0.806 / 0.777 | nan |  | 0.0138 | 0 |
 | Zm1p5/L48/m2m2p25_s6503 | complete | collect | 40000 | 4000 | 0.807 / 0.768 | nan |  | 0.0134 | 0 |
-| Zm1p3/L48/m2m2p1_s6504 | PD rtx_6000_pro | not started | | | | | | | 0 |
+| Zm1p3/L48/m2m2p1_s6504 | R rtx_6000_pro | therm | 1000 | 0 | 0.000 / 0.000 | nan |  | 0.01353 | 0 |
 | Zm1p3/L48/m2m2p2_s6505 | complete | collect | 40000 | 4000 | 0.804 / 0.786 | nan |  | 0.01339 | 0 |
 | Zm1p3/L48/m2m2p3_s6506 | complete | collect | 40000 | 4000 | 0.791 / 0.677 | nan |  | 0.01339 | 0 |
 | Zm1p3/L48/m2m2p4_s6507 | PD rtx_6000_pro | not started | | | | | | | 0 |
@@ -415,21 +415,6 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L48/m2m2p45_s6511 | PD rtx_6000_pro | not started | | | | | | | 0 |
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
-
-## 2026-11-23 09:11 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p5/L48/m2m2p15_s6502
-
-## 2026-11-23 09:30 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p1716/L48/m2m2p25_s6509
-
-## 2026-11-23 09:30 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p3/L48/m2m2p2_s6505
-
-## 2026-11-23 10:42 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/b8/Zm1p1716/L20/m2m2p5_s1220
-
-## 2026-11-23 11:42 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/uline/Zm0p9/L32/m2m2p368_s721_ordered
 
 ## 2026-11-23 12:31 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/uline/Zm0p9/L32/m2m2p368_s720_disordered
@@ -475,4 +460,19 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-24 04:04 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm1/L48/m2m2p4_s6093
+
+## 2026-11-24 04:34 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p95/L64/m2m2p425_s6109
+
+## 2026-11-24 04:34 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p9/L48/m2m2p263_s6117
+
+## 2026-11-24 04:45 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p8/L48/m2m1p594_s6125
+
+## 2026-11-24 05:04 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p6/L48/m2m1p752_s6141
+
+## 2026-11-24 05:04 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p8/L64/m2m2p134_s6133
 
