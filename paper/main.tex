@@ -129,7 +129,11 @@ can disorder an inhomogeneous condensate completely, as seen in recent lattice
 simulations of a moat $O(N)$ model~\cite{Pisarski2020,Winstel2024}.  For the
 one-component field considered here these Goldstone mechanisms are absent,
 which makes the $N=1$ theory the cleanest setting to study the competition
-between uniform and modulated order.
+between uniform and modulated order.  The Landau--Peierls effect, in turn,
+relies on the continuous rotational and translational symmetry of the
+continuum.  A lattice breaks both, and we show in Sec.~\ref{sec:smectic}
+that in the lattice theory it survives only as an intermediate-scale
+crossover whose range grows with the modulation period.
 
 In this paper we determine the phase diagram of the three-dimensional lattice
 theory defined in Eq.~\eqref{eq:H} below.  We combine three approaches.
@@ -624,19 +628,52 @@ L^{-\eta_\eff}$, with $\eta\le\eta_\eff\le2\eta$ depending on how the
 anisotropic decay of correlations is averaged over directions.  Between $L=12$
 and $36$ this amounts to a decrease of less than $7\%$.
 
-Two lattice corrections enter.  First, the single-mode energy depends on $k$
-only through $\khat$, so the degenerate surface $\khat=\qs^2$ still admits
-zero-energy tilts, and smectic elasticity survives at harmonic order.  Second,
-for commensurate wavevectors $\qs=2\pi/p$ the lattice breaks the continuous
-translation symmetry of the layers.  Umklapp terms of order $A^p$ in the
-energy, such as $\sum_x\cos^4$ for $p=4$, then pin the layer phase $u$.
-Beyond a pinning length they restore true long-range order.  Deep in the
-ordered phase, where the amplitude is large, pinning is strong for $p=4$ and
-still effective for $p=6$; it weakens rapidly with growing period and
-shrinking amplitude.  A test of the Landau--Peierls effect therefore requires
-long periods close to the transition, or a wavevector that the lattice
-cannot pin; on commensurate lattices deep in the lamellar phase one expects,
-and we find (Sec.~\ref{sec:results}), true long-range order.
+The Landau--Peierls argument needs two exact zero modes of the layers: a
+rigid translation and a rigid rotation.  The lattice removes both, and the
+model therefore has true long-range order asymptotically.  Two mechanisms
+are at work.
+
+\emph{Orientational locking.}  The bare dispersion depends on $k$ only
+through $\khat$, so in the single-mode approximation the degenerate surface
+$\khat=\qs^2$ still allows zero-energy tilts.  This degeneracy is accidental:
+higher harmonics and, more importantly, fluctuations make the inverse
+propagator depend on the direction of $k$ as well.  We measure this
+anisotropy directly in the symmetric phase (Sec.~\ref{sec:sk}).  Writing
+$G^{-1}(k)=g(\khat)+c\,(a_4-\tfrac12)$ with the cubic invariant
+$a_4=\sum_\mu\hat k_\mu^4/(\khat)^2$ ($a_4=1$ along an axis, $1/3$ along a
+body diagonal), we find near the transition $c\simeq-0.010$ at $Z=-2$ and
+$c\simeq-0.001$ at $Z=Z_8$ and $-1.5$; the bare theory has $c=0$.  Since
+$c<0$, lamellae along a lattice axis are preferred, as observed.  A tilt of
+the layer normal by a small angle $\vartheta$ changes $a_4$ by
+$-2\vartheta^2$ and the free-energy density by $-cA^2\vartheta^2/2$.  With
+$\vartheta=|\nabla_\perp u|$ this adds a term $\frac D2(\nabla_\perp u)^2$
+to $f_{\rm el}$, with $D=-cA^2$.  The layer fluctuations
+$\langle u^2\rangle\propto\int d^3q\,[Bq_z^2+Dq_\perp^2+Kq_\perp^4]^{-1}$
+then stay finite.  The logarithm of the Landau--Peierls effect is cut off
+at the length $\xi_D=\sqrt{K/D}$, which is $\approx7$ lattice spacings at
+$Z=-2$ and $\approx20$ at $Z_8$.  On scales $L\ll\xi_D$ the layers behave
+as a smectic; beyond it they have true long-range order.  Since lattice
+anisotropies vanish as the period grows, $\xi_D$ diverges in the continuum
+limit $\qs\to0$, where the Landau--Peierls effect is recovered.
+
+\emph{Translational pinning.}  For commensurate wavevectors $\qs=2\pi/p$ the
+lattice also breaks the continuous translation symmetry of the layers.
+Umklapp terms of order $A^p$ in the energy, such as $\sum_x\cos^4$ for
+$p=4$, or the coupling of the fundamental to the staggered harmonic for
+$p=6$ (Fig.~\ref{fig:profiles}), pin the layer phase $u$ even at
+$q_\perp=0$.  Deep in the ordered phase, where the amplitude is large,
+pinning is strong for $p=4$ and $p=6$.  It weakens rapidly with growing
+period and shrinking amplitude.  Unlike orientational locking, pinning can
+be avoided by an incommensurate wavevector.
+
+Both mechanisms stiffen the layers, but they leave different signatures in
+the spectrum of layer displacements: $\langle|u_{q_\perp}|^2\rangle$ grows
+as $q_\perp^{-4}$ for a smectic, as $q_\perp^{-2}$ with orientational locking
+alone, and saturates at small $q_\perp$ with pinning.  A test of the
+Landau--Peierls effect on the lattice therefore requires $L\ll\xi_D$, that
+is, long periods, close to the transition, and away from commensurability.
+Deep in the lamellar phase on commensurate lattices one expects true
+long-range order, which is what we find (Sec.~\ref{sec:lro}).
 
 \subsection{Finite-size signatures}
 \label{sec:fss}
@@ -825,7 +862,10 @@ so $1/S(k)$ is the inverse propagator $m^2+\varepsilon_k+\Sigma(k)$ of
 Sec.~\ref{sec:model}.  We sample it with plain HMC (eight independent
 chains per point, no bias) at $L=32$, $48$, and $64$, on a grid of masses
 approaching the ordering lines from the symmetric side, for
-$-2\le Z\le-0.6$.  None of the chains used here leaves the symmetric phase.
+$-2\le Z\le-0.6$.  At the deepest masses some chains nucleate the ordered
+phase (Sec.~\ref{sec:sk-nucl}); we identify them from the largest
+finite-momentum shell power and exclude them, so every spectrum shown
+is that of the symmetric phase.
 We take the position $\khat_*$ of the maximum of $S$ from a local parabola in
 $\khat$ through $1/S$ at the five momenta nearest its minimum; this does not
 assume a functional form for $\Sigma(k)$.  Results at $L=48$ and $64$
@@ -834,10 +874,12 @@ agree, so the peak positions are not finite-size effects.
 Figure~\ref{fig:sk} shows two regimes.  For $Z\le Z_8$ the moat survives:
 $1/S$ has a clear minimum at finite momentum, and a global fit
 $1/S=a+b\,\khat+c\,\widehat{k}^{4}$ describes the data (changing the fit
-range moves $Z_\eff=b/c$ by at most $0.02$).  The peak lies below the bare
+range moves $Z_\eff=b/c$ by at most $0.03$).  The peak lies below the bare
 value $-Z/2$ and moves further down as $m^2$ decreases toward the transition.
-For example $\khat_*$ falls from $0.94$ to $0.89$ at $Z=-2$ (bare $1$) and
-from $0.52$ to $0.42$ at $Z=Z_8$ (bare $0.586$), which corresponds to
+For example $\khat_*$ falls from $0.94$ to $0.89$ at $Z=-2$ (bare $1$),
+from $0.69$ to $0.59$ at $Z=-1.5$ (bare $0.75$), and
+from $0.52$ to $0.42$ at $Z=Z_8$ (bare $0.586$), where it levels off at
+$0.43$ over the last $0.35$ in $m^2$.  This corresponds to
 $Z_\eff-Z\simeq0.2$--$0.3$.  Fluctuations thus make the moat shallower and
 move it toward $k=0$, as anticipated in Sec.~\ref{sec:model}.
 
@@ -860,6 +902,28 @@ It also explains why lattices built to be commensurate with the bare period
 do not select the relevant states in this region: at $Z_9$, for example, the
 intermediate states of the mixed-coordinate runs at $L=18$ are slabs of the
 two uniform phases separated by domain walls, not lamellae of period $9$.
+
+\paragraph*{Nucleated chains.}\label{sec:sk-nucl}
+The chains that left the symmetric phase are themselves informative,
+because nothing biased them toward a particular state.  At $Z=-1.3$,
+$m^2=-2.40$ ($L=48$), six of eight chains nucleated lamellae within the run;
+all six chose the axis-aligned wave vector with $\khat=0.586$ (period $8$),
+not the neighboring allowed value $0.429$ that is closer to the
+symmetric-phase peak ($\khat_*\simeq0.45$ at $m^2=-2.30$).  At $m^2=-2.30$
+no chain ordered, so at this size the lamellar phase becomes
+accessible between these two masses.  At $Z=Z_8$ the order is reversed:
+one chain at $m^2=-2.35$ and all eight at $m^2=-2.45$ form lamellae at
+$\khat=0.413$, a tilted wave vector $(4,3,0)\,2\pi/48$ next to the
+renormalized peak ($0.43$), rather than at the axis-aligned value $0.586$
+for which this $Z$ was made commensurate.  At $Z=-1.1$ ($m^2=-2.4$ to $-2.6$,
+$L=32$--$64$) the nucleated states are also lamellae ($M^2\approx0$),
+with $\khat\simeq0.27$--$0.41$, well below the bare $0.55$.  At $Z=-1.0$,
+$m^2=-2.6$, the chains instead develop power in the lowest shell of the
+box ($\khat\approx0.02$), i.e., slabs of the two uniform phases, as at
+$Z_9$.  Lamellar order is
+therefore reached directly from the symmetric phase down to at least
+$Z=-1.1$, consistent with the renormalized moat closing between $-1.1$ and
+$-1.05$.
 
 \begin{figure*}[t]
 \includegraphics[width=\textwidth]{figures/sk_peak}
@@ -884,8 +948,33 @@ termination bracket $Z_*$.}
 scaling; latent $Q/V$; comparison with Hartree.}
 
 \subsection{Rank and long-range order of the modulated phase}
-\pending{$d_\eff$ in the ordered peak; $P_*(L)$ at $(Z,m^2)=(-2,-3),(-4,0)$
-vs Eq.~\eqref{eq:caille}.}
+\label{sec:lro}
+\pending{$d_\eff$ in the ordered peak.}
+
+To test the order of the lamellar phase we run unbiased HMC from lamellar
+starts at $(Z,m^2)=(-2,-3)$ for $L=12$--$36$ and at $(-4,0)$ for
+$L=12$--$40$, with independent replicas.  At $Z=-2$ the shell power is
+flat in $L$: a fit $P_*\propto L^{-\eta_\eff}$ gives
+$\eta_\eff=0.0003(2)$, two orders of magnitude below the harmonic smectic
+estimate $\eta\simeq0.030$ of Eq.~\eqref{eq:caille}.  At $Z=-4$ several
+replicas are trapped in configurations with phase-slip defects, which are
+long-lived at this large amplitude; the defect-free replicas give
+$\eta_\eff=0.0002(2)$, compared with $0.021$.
+
+The layer displacements themselves show why.  For each column along the
+modulation axis we compute the local layer phase
+$\theta(x_\perp)=\qs u(x_\perp)$ from the Fourier component of the field at
+$\qs$, and from it the spectrum $S_\theta(q_\perp)$ of the column-averaged
+displacements.  A harmonic smectic would give
+$S_\theta=2T/(LA^2\hat q_\perp^4)$, i.e., $S_\theta\approx45$ at the smallest
+transverse momentum of the $L=36$ box at $Z=-2$.  We find
+$S_\theta\approx0.02$--$0.04$ there, roughly constant in $q_\perp$ and more
+than three orders of magnitude smaller.  At $Z=-4$, $L=40$, it is
+$\approx0.005$.  The spectrum does not grow toward small $q_\perp$, so
+neither the smectic $q_\perp^{-4}$ nor the $q_\perp^{-2}$ of orientational
+locking alone is visible: the layers are pinned by the lattice
+(Sec.~\ref{sec:smectic}).  The lamellar phase of the commensurate lattice
+model deep in the ordered region therefore has true long-range order.
 
 \begin{figure*}[t]
  \centering
