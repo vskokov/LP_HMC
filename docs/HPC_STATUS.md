@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-24 01:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-24 02:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -29,7 +29,7 @@ Generated 2026-11-24 01:04 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `uline_ext` | 0/24 | 24 | 0 |
 | `validate` | 1/1 | 0 | 0 |
 | `zeff` | 152/171 | 19 | 0 |
-| `zeff2` | 5/11 | 6 | 0 |
+| `zeff2` | 6/11 | 5 | 0 |
 
 Running GPUs: none
 
@@ -398,13 +398,13 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Z0/L48/m2m1p196_s6170 | complete | collect | 40000 | 4000 | 0.819 / 0.782 | nan |  | 0.012 | 0 |
 | Z0/L64/m2m1p196_s6171 | complete | collect | 40000 | 4000 | 0.787 / 0.735 | nan |  | 0.01067 | 0 |
 
-### `zeff2` (5/11 complete)
+### `zeff2` (6/11 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
 | Zm1p5/L48/m2m2p05_s6501 | complete | collect | 40000 | 4000 | 0.788 / 0.732 | nan |  | 0.01437 | 0 |
 | Zm1p5/L48/m2m2p15_s6502 | complete | collect | 40000 | 4000 | 0.806 / 0.777 | nan |  | 0.0138 | 0 |
-| Zm1p5/L48/m2m2p25_s6503 | PD rtx_6000_pro | not started | | | | | | | 0 |
+| Zm1p5/L48/m2m2p25_s6503 | complete | collect | 40000 | 4000 | 0.807 / 0.768 | nan |  | 0.0134 | 0 |
 | Zm1p3/L48/m2m2p1_s6504 | PD rtx_6000_pro | not started | | | | | | | 0 |
 | Zm1p3/L48/m2m2p2_s6505 | complete | collect | 40000 | 4000 | 0.804 / 0.786 | nan |  | 0.01339 | 0 |
 | Zm1p3/L48/m2m2p3_s6506 | complete | collect | 40000 | 4000 | 0.791 / 0.677 | nan |  | 0.01339 | 0 |
@@ -415,9 +415,6 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L48/m2m2p45_s6511 | PD rtx_6000_pro | not started | | | | | | | 0 |
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
-
-## 2026-11-23 03:39 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff/Zm0p6/L48/m2m1p812_s6144
 
 ## 2026-11-23 03:58 UTC
 - exit3 rule uline/Zm0p9/L32/m2m2p388_s711_ordered: rt 50->75 rising at 600000; CVU_MAX_THERM 600000 -> 900000 (raise 1/2); resubmitted (uline: submit   cvu_uline_Zm0p9_L32_m2m2p388_s711  gpu=l40s)
@@ -475,4 +472,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-23 15:43 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p3/L48/m2m2p3_s6506
+
+## 2026-11-24 01:34 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeff2/Zm1p5/L48/m2m2p25_s6503
 
