@@ -16,6 +16,11 @@ Symbols
   time scale; it is not an error bar on m_c.
 * Z8 L = 20: chi_s still rising at the upper edge of the reweighting range, so the point
   is a lower bound on m_c(L=20) (arrow).
+* uniform <-> lamellar: brackets from the local direct-coexistence runs (stages ulam, ulam2;
+  reports/ulam/summary.csv, scripts/analyze_ulam.py).  Half-uniform / half-lamellar L = 48
+  boxes; the bar spans the lowest m2 where lamellae invade (all replicas) to the highest m2
+  where the uniform phase invades.  Where no uniform win was found yet, a downward arrow from
+  the lowest lamellar-win mass.
 * Open circle at the origin: mean-field Lifshitz point (theory lines: fig_theory.py).  Grey band: Z range where the renormalized S(k) peak moves to
   k -> 0 at the transition (moat closes).
 
@@ -59,14 +64,45 @@ def lamellar_points() -> list[dict]:
     return out
 
 
+def ulam_brackets() -> list[tuple[float, float, float | None]]:
+    """(Z, lowest m2 with lamellar win, highest m2 with uniform win or None)."""
+    f = ROOT / "reports" / "ulam" / "summary.csv"
+    if not f.is_file():
+        return []
+    t = pd.read_csv(f)
+    t = t[t.complete.astype(bool)]
+    out = []
+    for Z, g in t.groupby("Z"):
+        lam = g[g.lamellar == g[["uniform", "lamellar", "slab", "symmetric"]].sum(axis=1)].m2
+        uni = g[g.uniform > 0].m2
+        if lam.empty:
+            continue
+        lo = lam.min()
+        hi = uni[uni < lo].max() if not uni.empty else None
+        out.append((round(Z, 4), lo, None if hi is None or np.isnan(hi) else hi))
+    return out
+
+
 # unbiased L=48 chains: (Z, last fully symmetric m2, first m2 with nucleated order, state)
 NUCLEATION = [(-1.3, -2.30, -2.40, "lamellae"), (Z8, -2.25, -2.35, "lamellae"),
               (-1.1, -2.40, -2.50, "lamellae"), (-1.0, -2.50, -2.60, "slabs")]
 
 
-def draw(ax, U, lam, H, inset=False):
+def draw(ax, U, lam, H, inset=False, UL=()):
     ms = 3.2 if not inset else 3.6
-    ax.axvspan(-1.10, -1.05, color="0.88", lw=0, zorder=0)
+    mid = []
+    for Z, lo, hi in UL:
+        if hi is None:
+            ax.annotate("", (Z, lo - 0.25), (Z, lo), arrowprops=dict(arrowstyle="->", lw=0.8, color=C_UM))
+            ax.plot([Z], [lo], "_", ms=5, mew=1.0, color=C_UM)
+        else:
+            ax.plot([Z, Z], [hi, lo], "-", lw=1.4, color=C_UM, solid_capstyle="butt", zorder=3)
+            ax.plot([Z, Z], [hi, lo], "_", ms=5, mew=1.0, color=C_UM, zorder=3)
+            mid.append((Z, 0.5 * (hi + lo)))
+    if mid:
+        z, m = zip(*sorted(mid))
+        ax.plot(z, m, ":", lw=1.0, color=C_UM, zorder=2)
+    ax.fill_betweenx([-2.65, 0.3], -1.10, -1.05, color="0.88", lw=0, zorder=0)   # symmetric phase only
     # symmetric -> uniform
     cont = U.Z >= -0.75
     ax.plot(U.Z, U.m_chi_max, "-", lw=1.0, color=C_UNI, zorder=2)
@@ -97,6 +133,8 @@ def main() -> int:
 
     U = uniform_line()
     lam = lamellar_points()
+    UL = ulam_brackets()
+    print("uniform-lamellar brackets", UL)
     H = pd.read_csv(ROOT / "reports" / "hartree" / "hartree_lines.csv")
     H = H[H.L == 0].sort_values("Z")
     H = H[(H.Z >= -2.3) & (H.Z <= 2.1)]
@@ -106,14 +144,15 @@ def main() -> int:
 
     use_prd()
     fig, ax = plt.subplots(figsize=figsize("single", 0.9))
-    draw(ax, U, lam, H)
+    draw(ax, U, lam, H, UL=UL)
     ax.set_xlim(-2.25, 2.1)
-    ax.set_ylim(-2.95, 0.25)
+    ax.set_ylim(-4.0, 0.25)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
     ax.text(1.2, -0.4, "symmetric", ha="center", fontsize=8)
     ax.text(0.9, -1.6, "uniform", ha="center", fontsize=8)
-    ax.text(-1.85, -2.6, "lamellar", ha="center", fontsize=8)
+    ax.text(-0.75, -3.4, "uniform", ha="center", fontsize=8)
+    ax.text(-1.75, -2.6, "lamellar", ha="center", fontsize=8)
     ax.annotate("MF LP", (0, 0), (0.2, -0.2), fontsize=6.5, arrowprops=dict(arrowstyle="-", lw=0.5))
     ax.text(0.98, 0.98, "PRELIMINARY", transform=ax.transAxes, ha="right", va="top", fontsize=6.5, color="0.5")
 
@@ -125,12 +164,13 @@ def main() -> int:
     ax.indicate_inset_zoom(ins, edgecolor="0.5", lw=0.5)
 
     from matplotlib.lines import Line2D
-    h = [Line2D([], [], marker="o", ls="-", color=C_UNI, ms=3, label="sym.–uniform (continuous)"),
-         Line2D([], [], marker="o", ls="-", color=C_UNI, mfc="white", ms=3, label="sym.–uniform (order open)"),
-         Line2D([], [], marker="D", ls="--", color=C_MOD, ms=3, label="sym.–lamellar (1st order)"),
-         Line2D([], [], marker="s", ls="", color=C_UNI, mfc="white", ms=3, label=r"sym.–uniform, mixed CV ($Z_9$)"),
-         Line2D([], [], lw=2.2, color=C_MOD, alpha=0.35, label="ordering onset, unbiased $L=48$")]
-    ax.legend(handles=h, loc="lower right", fontsize=5.8, frameon=False, handlelength=1.6)
+    h = [Line2D([], [], marker="o", ls="-", color=C_UNI, ms=3, label="sym–uni, continuous"),
+         Line2D([], [], marker="o", ls="-", color=C_UNI, mfc="white", ms=3, label="sym–uni, order open"),
+         Line2D([], [], marker="D", ls="--", color=C_MOD, ms=3, label="sym–lam, 1st order"),
+         Line2D([], [], marker="s", ls="", color=C_UNI, mfc="white", ms=3, label=r"sym–uni, mixed CV ($Z_9$)"),
+         Line2D([], [], lw=2.2, color=C_MOD, alpha=0.35, label="ordering onset ($L=48$)"),
+         Line2D([], [], marker="_", ls="-", lw=1.4, color=C_UM, ms=5, label="uni–lam bracket ($L=48$)")]
+    ax.legend(handles=h, loc="lower right", fontsize=5.5, frameon=False, handlelength=1.6)
     fig.tight_layout(pad=0.3)
     save(fig, ROOT / "paper" / "figures" / "phase_diagram_prelim")
     return 0
