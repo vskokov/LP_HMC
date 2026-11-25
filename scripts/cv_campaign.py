@@ -61,7 +61,7 @@ from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit
 BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
-SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
+SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -328,6 +328,22 @@ def stage_rows(stage: str) -> list[dict]:
                 rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
                                    init=("slab", n)))
         return rows
+    if stage == "zeff3":
+        # LOCAL: symmetric -> moat crossover (Zeff = 0, curvature of 1/S at k = 0) for
+        # -0.4 < Z < 0, where the line leaves the uniform transition (Z=-0.4: Zeff changes
+        # sign ~0.03 above m_c; Z=0: Zeff > 0 everywhere).  m_c interpolated from
+        # reports/transition_order (Z=0 -1.216, -0.25 -1.432, -0.4 -1.61); deep-symmetric
+        # masses follow the line toward Z -> 0-.
+        mc = {-0.05: -1.257, -0.1: -1.30, -0.2: -1.39, -0.3: -1.49}
+        grid = {Z: [round(m + d, 3) for d in (1.5, 1.0, 0.6, 0.35, 0.2, 0.1, 0.05, 0.02)]
+                for Z, m in mc.items()}
+        grid[0.0] = [0.0, 0.5, 1.0]
+        rows, seed = [], 7200
+        for Z in sorted(grid):
+            for m2 in grid[Z]:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed))
+        return rows
     if stage == "ulam2":
         # LOCAL refinement of ulam (first pass: Z=-1.1 line in (-3.1,-2.7), Z=-1.3 in
         # (-3.6,-3.1), Z<=-1.6 lamellar down to -3.6); same slab protocol.
@@ -382,7 +398,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
-                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "ulam", "ulam2")
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "ulam", "ulam2", "zeff3")
 
 
 def manifest(stage: str) -> Path:

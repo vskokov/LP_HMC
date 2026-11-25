@@ -21,8 +21,11 @@ Symbols
   boxes; the bar spans the lowest m2 where lamellae invade (all replicas) to the highest m2
   where the uniform phase invades.  Where no uniform win was found yet, a downward arrow from
   the lowest lamellar-win mass.
-* Open circle at the origin: mean-field Lifshitz point (theory lines: fig_theory.py).  Grey band: Z range where the renormalized S(k) peak moves to
-  k -> 0 at the transition (moat closes).
+* symmetric -> moat crossover: Z_eff = 0 (curvature of 1/S at k = 0 changes sign), from
+  reports/sk_symmetric/moat_line.csv (scripts/moat_line.py).  For -1.05 <= Z <= -0.6 the
+  moat persists to within ~0.02 of the uniform transition (no separate line visible).
+* Open circle at the origin: mean-field Lifshitz point (theory lines: fig_theory.py).  Grey band (near the transition only): Z range where the
+  renormalized S(k) peak moves to k -> 0 at the transition.
 
 Output: paper/figures/phase_diagram_prelim.{pdf,png}
 """
@@ -40,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paper_style import OKABE_ITO, figsize, save, use_prd  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-C_UNI, C_MOD, C_UM = OKABE_ITO[0], OKABE_ITO[1], "0.25"
+C_UNI, C_MOD, C_UM, C_MOAT = OKABE_ITO[0], OKABE_ITO[1], "0.25", OKABE_ITO[2]
 Z8 = -8 * np.sin(np.pi / 8) ** 2
 
 
@@ -88,8 +91,18 @@ NUCLEATION = [(-1.3, -2.30, -2.40, "lamellae"), (Z8, -2.25, -2.35, "lamellae"),
               (-1.1, -2.40, -2.50, "lamellae"), (-1.0, -2.50, -2.60, "slabs")]
 
 
-def draw(ax, U, lam, H, inset=False, UL=()):
+def moat_points() -> pd.DataFrame:
+    f = ROOT / "reports" / "sk_symmetric" / "moat_line.csv"
+    if not f.is_file():
+        return pd.DataFrame(columns=["Z", "m2_moat", "sys"])
+    t = pd.read_csv(f)
+    return t[t.kind == "crossing"].sort_values("Z")
+
+
+def draw(ax, U, lam, H, inset=False, UL=(), MO=None):
     ms = 3.2 if not inset else 3.6
+    if MO is not None and len(MO):
+        ax.errorbar(MO.Z, MO.m2_moat, yerr=MO["sys"].fillna(0), fmt="^-.", ms=ms, lw=0.9, color=C_MOAT, zorder=4)
     mid = []
     for Z, lo, hi in UL:
         if hi is None:
@@ -102,7 +115,7 @@ def draw(ax, U, lam, H, inset=False, UL=()):
     if mid:
         z, m = zip(*sorted(mid))
         ax.plot(z, m, ":", lw=1.0, color=C_UM, zorder=2)
-    ax.fill_betweenx([-2.65, 0.3], -1.10, -1.05, color="0.88", lw=0, zorder=0)   # symmetric phase only
+    ax.fill_betweenx([-2.62, -2.30], -1.10, -1.05, color="0.88", lw=0, zorder=0)  # peak -> k=0 at the transition
     # symmetric -> uniform
     cont = U.Z >= -0.75
     ax.plot(U.Z, U.m_chi_max, "-", lw=1.0, color=C_UNI, zorder=2)
@@ -134,6 +147,7 @@ def main() -> int:
     U = uniform_line()
     lam = lamellar_points()
     UL = ulam_brackets()
+    MO = moat_points()
     print("uniform-lamellar brackets", UL)
     H = pd.read_csv(ROOT / "reports" / "hartree" / "hartree_lines.csv")
     H = H[H.L == 0].sort_values("Z")
@@ -143,25 +157,34 @@ def main() -> int:
         print(p)
 
     use_prd()
-    fig, ax = plt.subplots(figsize=figsize("single", 0.9))
-    draw(ax, U, lam, H, UL=UL)
+    fig, (ax, bx) = plt.subplots(2, 1, figsize=figsize("single", 1.6),
+                                 gridspec_kw={"height_ratios": [1.15, 1]})
+    draw(ax, U, lam, H, UL=UL, MO=MO)
     ax.set_xlim(-2.25, 2.1)
     ax.set_ylim(-4.0, 0.25)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
     ax.text(1.2, -0.4, "symmetric", ha="center", fontsize=8)
+    ax.text(-1.6, -0.6, "symmetric\n(moat)", ha="center", fontsize=7, color="0.3")
     ax.text(0.9, -1.6, "uniform", ha="center", fontsize=8)
     ax.text(-0.75, -3.4, "uniform", ha="center", fontsize=8)
     ax.text(-1.75, -2.6, "lamellar", ha="center", fontsize=8)
     ax.annotate("MF LP", (0, 0), (0.2, -0.2), fontsize=6.5, arrowprops=dict(arrowstyle="-", lw=0.5))
     ax.text(0.98, 0.98, "PRELIMINARY", transform=ax.transAxes, ha="right", va="top", fontsize=6.5, color="0.5")
+    ax.text(0.02, 0.98, "(a)", transform=ax.transAxes, va="top", fontsize=8)
 
-    ins = ax.inset_axes([0.10, 0.50, 0.36, 0.36])
-    draw(ins, U, lam, H, inset=True)
-    ins.set_xlim(-1.4, -0.82)
-    ins.set_ylim(-2.66, -2.20)
-    ins.tick_params(labelsize=5.5, length=2)
-    ax.indicate_inset_zoom(ins, edgecolor="0.5", lw=0.5)
+    zx, zy = (-1.45, -0.25), (-2.72, -1.40)
+    from matplotlib.patches import Rectangle
+    ax.add_patch(Rectangle((zx[0], zy[0]), zx[1] - zx[0], zy[1] - zy[0], fill=False, ec="0.5", lw=0.5, ls="--"))
+    draw(bx, U, lam, H, inset=True, UL=UL, MO=MO)
+    bx.set_xlim(*zx)
+    bx.set_ylim(*zy)
+    bx.set_xlabel(r"$Z$")
+    bx.set_ylabel(r"$m^2$")
+    bx.text(0.02, 0.98, "(b)", transform=bx.transAxes, va="top", fontsize=8)
+    bx.text(-1.3, -1.6, "symmetric (moat)", fontsize=7, color="0.3")
+    bx.text(-0.55, -2.4, "uniform", fontsize=7)
+    bx.text(-1.4, -2.6, "lamellar", fontsize=7)
 
     from matplotlib.lines import Line2D
     h = [Line2D([], [], marker="o", ls="-", color=C_UNI, ms=3, label="sym–uni, continuous"),
@@ -169,7 +192,8 @@ def main() -> int:
          Line2D([], [], marker="D", ls="--", color=C_MOD, ms=3, label="sym–lam, 1st order"),
          Line2D([], [], marker="s", ls="", color=C_UNI, mfc="white", ms=3, label=r"sym–uni, mixed CV ($Z_9$)"),
          Line2D([], [], lw=2.2, color=C_MOD, alpha=0.35, label="ordering onset ($L=48$)"),
-         Line2D([], [], marker="_", ls="-", lw=1.4, color=C_UM, ms=5, label="uni–lam bracket ($L=48$)")]
+         Line2D([], [], marker="_", ls="-", lw=1.4, color=C_UM, ms=5, label="uni–lam bracket ($L=48$)"),
+         Line2D([], [], marker="^", ls="-.", color=C_MOAT, ms=3, label=r"moat crossover ($Z_{\rm eff}=0$)")]
     ax.legend(handles=h, loc="lower right", fontsize=5.5, frameon=False, handlelength=1.6)
     fig.tight_layout(pad=0.3)
     save(fig, ROOT / "paper" / "figures" / "phase_diagram_prelim")
