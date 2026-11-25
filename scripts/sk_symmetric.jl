@@ -12,6 +12,13 @@
 #   SK_BLOCK                     samples per written block (default 100)
 #   SK_KMAX                      largest k̂² recorded (default 3.0)
 #   SK_SEED, SK_OUT, SK_GPU, SK_RUNTIME (s, then checkpoint and exit 75)
+#   SK_INIT                      random (default, small noise) | uniform | lamellar | slab
+#   SK_INIT_N                    lamellar start: n wavelengths across L, k = 2πn/L
+#                                (default: nearest to the bare peak k̂² = -Z/2)
+#     uniform  φ = +sqrt(-m²/λ);  lamellar  φ = A cos(kx), A² = 4|m² + Zk̂² + k̂⁴|/(3λ)
+#     slab     x < L/2 uniform, x ≥ L/2 lamellar: odd replicas modulated along x (layers
+#              parallel to the interfaces), even replicas along y (layers perpendicular).
+#              Direct-coexistence test: the phase with lower free energy invades the box.
 #
 # Output in SK_OUT:
 #   sk.csv     block,replica,q,deg,S       S = <|φ_k|²>/V averaged over the shell and block
@@ -56,6 +63,9 @@ const RUNTIME = parse(Float64, env("SK_RUNTIME", env("CVU_RUNTIME", "1e12")))   
 const ACC_TARGET, ADAPT_EVERY = 0.8, 50
 const EPS_MIN, EPS_MAX = Float64(ε) / 50, 1.5 * Float64(ε)
 const TAU = Float64(ε) * n_lf
+const INIT = env("SK_INIT", "random")
+const INIT_N = parse(Int, env("SK_INIT_N", "0"))
+INIT in ("random", "uniform", "lamellar", "slab") || error("SK_INIT must be random|uniform|lamellar|slab")
 SAMPLES % BLOCK == 0 || error("SK_SAMPLES must be a multiple of SK_BLOCK")
 
 mkpath(OUT)
@@ -95,6 +105,27 @@ function shell_sums(batch)
     return out
 end
 
+function initial_fields(rng)
+    host = 0.05 .* randn(rng, L, L, L, NR)
+    INIT == "random" && return host
+    z, m2 = Float64(Z), M2_VALUE
+    n = INIT_N > 0 ? INIT_N : max(1, round(Int, L * 2asin(sqrt(clamp(-z / 8, 0, 1))) / 2π))
+    k = 2π * n / L
+    q = 4sin(k / 2)^2
+    A = sqrt(max(-4 * (m2 + z * q + q^2) / (3 * Float64(λ)), 0.09))
+    u = sqrt(max(-m2 / Float64(λ), 0.09))
+    @printf("init %s: u=%.4f  lamellar n=%d khat2=%.4f A=%.4f\n", INIT, u, n, q, A)
+    for r in 1:NR, x in 1:L, y in 1:L
+        if INIT == "uniform" || (INIT == "slab" && x <= L ÷ 2)
+            host[x, y, :, r] .+= u
+        else
+            c = (INIT == "slab" && iseven(r)) ? y : x
+            host[x, y, :, r] .+= A * cos(k * (c - 1))
+        end
+    end
+    return host
+end
+
 function main()
     t0 = time()
     isfile(DONE) && (println("already complete"); return 0)
@@ -109,7 +140,7 @@ function main()
         sweeps, collected, phase = d["sweeps"], d["collected"], d["phase"]
         eps, nlf, acc_all, att_all = Float64.(d["eps"]), d["nlf"], d["acc"], d["att"]
     else
-        host = 0.05 .* randn(rng, L, L, L, NR)
+        host = initial_fields(rng)
         batch = cpu ? FloatType.(host) : CuArray(FloatType.(host))
         sweeps, collected, phase = 0, 0, "therm"
         eps, nlf, acc_all, att_all = fill(Float64(ε), NR), n_lf, zeros(Int, NR), 0
@@ -122,7 +153,7 @@ function main()
                         Z=Float64(Z), seed=SEED);
                 mv(CKPT * ".tmp", CKPT; force=true))
     diag() = Dict("sweeps" => sweeps, "collected" => collected, "phase" => phase, "L" => L,
-                  "Z" => Float64(Z), "m2" => M2_VALUE, "replicas" => NR,
+                  "Z" => Float64(Z), "m2" => M2_VALUE, "replicas" => NR, "init" => INIT, "init_n" => INIT_N,
                   "hmc_acceptance_mean" => mean(acc_all) / max(att_all, 1),
                   "hmc_acceptance_min" => minimum(acc_all) / max(att_all, 1),
                   "eps_median" => median(eps), "n_lf" => nlf, "elapsed_s" => time() - t0)

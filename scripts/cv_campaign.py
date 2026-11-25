@@ -61,7 +61,7 @@ from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit
 BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
-SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
+SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -73,13 +73,14 @@ def hmc(L: int) -> dict:
     return {"CVU_EPS": f"{eps:.4f}", "CVU_NLF": str(max(10, round(1.0 / eps)))}
 
 
-def sk_row(stage, Z, L, m2, seed, samples=4000, skip=5, therm=20000, reps=8, kmax=3.0):
+def sk_row(stage, Z, L, m2, seed, samples=4000, skip=5, therm=20000, reps=8, kmax=3.0, init=None):
     out = BASE / stage / f"Z{tag(round(Z, 4))}" / f"L{L}" / f"m2{tag(m2)}_s{seed}"
     eps = 0.039 * (12 / L) ** 0.75
     return {"stage": stage, "L": L, "Z": f"{Z:.6f}", "m2": m2, "seed": seed, "out": str(out),
             "SK_L": L, "SK_Z": f"{Z:.6f}", "SK_M2": m2, "SK_REPS": reps, "SK_EPS": f"{eps:.4f}",
             "SK_NLF": max(10, round(1.0 / eps)), "SK_THERM": therm, "SK_SAMPLES": samples,
-            "SK_SKIP": skip, "SK_KMAX": kmax, "SK_SEED": seed, "SK_OUT": str(out), "SK_GPU": "true"}
+            "SK_SKIP": skip, "SK_KMAX": kmax, "SK_SEED": seed, "SK_OUT": str(out), "SK_GPU": "true",
+            **({"SK_INIT": init[0], "SK_INIT_N": init[1]} if init else {})}
 
 
 def ladder(L: int) -> dict:
@@ -313,6 +314,20 @@ def stage_rows(stage: str) -> list[dict]:
                         r["CVU_WINDOWS"] = str(int(round(int(r["CVU_WINDOWS"]) * 1.1 / 4) * 4))
                         rows.append(r)
         return rows
+    if stage == "ulam":
+        # LOCAL exploratory (not in the Hazel run plan): uniform <-> lamellar boundary by
+        # direct coexistence.  Half-uniform / half-lamellar L = 48 boxes (sk_symmetric.jl
+        # SK_INIT=slab, layers parallel to the interfaces in odd replicas, perpendicular in
+        # even ones); the phase that invades the box has the lower free energy.  n = number
+        # of wavelengths across L, near the renormalized peak (reports/sk_symmetric).
+        nwave = {-1.1: 5, -1.3: 6, -1.6: 7, -2.0: 8}
+        rows, seed = [], 7000
+        for m2 in (-2.7, -3.1, -3.6, -4.2):
+            for Z, n in nwave.items():
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
     if stage == "zeff2":
         # Run plan r8.  The zeff m2_c guesses for -1.5 <= Z <= -1.17 were too high (the
         # deepest points still have m2_eff 0.2-0.45); follow the peak down to ordering.
@@ -355,7 +370,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
-                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline")
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "ulam")
 
 
 def manifest(stage: str) -> Path:
