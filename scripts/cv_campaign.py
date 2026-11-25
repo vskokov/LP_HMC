@@ -61,7 +61,7 @@ from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit
 BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
-SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
+SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -344,6 +344,17 @@ def stage_rows(stage: str) -> list[dict]:
                 seed += 1
                 rows.append(sk_row(stage, Z, 48, m2, seed))
         return rows
+    if stage == "zeff4":
+        # LOCAL: resolve the moat crossover next to the uniform line for Z <= -0.6, where the
+        # zeff/zeff2 scans still have Zeff < 0 at m_c + 0.02.  L = 64 (lowest shell
+        # khat^2 = 0.0096) at 0.005-0.015 above m_c (zeff grid: Z=-0.6 -1.872, Z=-0.8 -2.194).
+        mc = {-0.6: -1.872, -0.8: -2.194}
+        rows, seed = [], 7300
+        for Z, m in mc.items():
+            for d in (0.015, 0.01, 0.005):
+                seed += 1
+                rows.append(sk_row(stage, Z, 64, round(m + d, 3), seed))
+        return rows
     if stage == "ulam2":
         # LOCAL refinement of ulam (first pass: Z=-1.1 line in (-3.1,-2.7), Z=-1.3 in
         # (-3.6,-3.1), Z<=-1.6 lamellar down to -3.6); same slab protocol.
@@ -398,7 +409,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
-                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "ulam", "ulam2", "zeff3")
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "ulam", "ulam2", "zeff3", "zeff4")
 
 
 def manifest(stage: str) -> Path:
