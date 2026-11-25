@@ -21,6 +21,7 @@ Stages (each a manifest under runs/cv_umbrella/<stage>/manifest.csv):
   p9_L27       r5: p=9 mixed CV at L=27 (second size for the L=18 coexistence).
   b8, b13      r8: band-CV symmetric->lamellar umbrellas at Z=-1.1716 (band 0.36-0.62) and
                Z=-1.3 (band 0.37-0.70), L=20/28/32, bands from the measured S(k) peak.
+  bline        r10: re-placed b8/b13 masses (L20/28/32 near m2 = -2.34..-2.40).
   b8_mixed     r8: mixedband s = M^2 - 2 P_band at Z=-1.1716, L=20/28: uniform vs lamellar.
   uline_ext    r8: M^2 CV at Z=-1.0, -1.05 (renormalized moat closes), L=24/32.
   zeff2        r8: deeper unbiased S(k) points at Z=-1.5, -1.3, -1.1716 (L=48).
@@ -260,6 +261,25 @@ def stage_rows(stage: str) -> list[dict]:
                 r.update({"CVU_BAND_LO": band[0], "CVU_BAND_HI": band[1]})
                 rows.append(r)
         return rows
+    if stage == "bline":
+        # Run plan r10.  The r8 b8/b13 masses were placed from the p=8 axis-shell estimate
+        # (L16 m_eq -2.65), which forced the wrong wave vector.  Band-CV L20 results put the
+        # line near m2 = -2.34 at both Z (b13 L20 m_eq -2.342(3); b8 L20 chi_s peak ~-2.34,
+        # at the edge of the reweighting range), and unbiased L48 chains at Z8 nucleate
+        # lamellae between -2.35 (1/8) and -2.45 (8/8).  New rows bracket -2.34..-2.40;
+        # same CV, band and caps as b8/b13.  Results combine with b8/b13 per (Z, L).
+        spec = {"b8": (Z_P8, (0.36, 0.62), 0.44, 1600, ((20, -2.36), (28, -2.34), (28, -2.40),
+                                                       (32, -2.34), (32, -2.40))),
+                "b13": (-1.3, (0.37, 0.70), 0.50, 1700, ((28, -2.36), (32, -2.34), (32, -2.40)))}
+        caps = {20: 400000, 28: 900000, 32: 1300000}
+        rows = []
+        for Z, band, q0, s0, pts in spec.values():
+            for i, (L, m2) in enumerate(pts):
+                r = umbrella_row(stage, Z, q0, L, m2, s0 + 10 * i + L, smax=0.5,
+                                 max_therm=caps[L], kind="band")
+                r.update({"CVU_BAND_LO": band[0], "CVU_BAND_HI": band[1]})
+                rows.append(r)
+        return rows
     if stage == "b8_mixed":
         # Run plan r8, replaces p8_mixed: s = M^2 - 2 P_band, uniform vs lamellar deep in
         # the ordered region at Z8.  Window spacing as p8_mixed.
@@ -335,7 +355,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
-                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2")
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline")
 
 
 def manifest(stage: str) -> Path:
