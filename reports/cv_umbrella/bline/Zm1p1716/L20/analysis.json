@@ -1,0 +1,37 @@
+{
+  "dir": "/gpfs_common/share02/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/bline/Zm1p1716/L20",
+  "L": 20,
+  "Z": -1.1715730428695679,
+  "masses": [
+    -2.36
+  ],
+  "cv": "band(0.36,0.62)",
+  "runs": [
+    "/gpfs_common/share02/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/bline/Zm1p1716/L20/m2m2p36_s1620/statistics.csv"
+  ],
+  "summary": {
+    "n_good": 101,
+    "chi_s_max": 11.383381732275195,
+    "m_chi_s_max": -2.3125,
+    "chi_at_edge": false,
+    "n_twopeak": 11,
+    "coexistence": {
+      "m_eq": -2.300792771289129,
+      "barrier": 0.27764564969194205,
+      "s_lo": 0.22655550172234373,
+      "s_hi": 0.2812937437492188,
+      "s_min": 0.2539246227357812,
+      "latent_q": 0.010221347559650667,
+      "deff_ordered": 1.3189561426413334
+    }
+  },
+  "errors": {
+    "chi_s_max": 0.4388628869220309,
+    "m_chi_s_max": 0.003879348154685649,
+    "coexistence_fraction": 0.75,
+    "m_eq": 0.00598372452316885,
+    "barrier": 0.09743099542079907,
+    "latent_q": 0.0009051953761929786
+  },
+  "elapsed_s": 130.8685166835785
+}
