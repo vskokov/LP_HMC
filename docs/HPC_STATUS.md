@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-25 21:15 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-25 22:15 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -36,7 +36,7 @@ Generated 2026-11-25 21:15 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `zeff` | 171/171 | 0 | 0 |
 | `zeff2` | 11/11 | 0 | 0 |
 
-Running GPUs: l40s 3
+Running GPUs: l40s 2
 
 During thermalization the HMC columns show the last check interval (ε adapts per window); for completed/collecting rows they show the whole collect phase. Round-trip walkers reset when collection starts.
 
@@ -79,9 +79,9 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm1p1716/L20/m2m2p36_s1620 | complete | collect | 180000 | 4000 | 0.802 / 0.704 | 0.393 | 0 | 0.02556 | 0 |
 | Zm1p1716/L28/m2m2p34_s1638 | PD h100 | therm | 92052 | 0 | 0.801 / 0.596 | 0.403 | 0 | 0.02029 | 2 |
-| Zm1p1716/L28/m2m2p4_s1648 | R l40s | therm | 38000 | 0 | 0.800 / 0.787 | 0.398 | 0 | 0.02029 | 1 |
+| Zm1p1716/L28/m2m2p4_s1648 | R l40s | therm | 69000 | 0 | 0.800 / 0.789 | 0.400 | 0 | 0.02029 | 1 |
 | Zm1p1716/L32/m2m2p34_s1662 | PD h200 | not started | | | | | | | 0 |
-| Zm1p1716/L32/m2m2p4_s1672 | R l40s | therm | 59000 | 0 | 0.800 / 0.783 | 0.400 | 0 | 0.01833 | 2 |
+| Zm1p1716/L32/m2m2p4_s1672 | R l40s | therm | 77000 | 0 | 0.800 / 0.786 | 0.400 | 0 | 0.01833 | 2 |
 | Zm1p3/L28/m2m2p36_s1728 | PD h200 | therm | 47850 | 0 | 0.800 / 0.785 | 0.399 | 0 | 0.01989 | 1 |
 | Zm1p3/L32/m2m2p34_s1742 | PD h100 | therm | 25036 | 0 | 0.803 / 0.583 | 0.394 | 0 | 0.01833 | 1 |
 | Zm1p3/L32/m2m2p4_s1752 | PD h200 | not started | | | | | | | 0 |
@@ -226,9 +226,9 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L24/m2m2p68_s1634_disordered | PD h200 | collect | 731200 | 7100 | 0.797 / 0.675 | 0.335 | 0 | 0.02229 | 3 |
 | Zm1p05/L24/m2m2p68_s2634_ordered | PD rtx_6000_pro | therm | 484299 | 0 | 0.800 / 0.763 | 0.337 | 37 | 0.02229 | 2 |
 | Zm1p05/L24/m2m2p65_s1644_disordered | PD rtx_6000_pro | therm | 253266 | 0 | 0.799 / 0.744 | 0.340 | 1 | 0.02229 | 1 |
-| Zm1p05/L24/m2m2p65_s2644_ordered | PD l40s | therm | 819482 | 0 | 0.801 / 0.766 | 0.341 | 45 | 0.02229 | 4 |
+| Zm1p05/L24/m2m2p65_s2644_ordered | PD h100 | therm | 900000 | 0 | 0.800 / 0.784 | 0.341 | 51 | 0.02229 | 4 |
 | Zm1p05/L32/m2m2p71_s1632_disordered | PD rtx_6000_pro | therm | 105399 | 0 | 0.800 / 0.757 | 0.345 | 0 | 0.01797 | 2 |
-| Zm1p05/L32/m2m2p71_s2632_ordered | R l40s | therm | 287000 | 0 | 0.800 / 0.785 | 0.344 | 0 | 0.01797 | 6 |
+| Zm1p05/L32/m2m2p71_s2632_ordered | PD l40s | therm | 310136 | 0 | 0.799 / 0.669 | 0.343 | 0 | 0.01761 | 7 |
 | Zm1p05/L32/m2m2p68_s1642_disordered | PD rtx_6000_pro | therm | 46124 | 0 | 0.800 / 0.694 | 0.350 | 0 | 0.01761 | 1 |
 | Zm1p05/L32/m2m2p68_s2642_ordered | PD l40s | therm | 138856 | 0 | 0.800 / 0.784 | 0.346 | 0 | 0.01797 | 3 |
 | Zm1p05/L32/m2m2p65_s1652_disordered | PD l40s | therm | 322357 | 0 | 0.799 / 0.742 | 0.354 | 2 | 0.01761 | 7 |
@@ -434,9 +434,6 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
 
-## 2026-11-24 13:35 UTC
-- exit3 rule uline/Zm0p95/L32/m2m2p49_s710_disordered: rt 41->68 rising at 600000; CVU_MAX_THERM 600000 -> 900000 (raise 1/2); resubmitted (uline: submit   cvu_uline_Zm0p95_L32_m2m2p49_s710  gpu=rtx_6000_pro)
-
 ## 2026-11-24 13:46 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/uline/Zm0p95/L32/m2m2p49_s711_ordered
 
@@ -493,4 +490,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-25 15:49 UTC
 - bline/Zm1p1716/L20 complete -> analysis job 2095093: chi_s_max 11.38(44) at m2 -2.3125(39), not at edge, n_twopeak 11, coexistence 75%: m_eq -2.3008(60), barrier 0.278(97), latent_q 0.01022(91). Combined b8+bline L20 (cv_umbrella/combined/b8_bline, symlinks; job 2095094): chi_s_max 11.38(51) at -2.312(3), m_eq -2.303 but bootstrap sd 0.20, coexistence 40%, barrier 0.247(88). Reports committed to hazel-ops.
+
+## 2026-11-25 21:56 UTC
+- exit3 rule uline_ext/Zm1p05/L24/m2m2p65_s2644_ordered: rt 43->51 rising at 900000; CVU_MAX_THERM 900000 -> 1350000 (raise 1/2); resubmitted (uline_ext: submit   cvu_uline_ext_Zm1p05_L24_m2m2p65_s2644  gpu=h100)
 
