@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-26 15:19 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-26 16:19 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -39,7 +39,7 @@ Generated 2026-11-26 15:19 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `zeff` | 171/171 | 0 | 0 |
 | `zeff2` | 11/11 | 0 | 0 |
 
-Running GPUs: h100 2, h200 1, l40s 4
+Running GPUs: h100 1, h200 2
 
 During thermalization the HMC columns show the last check interval (ε adapts per window); for completed/collecting rows they show the whole collect phase. Round-trip walkers reset when collection starts.
 
@@ -51,7 +51,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm1p3/L20/m2m2p39_s1320 | complete | collect | 223000 | 4000 | 0.800 / 0.727 | 0.383 | 0 | 0.02607 | 0 |
 | Zm1p3/L20/m2m2p49_s1330 | complete | collect | 244000 | 4000 | 0.802 / 0.723 | 0.379 | 0 | 0.02556 | 1 |
-| Zm1p3/L28/m2m2p44_s1328 | R h200 | therm | 126000 | 0 | 0.800 / 0.781 | 0.402 | 0 | 0.01989 | 3 |
+| Zm1p3/L28/m2m2p44_s1328 | R h200 | therm | 152000 | 0 | 0.800 / 0.783 | 0.401 | 1 | 0.02029 | 3 |
 | Zm1p3/L28/m2m2p54_s1338 | IDLE | therm | 258000 | 0 | 0.800 / 0.787 | 0.399 | 0 | 0.02029 | 5 |
 | Zm1p3/L32/m2m2p47_s1332 | IDLE | therm | 102293 | 0 | 0.801 / 0.741 | 0.395 | 0 | 0.01833 | 3 |
 | Zm1p3/L32/m2m2p57_s1342 | IDLE | therm | 112394 | 0 | 0.800 / 0.754 | 0.397 | 0 | 0.01833 | 4 |
@@ -83,7 +83,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L20/m2m2p36_s1620 | complete | collect | 180000 | 4000 | 0.802 / 0.704 | 0.393 | 0 | 0.02556 | 0 |
 | Zm1p1716/L28/m2m2p34_s1638 | PD l40s | therm | 169611 | 0 | 0.801 / 0.779 | 0.402 | 0 | 0.02029 | 4 |
 | Zm1p1716/L28/m2m2p4_s1648 | IDLE | therm | 164698 | 0 | 0.800 / 0.782 | 0.403 | 0 | 0.01989 | 4 |
-| Zm1p1716/L32/m2m2p34_s1662 | R l40s | therm | 122000 | 0 | 0.800 / 0.785 | 0.399 | 0 | 0.01797 | 4 |
+| Zm1p1716/L32/m2m2p34_s1662 | PD l40s | therm | 137985 | 0 | 0.800 / 0.781 | 0.400 | 0 | 0.01797 | 5 |
 | Zm1p1716/L32/m2m2p4_s1672 | IDLE | therm | 114000 | 0 | 0.800 / 0.785 | 0.401 | 0 | 0.01797 | 4 |
 | Zm1p3/L28/m2m2p36_s1728 | PD l40s | therm | 206572 | 0 | 0.800 / 0.776 | 0.401 | 1 | 0.02029 | 5 |
 | Zm1p3/L32/m2m2p34_s1742 | PD h100 | therm | 78805 | 0 | 0.799 / 0.778 | 0.398 | 0 | 0.01797 | 3 |
@@ -160,7 +160,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm2/L24/m2m1p88_s132 | complete | collect | 160000 | 4000 | 0.796 / 0.713 | 0.388 | 0 | 0.02415 | 4 |
 | Zm2/L30/m2m1p9_s133 | complete | collect | 355000 | 4000 | 0.799 / 0.710 | 0.372 | 0 | 0.02 | 11 |
 | Zm2/L36/m2m1p92_s134 | PD h200 | therm | 387539 | 0 | 0.800 / 0.766 | 0.400 | 7 | 0.0178 | 22 |
-| Zm2/L36/m2m1p96_s135 | R h100 | therm | 325000 | 0 | 0.800 / 0.785 | 0.400 | 0 | 0.01745 | 13 |
+| Zm2/L36/m2m1p96_s135 | PD h100 | therm | 330429 | 0 | 0.800 / 0.767 | 0.400 | 0 | 0.01745 | 14 |
 
 ### `uline` (45/48 complete)
 
@@ -210,7 +210,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p95/L24/m2m2p467_s721_ordered | complete | collect | 311000 | 8000 | 0.803 / 0.703 | 0.368 | 0 | 0.02185 | 2 |
 | Zm0p95/L32/m2m2p51_s700_disordered | PD rtx_6000_pro | therm | 784979 | 0 | 0.800 / 0.784 | 0.365 | 92 | 0.01797 | 16 |
 | Zm0p95/L32/m2m2p51_s701_ordered | PD rtx_6000_pro | therm | 732473 | 0 | 0.800 / 0.772 | 0.365 | 80 | 0.01761 | 15 |
-| Zm0p95/L32/m2m2p49_s710_disordered | R l40s | therm | 630000 | 0 | 0.800 / 0.787 | 0.366 | 78 | 0.01761 | 13 |
+| Zm0p95/L32/m2m2p49_s710_disordered | PD h100 | therm | 643667 | 0 | 0.800 / 0.781 | 0.366 | 79 | 0.01761 | 14 |
 | Zm0p95/L32/m2m2p49_s711_ordered | complete | collect | 757000 | 8000 | 0.799 / 0.690 | 0.364 | 0 | 0.01761 | 15 |
 | Zm0p95/L32/m2m2p47_s720_disordered | complete | collect | 731000 | 8000 | 0.799 / 0.683 | 0.357 | 0 | 0.01797 | 14 |
 | Zm0p95/L32/m2m2p47_s721_ordered | complete | collect | 697000 | 8000 | 0.799 / 0.710 | 0.358 | 0 | 0.01797 | 13 |
@@ -235,14 +235,14 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L24/m2m2p71_s2624_ordered | complete | collect | 762000 | 8000 | 0.801 / 0.732 | 0.337 | 0 | 0.02185 | 3 |
 | Zm1p05/L24/m2m2p68_s1634_disordered | complete | collect | 733000 | 8000 | 0.798 / 0.677 | 0.331 | 0 | 0.02229 | 3 |
 | Zm1p05/L24/m2m2p68_s2634_ordered | PD rtx_6000_pro | therm | 484299 | 0 | 0.800 / 0.763 | 0.337 | 37 | 0.02229 | 2 |
-| Zm1p05/L24/m2m2p65_s1644_disordered | PD h200 | therm | 253266 | 0 | 0.799 / 0.744 | 0.340 | 1 | 0.02229 | 1 |
+| Zm1p05/L24/m2m2p65_s1644_disordered | R h200 | therm | 284000 | 0 | 0.800 / 0.781 | 0.340 | 2 | 0.02185 | 1 |
 | Zm1p05/L24/m2m2p65_s2644_ordered | PD h200 | therm | 1097621 | 0 | 0.799 / 0.770 | 0.341 | 66 | 0.02229 | 5 |
 | Zm1p05/L32/m2m2p71_s1632_disordered | PD rtx_6000_pro | therm | 105399 | 0 | 0.800 / 0.757 | 0.345 | 0 | 0.01797 | 2 |
-| Zm1p05/L32/m2m2p71_s2632_ordered | R l40s | therm | 520000 | 0 | 0.800 / 0.785 | 0.343 | 2 | 0.01761 | 11 |
-| Zm1p05/L32/m2m2p68_s1642_disordered | R h100 | therm | 48000 | 0 | 0.800 / 0.785 | 0.349 | 0 | 0.01761 | 1 |
+| Zm1p05/L32/m2m2p71_s2632_ordered | PD l40s | therm | 536936 | 0 | 0.799 / 0.784 | 0.344 | 2 | 0.01761 | 12 |
+| Zm1p05/L32/m2m2p68_s1642_disordered | R h100 | therm | 69000 | 0 | 0.800 / 0.783 | 0.350 | 0 | 0.01797 | 1 |
 | Zm1p05/L32/m2m2p68_s2642_ordered | PD rtx_6000_pro | therm | 352984 | 0 | 0.800 / 0.787 | 0.346 | 0 | 0.01797 | 8 |
 | Zm1p05/L32/m2m2p65_s1652_disordered | PD rtx_6000_pro | therm | 525246 | 0 | 0.798 / 0.728 | 0.353 | 11 | 0.01797 | 12 |
-| Zm1p05/L32/m2m2p65_s2652_ordered | R l40s | therm | 80000 | 0 | 0.800 / 0.784 | 0.352 | 0 | 0.01797 | 1 |
+| Zm1p05/L32/m2m2p65_s2652_ordered | PD l40s | therm | 96647 | 0 | 0.801 / 0.779 | 0.352 | 0 | 0.01797 | 2 |
 
 ### `validate` (1/1 complete)
 
