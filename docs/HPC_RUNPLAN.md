@@ -1,6 +1,6 @@
 # Hazel run plan — which stages to run
 
-**Revision:** 11 (2026-11-26). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
+**Revision:** 12 (2026-11-26). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
 
 **GPU budget:** unlimited. Throughput is limited only by the queue, so keep every ACTIVE stage fully submitted. Escalation for failures, wrong-looking data, or a run hitting its caps still applies.
 
@@ -27,6 +27,8 @@ Submit ACTIVE stages in the order listed. When the queue is congested, earlier r
 | 5e | `uline_ext` | **ACTIVE (new, r8)** | 24 | does the uniform line continue to Z = −1.0, −1.05, where the renormalized moat closes? | M² CV, profile as `uline`; Z = −1.0 (m² −2.63, −2.60, −2.57), −1.05 (−2.71, −2.68, −2.65); L = 24, 32; ordered/disordered starts; cap 0.9M. |
 | 5g | `bline` | **ACTIVE (r10); Z8 −2.40 rows CANCELLED (r11)** | 8 | symmetric→lamellar coexistence and barrier vs L at the corrected masses (answers QUESTION_b8_L20_2026-11-25) | Band CV, same bands/caps/ladders as `b8`/`b13`. Z = −1.1716: L20 (m² −2.36), L28 (−2.34, −2.40), L32 (−2.34, −2.40). Z = −1.3: L28 (−2.36), L32 (−2.34, −2.40). Priority right after `uline`. |
 | 5h | `bline2` | **ACTIVE (new, r11)** | 2 | Z8 symmetric→lamellar line at L28/L32 from above (answers QUESTION_bline_masses_2026-11-26) | Band CV as `bline`, Z = −1.1716, m² −2.30 at L28 (s1828) and L32 (s1832), caps 0.9M / 1.3M. Same priority as `bline`. |
+| 5i | `zeffL` | **ACTIVE (new, r12)** | 17 | volume dependence of the symmetric→moat crossover next to the uniform line (where Z_eff = 0 on the curvature of 1/S at k=0) | Plain HMC like `zeff` (`sk_symmetric.jl`, 8 replicas, no umbrella, no transport gate). L=96: Z = −0.6 (m² −1.857, −1.862, −1.867), −0.8 (−2.189, −2.192), −0.9 (−2.378, −2.383), −0.95 (−2.480, −2.485); L=64: Z = −0.9 (−2.373, −2.378, −2.383), −0.95 (−2.475, −2.480, −2.485); L=128: Z = −0.6 (−1.857, −1.862). L=96/128 rows will need continuations (exit 75 as usual). Replicas that order from the disordered start are a result, not a failure. Submit right away: short jobs that fill idle GPUs; same priority as `bline`. |
+| 5j | `ulamL` | **ACTIVE (new, r12)** | 12 | uniform↔lamellar boundary at a second box size (direct coexistence) | `sk_symmetric.jl` with `SK_INIT=slab` (half uniform, half lamellar start; needs the `SK_INIT` support merged with this revision), L=64, 4000 samples, skip 25, therm 2000, 8 replicas. Z = −1.0, −1.1 (7 wavelengths), −1.3, −1.45 (8 wavelengths), three masses each. No transport gate. Replicas that end uniform, lamellar or as a slab are all results. Priority right after `zeffL`. |
 | 5f | `b8_mixed` | **ACTIVE, L=20 only (r9)**; L=28 rows **CANCELLED (r9)** | 4 | uniform vs lamellar deep in the ordered region at Z = −1.1716 (replaces `p8_mixed`) | `CVU_KIND=mixedband`, s = M² − 2 P_band, band [0.36, 0.62], s ∈ [−1.2, 0.75]; L = 20 (352 windows), 28 (584); m² = −2.7, −2.9. Gate 15% round-trip walkers, min swap 0.1; caps 2M / 3.5M. Lowest priority. r9: submit only with `--lmax 20`; `scancel` the two L=28 chains (m² −2.7, −2.9), do not resubmit them, keep their directories. |
 | 6 | `p9_L27` | **CANCELLED (r9)** | 2 | second size for the p=9 symmetric→uniform coexistence (barrier vs L) | Mixed CV, L=27, m² = −2.42, −2.47, s ∈ [−0.6, 0.6], 340 windows. Gate 15%, min swap 0.1, cap 3M. r9: `scancel` both chains, do not resubmit, keep checkpoints and data. |
 | — | `s2_zm1172_prod` | DONE (4 of 6); **L=32 rows CANCELLED (r5)** | 6 | — | L=16/24 complete. The two L=32 rows (m² = −2.51, −2.57) sit above the transition (r5 log): `scancel` their jobs, do not resubmit them, keep their checkpoints. Superseded by `p8_shift`. |
@@ -46,9 +48,10 @@ python3 scripts/cv_campaign.py prepare --stage zeff        # once (r7)
 python3 scripts/cv_campaign.py prepare --stage zeff2 b8 b13 uline_ext b8_mixed   # once (r8)
 python3 scripts/cv_campaign.py prepare --stage bline                                 # once (r10)
 python3 scripts/cv_campaign.py prepare --stage bline2                                # once (r11)
-python3 scripts/cv_campaign.py submit  --stage uline bline bline2 s2_zm2_ext b8 b13 uline_ext
+python3 scripts/cv_campaign.py prepare --stage zeffL ulamL                           # once (r12)
+python3 scripts/cv_campaign.py submit  --stage uline bline bline2 zeffL ulamL s2_zm2_ext b8 b13 uline_ext
 python3 scripts/cv_campaign.py --lmax 20 submit --stage b8_mixed          # r9: L=20 rows only
-python3 scripts/cv_campaign.py status  --stage uline bline bline2 s2_zm2_ext b8 b13 uline_ext b8_mixed
+python3 scripts/cv_campaign.py status  --stage uline bline bline2 zeffL ulamL s2_zm2_ext b8 b13 uline_ext b8_mixed
 ```
 
 `prepare` must not be rerun for a stage that already has runs (HPC_AGENT.md §3). When a later revision adds rows to an existing stage, the revision says explicitly how to add them.
@@ -63,6 +66,12 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 - (done) for `p9_pilot` and `p9_mixed`, also run `python3 scripts/analyze_cv_umbrella.py --dir $LP_HMC_RUNS/cv_umbrella/p9_pilot/Zm0p9358/L18 --bootstrap 20 --span 0.3` and report the `summary` block. Do not interpret it beyond reporting.
 
 ## Revision log
+
+- **r12 (2026-11-26):** approved by the user (the Hazel queue had only 23 jobs). Two new ACTIVE stages of short unbiased runs, analysed on the workstation (not on the cluster):
+  - `zeffL` (17 rows): the symmetric→moat crossover runs alongside the uniform line, 0.012 above it at Z = −0.6 and < 0.005 at Z = −0.8 (workstation L=64 runs), where ξ ≈ 25. L=96/128 test whether this survives larger volume; L=64/96 at Z = −0.9/−0.95 follow it toward the end of the uniform line.
+  - `ulamL` (12 rows): workstation slab runs at L=48 put the uniform↔lamellar line at Z = −1.1 in (−2.9, −2.8), Z = −1.3 in (−3.6, −3.4), below −4.0 at Z = −1.45; L=64 removes the single-box caveat.
+  - Report each completed row as usual and "stage X complete" at the end; the regular `hpc_sync.py push` carries the data.
+  - Nothing else changes: `uline` (G1) keeps first priority.
 
 - **r11 (2026-11-26):** approved by the user; answers `QUESTION_bline_masses_2026-11-26.md`. `bline` Z8 L20 gives m_eq = −2.301(6) (χ_s peak −2.3125(4), not at edge), above the r10 L28/L32 masses. At Z = −2 m_eq moved down 0.024 from L18 to L30, so L28/32 is expected near −2.32 to −2.34; the pair −2.30/−2.34 brackets that, −2.40 would sit at the edge of its reach. Use the `bline` L20 analysis alone for Z8 L20 (the combined `b8`+`bline` one is unstable, m_eq bootstrap sd 0.20; keep it, but no further use).
   - **CANCEL (scancel, do not resubmit, keep dirs/checkpoints):** `bline` Zm1p1716/L28/m2m2p4_s1648 and Zm1p1716/L32/m2m2p4_s1672. Add them to ops/cancelled_rows.txt so `submit --stage bline` skips them.

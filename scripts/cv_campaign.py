@@ -62,7 +62,8 @@ BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
 SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT,
-             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "zeff7": SK_SCRIPT, "ulam3": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
+             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT,
+             "zeffL": SK_SCRIPT, "ulamL": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -384,25 +385,45 @@ def stage_rows(stage: str) -> list[dict]:
                 rows.append(sk_row(stage, Z, 48, m2, seed, samples=ns))
         return rows
     if stage == "zeff6":
-        # LOCAL: volume dependence of the moat line (toward L -> inf).  L=96 next to the
-        # uniform line at Z=-0.6/-0.8 (xi ~ 25 at L=64), L=64 at the Z=-0.2/-0.3 crossings
-        # (L=48 only so far), L=32 at Z=-0.4 (L=48/64 exist) for a three-size series.
-        grid = [(-0.4, 32, (-1.59, -1.55)), (-0.3, 64, (-1.41, -1.44)), (-0.2, 64, (-1.25, -1.29)),
-                (-0.6, 96, (-1.857, -1.862, -1.867)), (-0.8, 96, (-2.189, -2.192))]
+        # LOCAL: volume dependence of the moat line away from the uniform line: L=64 at the
+        # Z=-0.2/-0.3 crossings (L=48 only so far), L=32 at Z=-0.4 (L=48/64 exist).  The
+        # large-L rows next to the transition run on Hazel (stage zeffL, r12).
+        grid = [(-0.4, 32, (-1.59, -1.55)), (-0.3, 64, (-1.41, -1.44)), (-0.2, 64, (-1.25, -1.29))]
         rows, seed = [], 7500
         for Z, L, ms in grid:
             for m2 in ms:
                 seed += 1
                 rows.append(sk_row(stage, Z, L, m2, seed))
         return rows
-    if stage == "zeff7":
-        # LOCAL: moat crossover next to the end of the uniform line, L=64 at 0.005-0.015
-        # above m_c(L=32) (ULINE_CENTERS: Z=-0.9 -2.388, Z=-0.95 -2.490).
-        rows, seed = [], 7600
-        for Z, m in ((-0.9, -2.388), (-0.95, -2.490)):
-            for d in (0.015, 0.01, 0.005):
+    if stage == "zeffL":
+        # HAZEL (run plan r12): moat crossover next to the uniform line at large L.  Near the
+        # crossover xi ~ 25 at L=64 (m2_eff ~ 0.002), so L=96/128 test the volume dependence;
+        # L=64 at Z=-0.9/-0.95 extends the Z=-0.6/-0.8 series toward Z*.  m_c: L=32 chi_max
+        # (Z=-0.6 -1.872, -0.8 -2.194, -0.9 -2.388, -0.95 -2.490).
+        grid = [(-0.6, 96, (-1.857, -1.862, -1.867)), (-0.8, 96, (-2.189, -2.192)),
+                (-0.9, 64, (-2.373, -2.378, -2.383)), (-0.95, 64, (-2.475, -2.480, -2.485)),
+                (-0.9, 96, (-2.378, -2.383)), (-0.95, 96, (-2.480, -2.485)),
+                (-0.6, 128, (-1.857, -1.862))]
+        rows, seed = [], 7800
+        for Z, L, ms in grid:
+            for m2 in ms:
                 seed += 1
-                rows.append(sk_row(stage, Z, 64, round(m + d, 3), seed))
+                rows.append(sk_row(stage, Z, L, m2, seed))
+        return rows
+    if stage == "ulamL":
+        # HAZEL (run plan r12): second box size for the uniform <-> lamellar slab runs (local
+        # ulam/ulam2 at L=48).  L=64 with the same wavevector where commensurate (n=8 for
+        # khat^2=0.586 at Z=-1.3/-1.45; n=7, khat^2=0.462, for the L=48 n=5 at Z=-1.0/-1.1).
+        # Masses bracket the L=48 line: Z=-1.0 above -2.7, -1.1 (-2.9,-2.8), -1.3 (-3.6,-3.4),
+        # -1.45 below -4.0.
+        grid = {-1.0: (7, (-2.6, -2.7, -2.85)), -1.1: (7, (-2.8, -2.9, -3.0)),
+                -1.3: (8, (-3.4, -3.5, -3.6)), -1.45: (8, (-3.7, -4.0, -4.3))}
+        rows, seed = [], 7900
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 64, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
         return rows
     if stage == "ulam3":
         # LOCAL: uniform <-> lamellar line deeper in m2 for Z <= -1.45 (ulam/ulam2: lamellar
@@ -470,7 +491,7 @@ STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
                        "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
-                       "zeff5", "zeff6", "zeff7", "ulam3")
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL")
 
 
 def manifest(stage: str) -> Path:
