@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-26 05:16 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-26 06:16 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -79,8 +79,8 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm1p1716/L20/m2m2p36_s1620 | complete | collect | 180000 | 4000 | 0.802 / 0.704 | 0.393 | 0 | 0.02556 | 0 |
 | Zm1p1716/L28/m2m2p34_s1638 | PD h100 | therm | 92052 | 0 | 0.801 / 0.596 | 0.403 | 0 | 0.02029 | 2 |
-| Zm1p1716/L28/m2m2p4_s1648 | PD h200 | therm | 125019 | 0 | 0.796 / 0.474 | 0.403 | 0 | 0.01989 | 3 |
-| Zm1p1716/L32/m2m2p34_s1662 | R l40s | therm | 33000 | 0 | 0.800 / 0.786 | 0.394 | 0 | 0.01797 | 1 |
+| Zm1p1716/L28/m2m2p4_s1648 | R h200 | therm | 133000 | 0 | 0.800 / 0.784 | 0.403 | 0 | 0.01989 | 3 |
+| Zm1p1716/L32/m2m2p34_s1662 | R l40s | therm | 52000 | 0 | 0.800 / 0.786 | 0.396 | 0 | 0.01797 | 1 |
 | Zm1p1716/L32/m2m2p4_s1672 | PD l40s | therm | 111113 | 0 | 0.802 / 0.690 | 0.401 | 0 | 0.01833 | 4 |
 | Zm1p3/L28/m2m2p36_s1728 | PD l40s | therm | 88099 | 0 | 0.795 / 0.707 | 0.400 | 0 | 0.02029 | 2 |
 | Zm1p3/L32/m2m2p34_s1742 | PD h100 | therm | 25036 | 0 | 0.803 / 0.583 | 0.394 | 0 | 0.01833 | 1 |
@@ -149,7 +149,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 |---|---|---|---|---|---|---|---|---|---|
 | Zm2/L24/m2m1p88_s132 | complete | collect | 160000 | 4000 | 0.796 / 0.713 | 0.388 | 0 | 0.02415 | 4 |
 | Zm2/L30/m2m1p9_s133 | complete | collect | 355000 | 4000 | 0.799 / 0.710 | 0.372 | 0 | 0.02 | 11 |
-| Zm2/L36/m2m1p92_s134 | R h200 | therm | 348000 | 0 | 0.800 / 0.786 | 0.400 | 5 | 0.01745 | 19 |
+| Zm2/L36/m2m1p92_s134 | PD l40s | therm | 354375 | 0 | 0.801 / 0.752 | 0.400 | 5 | 0.01762 | 20 |
 | Zm2/L36/m2m1p96_s135 | PD rtx_6000_pro | therm | 314632 | 0 | 0.800 / 0.775 | 0.401 | 0 | 0.01745 | 13 |
 
 ### `uline` (44/48 complete)
@@ -219,7 +219,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1/L32/m2m2p63_s2532_ordered | PD l40s | therm | 241633 | 0 | 0.800 / 0.768 | 0.347 | 0 | 0.01797 | 5 |
 | Zm1/L32/m2m2p6_s1542_disordered | PD rtx_6000_pro | therm | 226295 | 0 | 0.801 / 0.753 | 0.352 | 1 | 0.01797 | 5 |
 | Zm1/L32/m2m2p6_s2542_ordered | PD l40s | therm | 357007 | 0 | 0.808 / 0.286 | 0.353 | 4 | 0.01761 | 8 |
-| Zm1/L32/m2m2p57_s1552_disordered | R l40s | therm | 209000 | 0 | 0.800 / 0.784 | 0.360 | 0 | 0.01797 | 5 |
+| Zm1/L32/m2m2p57_s1552_disordered | R l40s | therm | 240000 | 0 | 0.799 / 0.782 | 0.360 | 1 | 0.01761 | 5 |
 | Zm1/L32/m2m2p57_s2552_ordered | PD rtx_6000_pro | therm | 106288 | 0 | 0.799 / 0.750 | 0.361 | 0 | 0.01761 | 2 |
 | Zm1p05/L24/m2m2p71_s1624_disordered | PD rtx_6000_pro | therm | 486844 | 0 | 0.800 / 0.780 | 0.327 | 34 | 0.02185 | 2 |
 | Zm1p05/L24/m2m2p71_s2624_ordered | complete | collect | 762000 | 8000 | 0.801 / 0.732 | 0.337 | 0 | 0.02185 | 3 |
@@ -228,9 +228,9 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L24/m2m2p65_s1644_disordered | PD rtx_6000_pro | therm | 253266 | 0 | 0.799 / 0.744 | 0.340 | 1 | 0.02229 | 1 |
 | Zm1p05/L24/m2m2p65_s2644_ordered | PD h100 | therm | 900000 | 0 | 0.800 / 0.784 | 0.341 | 51 | 0.02229 | 4 |
 | Zm1p05/L32/m2m2p71_s1632_disordered | PD rtx_6000_pro | therm | 105399 | 0 | 0.800 / 0.757 | 0.345 | 0 | 0.01797 | 2 |
-| Zm1p05/L32/m2m2p71_s2632_ordered | PD h200 | therm | 358934 | 0 | 0.800 / 0.786 | 0.344 | 0 | 0.01797 | 8 |
+| Zm1p05/L32/m2m2p71_s2632_ordered | R h200 | therm | 370000 | 0 | 0.800 / 0.786 | 0.343 | 0 | 0.01797 | 8 |
 | Zm1p05/L32/m2m2p68_s1642_disordered | PD rtx_6000_pro | therm | 46124 | 0 | 0.800 / 0.694 | 0.350 | 0 | 0.01761 | 1 |
-| Zm1p05/L32/m2m2p68_s2642_ordered | R h200 | therm | 207000 | 0 | 0.800 / 0.786 | 0.346 | 0 | 0.01797 | 4 |
+| Zm1p05/L32/m2m2p68_s2642_ordered | PD h200 | therm | 223627 | 0 | 0.799 / 0.775 | 0.346 | 0 | 0.01761 | 5 |
 | Zm1p05/L32/m2m2p65_s1652_disordered | PD l40s | therm | 406477 | 0 | 0.800 / 0.765 | 0.353 | 3 | 0.01797 | 9 |
 | Zm1p05/L32/m2m2p65_s2652_ordered | PD rtx_6000_pro | therm | 51420 | 0 | 0.799 / 0.767 | 0.355 | 0 | 0.01797 | 1 |
 
