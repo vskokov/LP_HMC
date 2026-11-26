@@ -8,7 +8,8 @@ Symbols
   still undecided (gate G1, `uline` L = 32 pending).
 * symmetric -> lamellar: equal-weight mass m_eq of the shell / band umbrellas.  Z = -2 at
   L = 30 (barrier 1.2 -> 19.3 kT for L = 12 -> 30, first order); Z = -1.3 band CV at L = 20
-  (single size); Z8 band CV at L = 20 is a chi_s peak at the edge of the reweighting range.
+  (single size); Z8 band CV at L = 20 from the bline row at -2.36 (m_eq -2.301(6), barrier
+  0.28(10) kT; the earlier b8 rows at -2.5/-2.6 only bounded it from below).
 * Z9 = -0.936, L = 18 mixed CV: symmetric -> uniform m_eq.
 * Vertical bars: unbiased L = 48 chains (reports/sk_symmetric), all symmetric at the upper
   end, ordered chains (lamellae, or slabs at Z = -1.0) at the lower end.  The symmetric
@@ -58,7 +59,7 @@ def uniform_line() -> pd.DataFrame:
 def lamellar_points() -> list[dict]:
     out = []
     for d, Z, kind in (("combined/Zm2/L30", -2.0, "filled"), ("b13/Zm1p3/L20", -1.3, "open"),
-                       ("b8/Zm1p1716/L20", Z8, "edge")):
+                       ("bline/Zm1p1716/L20", Z8, "open")):
         a = json.loads((ROOT / "reports" / "cv_umbrella" / d / "analysis.json").read_text())
         c = a["summary"].get("coexistence") or {}
         m = c.get("m_eq", a["summary"]["m_chi_s_max"])
