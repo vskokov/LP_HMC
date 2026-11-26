@@ -90,7 +90,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--root", type=Path, nargs="+",
                     default=[ROOT / "runs" / "sk_symmetric", ROOT / "runs" / "cv_umbrella" / "zeff",
-                             ROOT / "runs" / "cv_umbrella" / "zeff2"],
+                             ROOT / "runs" / "cv_umbrella" / "zeff2",
+                             ROOT / "runs" / "cv_umbrella" / "zeff3",
+                             ROOT / "runs" / "cv_umbrella" / "zeff4"],
                     help="local scan and the Hazel zeff/zeff2 stages (pulled by hpc_sync.py)")
     ap.add_argument("--kfit", type=float, default=3.0)
     ap.add_argument("--order-threshold", type=float, default=5.0)
