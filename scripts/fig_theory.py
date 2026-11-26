@@ -3,6 +3,9 @@
 
 Inputs:  reports/mean_field/mean_field_lines.csv  (scripts/mf_lattice.py)
          reports/hartree/hartree_lines.csv         (scripts/hartree_lattice.py)
+Symmetric -> moat crossover: both approximations keep the self-energy momentum
+independent, so Z_eff = Z and the crossover is the vertical line Z = 0 above the
+symmetric boundary (m2 > 0 in mean field, m2 > m2_sym_uniform(0) in Hartree).
 Output:  paper/figures/theory_phase_diagram.{pdf,png}
 """
 
@@ -16,7 +19,7 @@ import numpy as np
 
 from paper_style import OKABE_ITO, figsize, save, use_prd
 
-C_UNI, C_MOD, C_UM = OKABE_ITO[0], OKABE_ITO[1], "0.15"
+C_UNI, C_MOD, C_UM, C_MOAT = OKABE_ITO[0], OKABE_ITO[1], "0.15", OKABE_ITO[2]
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -84,11 +87,18 @@ def main() -> int:
     ax.plot(zul, mul_, "-", lw=1.4, color=C_UM)
     ax.plot([Zt], [mt], "s", ms=3.5, color="k", zorder=6)
 
+    # ---- symmetric -> moat crossover, Z_eff = Z = 0 in both approximations
+    mH0 = float(np.interp(0.0, zs, mu))
+    ax.plot([0, 0], [mH0, 2.5], "-", lw=1.4, color=C_MOAT, zorder=3)
+    ax.text(-0.07, 1.9, "moat", ha="right", va="center", fontsize=7, color=C_MOAT)
+    ax.text(0.07, 1.9, "no moat", ha="left", va="center", fontsize=7, color=C_MOAT)
+    print(f"Hartree moat line: Z=0, m2 > {mH0:.3f}")
+
     ax.set_xlim(-3.0, 1.0)
     ax.set_ylim(-6.0, 2.5)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
-    ax.text(-0.9, 1.6, "symmetric", ha="center", fontsize=8)
+    ax.text(-1.3, 1.6, "symmetric", ha="center", fontsize=8)
     ax.text(0.5, -3.0, "uniform", ha="center", fontsize=8)
     ax.text(-2.3, -1.9, "lamellar", ha="center", fontsize=8)
     ax.annotate("LP (MF)", (0, 0), (0.3, 0.55), fontsize=7,
