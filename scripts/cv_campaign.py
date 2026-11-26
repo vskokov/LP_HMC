@@ -262,6 +262,19 @@ def stage_rows(stage: str) -> list[dict]:
                 r.update({"CVU_BAND_LO": band[0], "CVU_BAND_HI": band[1]})
                 rows.append(r)
         return rows
+    if stage == "bline2":
+        # Run plan r11 (answers QUESTION_bline_masses_2026-11-26).  bline Z8 L20 gives
+        # m_eq = -2.301(6), above the r10 L28/L32 masses; at Z=-2 m_eq moved down by 0.024
+        # from L18 to L30, so L28/32 is expected near -2.32..-2.34.  The Z8 -2.40 rows are
+        # cancelled and replaced by -2.30, so -2.30/-2.34 bracket the line.  Same CV/caps.
+        caps = {28: 900000, 32: 1300000}
+        rows = []
+        for L in (28, 32):
+            r = umbrella_row(stage, Z_P8, 0.44, L, -2.30, 1800 + L, smax=0.5,
+                             max_therm=caps[L], kind="band")
+            r.update({"CVU_BAND_LO": 0.36, "CVU_BAND_HI": 0.62})
+            rows.append(r)
+        return rows
     if stage == "bline":
         # Run plan r10.  The r8 b8/b13 masses were placed from the p=8 axis-shell estimate
         # (L16 m_eq -2.65), which forced the wrong wave vector.  Band-CV L20 results put the
@@ -409,7 +422,7 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
-                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "ulam", "ulam2", "zeff3", "zeff4")
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4")
 
 
 def manifest(stage: str) -> Path:
