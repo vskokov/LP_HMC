@@ -543,7 +543,12 @@ Eq.~\eqref{eq:commensurate}.
  momentum independent, so $Z_\eff=Z$ and the crossover is the line $Z=0$,
  above $m^2=0$ in mean field and above the Hartree uniform line
  ($m^2=-1.17$).  In the Hartree approximation the symmetric phase is
- therefore a moat for $Z_{\rm H}<Z<0$ but still orders uniformly.}
+ therefore a moat for $Z_{\rm H}<Z<0$ but still orders uniformly.
+ Symbols: lattice data.  Grey circles: symmetric--uniform transition
+ (maximum of $\chi$, largest $L$).  Green triangles: measured crossover
+ $Z_\eff=0$ (Sec.~\ref{sec:moat-line}); filled, interpolated zero; open,
+ $Z_\eff<0$ down to the deepest symmetric mass, so the crossover lies
+ between that mass and the transition.}
  \label{fig:theory}
 \end{figure}
 
@@ -867,7 +872,7 @@ so $1/S(k)$ is the inverse propagator $m^2+\varepsilon_k+\Sigma(k)$ of
 Sec.~\ref{sec:model}.  We sample it with plain HMC (eight independent
 chains per point, no bias) at $L=32$, $48$, and $64$, on a grid of masses
 approaching the ordering lines from the symmetric side, for
-$-2\le Z\le-0.6$.  At the deepest masses some chains nucleate the ordered
+$-2\le Z\le0$.  At the deepest masses some chains nucleate the ordered
 phase (Sec.~\ref{sec:sk-nucl}); we identify them from the largest
 finite-momentum shell power and exclude them, so every spectrum shown
 is that of the symmetric phase.
@@ -898,12 +903,48 @@ $\khat_*\simeq0.25$ and $0.18$ far from the transition to $k=0$ at it.  A
 peak at finite momentum deep in the symmetric phase therefore does not by
 itself signal modulated order: what matters is where the peak is when the
 symmetric phase becomes unstable.  There
-the polynomial fit fails, so a single number $Z_\eff$ is no longer a useful
-description.  In this range of bare $Z<0$, then, the fluctuations that drive
-the ordering are long-wavelength, as they are on the uniform side.  The
-renormalized moat closes near $Z\approx-1.0$, close to the end of the
-direct symmetric--uniform line ($Z_*\approx-0.95$, Sec.~\ref{sec:uline}).
-It also explains why lattices built to be commensurate with the bare period
+the global polynomial fit fails, so a single number $Z_\eff$ no longer
+describes the whole spectrum.  In this range of bare $Z<0$, then, the
+fluctuations that drive the ordering are long-wavelength, as they are on the
+uniform side.
+
+\paragraph*{Symmetric--moat crossover.}\label{sec:moat-line}
+Where the moat ends inside the symmetric phase is decided by the curvature of
+$1/S$ at $k=0$, which we take from a fit restricted to $\khat\le0.8$ (the
+fit with $\khat\le3$ moves the zero by at most $0.007$ in $m^2$).  Its sign
+defines the crossover line $Z_\eff(Z,m^2)=0$ shown in
+Fig.~\ref{fig:theory}.  For $-1.0\le Z\le-0.6$ the
+curvature stays negative down to the deepest symmetric masses we can
+reach, $0.01$--$0.02$ above the transition at $L=64$; for example
+$Z_\eff=-0.065$ at $Z=-0.8$, $m^2=-2.174$, and $-0.005$ at $Z=-1.0$,
+$m^2=-2.60$.  The crossover thus runs alongside the uniform line.  For
+$Z=-0.4$, $-0.3$, and $-0.2$ it separates from it: $Z_\eff$ changes sign at
+$m^2=-1.567$, $-1.427$, and $-1.274$, about $0.03$, $0.06$, and $0.12$
+above the transition.  At $Z=0$ the curvature is positive at every mass,
+from $Z_\eff=0.02$ at $m^2=-0.47$ to $0.22$ next to the transition.
+Deep in the symmetric phase $Z_\eff\to Z$, so the line approaches $Z=0$ as
+$m^2$ grows.
+\pending{$L=64$ spectra at $0.005$--$0.015$ above the transition for
+$Z=-0.6,-0.8$ and the remaining $Z=-0.1,-0.05$ scans are running.}
+
+This differs qualitatively from the mean-field and Hartree crossover, which
+is the vertical line $Z=0$ because there $\Sigma$ does not depend on
+momentum [Fig.~\ref{fig:theory}].  On the lattice the positive shift
+$Z_\eff-Z$ grows as the uniform transition is approached and turns a moat
+into a spectrum peaked at $k=0$ just before the system orders.  This is
+what one expects near a continuous transition: at criticality
+$1/S\propto k^{2-\eta}$, so the small-$k$ curvature must become positive
+once the correlation length is large, and the crossover line cannot reach
+the Ising line.  Its distance from that line measures the width of the
+region in which the critical long-wavelength modes dominate the spectrum.
+Moat behavior in the symmetric phase is therefore not a precursor of
+modulated order: for $-1.0\lesssim Z<0$ the system has a moat over most of
+its symmetric phase and still orders uniformly, while lamellar order is
+reached directly only for $Z\lesssim-1.05$ (Sec.~\ref{sec:sk-nucl}), at the
+end of the direct symmetric--uniform line ($Z_*\approx-0.95$,
+Sec.~\ref{sec:uline}).
+
+The slide of the peak toward $k=0$ also explains why lattices built to be commensurate with the bare period
 do not select the relevant states in this region: at $Z_9$, for example, the
 intermediate states of the mixed-coordinate runs at $L=18$ are slabs of the
 two uniform phases separated by domain walls, not lamellae of period $9$.
@@ -927,8 +968,9 @@ $m^2=-2.6$, the chains instead develop power in the lowest shell of the
 box ($\khat\approx0.02$), i.e., slabs of the two uniform phases, as at
 $Z_9$.  Lamellar order is
 therefore reached directly from the symmetric phase down to at least
-$Z=-1.1$, consistent with the renormalized moat closing between $-1.1$ and
-$-1.05$.
+$Z=-1.1$, while at $Z=-1.0$ the symmetric phase orders uniformly although
+its spectrum is still a moat ($Z_\eff<0$) a few hundredths above the
+transition.
 
 \begin{figure*}[t]
 \includegraphics[width=\textwidth]{figures/sk_peak}
