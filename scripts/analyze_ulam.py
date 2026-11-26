@@ -38,7 +38,8 @@ def classify(x: float, m2: float, p: float) -> str:
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     reps, runs = [], []
-    for obs in sorted([*RUNS.glob("ulam/Z*/L*/*/obs.csv"), *RUNS.glob("ulam2/Z*/L*/*/obs.csv")]):
+    for obs in sorted([*RUNS.glob("ulam/Z*/L*/*/obs.csv"), *RUNS.glob("ulam2/Z*/L*/*/obs.csv"),
+                         *RUNS.glob("ulam3/Z*/L*/*/obs.csv")]):
         run = obs.parent
         d = pd.read_csv(obs, comment="#")
         if d.empty:

@@ -3,6 +3,13 @@
 
 Inputs:  reports/mean_field/mean_field_lines.csv  (scripts/mf_lattice.py)
          reports/hartree/hartree_lines.csv         (scripts/hartree_lattice.py)
+Symmetric -> moat crossover: both approximations keep the self-energy momentum
+independent, so Z_eff = Z and the crossover is the vertical line Z = 0 above the
+symmetric boundary (m2 > 0 in mean field, m2 > m2_sym_uniform(0) in Hartree).
+Lattice overlay (grey/green markers): symmetric-uniform line (chi_s maximum, largest L;
+fig_phase_diagram.uniform_line) and the measured Z_eff = 0 crossover
+(reports/sk_symmetric/moat_line.csv): filled = interpolated zero, open = Z_eff < 0 down to
+the deepest symmetric mass (-1.0 <= Z <= -0.6; the crossover hugs the transition).
 Output:  paper/figures/theory_phase_diagram.{pdf,png}
 """
 
@@ -16,7 +23,7 @@ import numpy as np
 
 from paper_style import OKABE_ITO, figsize, save, use_prd
 
-C_UNI, C_MOD, C_UM = OKABE_ITO[0], OKABE_ITO[1], "0.15"
+C_UNI, C_MOD, C_UM, C_MOAT = OKABE_ITO[0], OKABE_ITO[1], "0.15", OKABE_ITO[2]
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -84,11 +91,31 @@ def main() -> int:
     ax.plot(zul, mul_, "-", lw=1.4, color=C_UM)
     ax.plot([Zt], [mt], "s", ms=3.5, color="k", zorder=6)
 
+    # ---- symmetric -> moat crossover, Z_eff = Z = 0 in both approximations
+    mH0 = float(np.interp(0.0, zs, mu))
+    ax.plot([0, 0], [mH0, 2.5], "-", lw=1.4, color=C_MOAT, zorder=3)
+    ax.text(-0.07, 1.9, "moat", ha="right", va="center", fontsize=7, color=C_MOAT)
+    ax.text(0.07, 1.9, "no moat", ha="left", va="center", fontsize=7, color=C_MOAT)
+    print(f"Hartree moat line: Z=0, m2 > {mH0:.3f}")
+
+    # ---- lattice data for comparison
+    import pandas as pd
+    from fig_phase_diagram import uniform_line
+    U = uniform_line()
+    ax.plot(U.Z, U.m_chi_max, "o", ms=2.2, color="0.45", zorder=4)
+    mo = pd.read_csv(ROOT / "reports" / "sk_symmetric" / "moat_line.csv")
+    cr = mo[mo.kind == "crossing"].sort_values("Z")
+    bd = mo[(mo.kind == "below") & (mo.Z >= -1.0) & (mo.Z <= -0.6) & (mo.n >= 8)].sort_values("Z")
+    path = pd.concat([bd, cr]).sort_values("Z")
+    ax.plot(path.Z, path.m2_moat, "-.", lw=0.9, color=C_MOAT, zorder=4)
+    ax.plot(cr.Z, cr.m2_moat, "^", ms=3.5, color=C_MOAT, zorder=5)
+    ax.plot(bd.Z, bd.m2_moat, "^", ms=3.5, mfc="white", mec=C_MOAT, mew=0.8, zorder=5)
+
     ax.set_xlim(-3.0, 1.0)
     ax.set_ylim(-6.0, 2.5)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
-    ax.text(-0.9, 1.6, "symmetric", ha="center", fontsize=8)
+    ax.text(-1.3, 1.6, "symmetric", ha="center", fontsize=8)
     ax.text(0.5, -3.0, "uniform", ha="center", fontsize=8)
     ax.text(-2.3, -1.9, "lamellar", ha="center", fontsize=8)
     ax.annotate("LP (MF)", (0, 0), (0.3, 0.55), fontsize=7,
@@ -96,7 +123,10 @@ def main() -> int:
     from matplotlib.lines import Line2D
     handles = [Line2D([], [], ls=":", lw=1.1, color="k", label="single mode"),
                Line2D([], [], ls="--", lw=0.9, color="k", label="lattice mean field"),
-               Line2D([], [], ls="-", lw=1.4, color="k", label="Hartree")]
+               Line2D([], [], ls="-", lw=1.4, color="k", label="Hartree"),
+               Line2D([], [], ls="", marker="o", ms=2.2, color="0.45", label="lattice: sym.--uniform"),
+               Line2D([], [], ls="-.", marker="^", ms=3.5, lw=0.9, color=C_MOAT,
+                      label=r"lattice: $Z_{\rm eff}=0$")]
     ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=7)
     fig.tight_layout(pad=0.3)
     save(fig, ROOT / "paper" / "figures" / "theory_phase_diagram")

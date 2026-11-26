@@ -61,7 +61,9 @@ from tsp_campaign import ROOT, julia_command, read_manifest, status_rows, submit
 BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
-SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
+SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT,
+             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT,
+             "zeffL": SK_SCRIPT, "ulamL": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
 Z_P9 = -8 * math.sin(math.pi / 9) ** 2           # -0.935822 (meeting region)
@@ -368,6 +370,72 @@ def stage_rows(stage: str) -> list[dict]:
                 seed += 1
                 rows.append(sk_row(stage, Z, 64, round(m + d, 3), seed))
         return rows
+    if stage == "zeff5":
+        # LOCAL: follow the moat line up to the top of the phase-diagram figures.  Near Z = 0
+        # the crossover sits where Zeff(Z=0, m2) - 0 = -Z (the shift Zeff - Z is nearly
+        # Z-independent: it reproduces the Z=-0.05/-0.1 crossings).  (a) direct crossings
+        # for Z = -0.03, -0.02, -0.01 (expected m2 ~ -0.7, -0.55, -0.1); (b) high-statistics
+        # Z = 0 shift at the figure borders m2 = 0.25 (prelim) and 2.5 (theory), plus 1.0.
+        grid = {-0.03: ((-0.55, -0.7, -0.85), 4000), -0.02: ((-0.35, -0.5, -0.65), 4000),
+                -0.01: ((0.25, -0.1, -0.35), 8000), 0.0: ((0.25, 1.0, 2.5), 16000)}
+        rows, seed = [], 7400
+        for Z, (ms, ns) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=ns))
+        return rows
+    if stage == "zeff6":
+        # LOCAL: volume dependence of the moat line away from the uniform line: L=64 at the
+        # Z=-0.2/-0.3 crossings (L=48 only so far), L=32 at Z=-0.4 (L=48/64 exist).  The
+        # large-L rows next to the transition run on Hazel (stage zeffL, r12).
+        grid = [(-0.4, 32, (-1.59, -1.55)), (-0.3, 64, (-1.41, -1.44)), (-0.2, 64, (-1.25, -1.29))]
+        rows, seed = [], 7500
+        for Z, L, ms in grid:
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, L, m2, seed))
+        return rows
+    if stage == "zeffL":
+        # HAZEL (run plan r12): moat crossover next to the uniform line at large L.  Near the
+        # crossover xi ~ 25 at L=64 (m2_eff ~ 0.002), so L=96/128 test the volume dependence;
+        # L=64 at Z=-0.9/-0.95 extends the Z=-0.6/-0.8 series toward Z*.  m_c: L=32 chi_max
+        # (Z=-0.6 -1.872, -0.8 -2.194, -0.9 -2.388, -0.95 -2.490).
+        grid = [(-0.6, 96, (-1.857, -1.862, -1.867)), (-0.8, 96, (-2.189, -2.192)),
+                (-0.9, 64, (-2.373, -2.378, -2.383)), (-0.95, 64, (-2.475, -2.480, -2.485)),
+                (-0.9, 96, (-2.378, -2.383)), (-0.95, 96, (-2.480, -2.485)),
+                (-0.6, 128, (-1.857, -1.862))]
+        rows, seed = [], 7800
+        for Z, L, ms in grid:
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, L, m2, seed))
+        return rows
+    if stage == "ulamL":
+        # HAZEL (run plan r12): second box size for the uniform <-> lamellar slab runs (local
+        # ulam/ulam2 at L=48).  L=64 with the same wavevector where commensurate (n=8 for
+        # khat^2=0.586 at Z=-1.3/-1.45; n=7, khat^2=0.462, for the L=48 n=5 at Z=-1.0/-1.1).
+        # Masses bracket the L=48 line: Z=-1.0 above -2.7, -1.1 (-2.9,-2.8), -1.3 (-3.6,-3.4),
+        # -1.45 below -4.0.
+        grid = {-1.0: (7, (-2.6, -2.7, -2.85)), -1.1: (7, (-2.8, -2.9, -3.0)),
+                -1.3: (8, (-3.4, -3.5, -3.6)), -1.45: (8, (-3.7, -4.0, -4.3))}
+        rows, seed = [], 7900
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 64, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
+    if stage == "ulam3":
+        # LOCAL: uniform <-> lamellar line deeper in m2 for Z <= -1.45 (ulam/ulam2: lamellar
+        # wins at Z=-1.45 down to -4.0, Z=-1.6/-2.0 down to -4.2).  Same slab protocol.
+        grid = {-1.45: (6, (-4.3, -4.6)), -1.6: (7, (-4.6, -5.0)), -2.0: (8, (-5.0, -5.5, -6.0))}
+        rows, seed = [], 7700
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
     if stage == "ulam2":
         # LOCAL refinement of ulam (first pass: Z=-1.1 line in (-3.1,-2.7), Z=-1.3 in
         # (-3.6,-3.1), Z<=-1.6 lamellar down to -3.6); same slab protocol.
@@ -422,7 +490,8 @@ ULINE_CENTERS = {-0.80: {24: -2.195, 32: -2.200}, -0.85: {24: -2.290, 32: -2.297
 STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
-                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4")
+                       "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL")
 
 
 def manifest(stage: str) -> Path:
