@@ -19,8 +19,8 @@ Symbols
 * uniform <-> lamellar: brackets from the local direct-coexistence runs (stages ulam, ulam2;
   reports/ulam/summary.csv, scripts/analyze_ulam.py).  Half-uniform / half-lamellar L = 48
   boxes; the bar spans the lowest m2 where lamellae invade (all replicas) to the highest m2
-  where the uniform phase invades.  Where no uniform win was found yet, a downward arrow from
-  the lowest lamellar-win mass.
+  where the uniform phase invades (majority of replicas).  Arrows: open ends (line below the
+  deepest lamellar win, or above the highest uniform win).
 * symmetric -> moat crossover: Z_eff = 0 (curvature of 1/S at k = 0 changes sign), from
   reports/sk_symmetric/moat_line.csv (scripts/moat_line.py).  For -1.05 <= Z <= -0.6 the
   moat persists to within ~0.02 of the uniform transition (no separate line visible).
@@ -67,8 +67,13 @@ def lamellar_points() -> list[dict]:
     return out
 
 
-def ulam_brackets() -> list[tuple[float, float, float | None]]:
-    """(Z, lowest m2 with lamellar win, highest m2 with uniform win or None)."""
+def ulam_brackets() -> list[tuple[float, float | None, float | None]]:
+    """(Z, lowest m2 where lamellae win, highest m2 below it where the uniform phase wins).
+
+    Per run the winner is the phase that invaded more replicas (pinned slabs, mostly the
+    layers-parallel replicas, carry no vote).  None marks an open end: the line lies below
+    the deepest lamellar win (lo given, hi None) or above the highest uniform win (lo None).
+    """
     f = ROOT / "reports" / "ulam" / "summary.csv"
     if not f.is_file():
         return []
@@ -76,13 +81,14 @@ def ulam_brackets() -> list[tuple[float, float, float | None]]:
     t = t[t.complete.astype(bool)]
     out = []
     for Z, g in t.groupby("Z"):
-        lam = g[g.lamellar == g[["uniform", "lamellar", "slab", "symmetric"]].sum(axis=1)].m2
-        uni = g[g.uniform > 0].m2
-        if lam.empty:
+        lam = g[g.lamellar > g.uniform].m2
+        uni = g[g.uniform > g.lamellar].m2
+        lo = lam.min() if not lam.empty else None
+        cand = uni[uni < lo] if lo is not None else uni
+        hi = cand.max() if not cand.empty else None
+        if lo is None and hi is None:
             continue
-        lo = lam.min()
-        hi = uni[uni < lo].max() if not uni.empty else None
-        out.append((round(Z, 4), lo, None if hi is None or np.isnan(hi) else hi))
+        out.append((round(Z, 4), lo, hi))
     return out
 
 
@@ -105,7 +111,10 @@ def draw(ax, U, lam, H, inset=False, UL=(), MO=None):
         ax.errorbar(MO.Z, MO.m2_moat, yerr=MO["sys"].fillna(0), fmt="^-.", ms=ms, lw=0.9, color=C_MOAT, zorder=4)
     mid = []
     for Z, lo, hi in UL:
-        if hi is None:
+        if lo is None:
+            ax.annotate("", (Z, hi + 0.25), (Z, hi), arrowprops=dict(arrowstyle="->", lw=0.8, color=C_UM))
+            ax.plot([Z], [hi], "_", ms=5, mew=1.0, color=C_UM)
+        elif hi is None:
             ax.annotate("", (Z, lo - 0.25), (Z, lo), arrowprops=dict(arrowstyle="->", lw=0.8, color=C_UM))
             ax.plot([Z], [lo], "_", ms=5, mew=1.0, color=C_UM)
         else:
@@ -161,7 +170,7 @@ def main() -> int:
                                  gridspec_kw={"height_ratios": [1.15, 1]})
     draw(ax, U, lam, H, UL=UL, MO=MO)
     ax.set_xlim(-2.25, 2.1)
-    ax.set_ylim(-4.0, 0.25)
+    ax.set_ylim(-4.6, 0.25)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
     ax.text(1.2, -0.4, "symmetric", ha="center", fontsize=8)
@@ -173,7 +182,7 @@ def main() -> int:
     ax.text(0.98, 0.98, "PRELIMINARY", transform=ax.transAxes, ha="right", va="top", fontsize=6.5, color="0.5")
     ax.text(0.02, 0.98, "(a)", transform=ax.transAxes, va="top", fontsize=8)
 
-    zx, zy = (-1.45, -0.25), (-2.72, -1.40)
+    zx, zy = (-1.45, -0.25), (-3.0, -1.40)
     from matplotlib.patches import Rectangle
     ax.add_patch(Rectangle((zx[0], zy[0]), zx[1] - zx[0], zy[1] - zy[0], fill=False, ec="0.5", lw=0.5, ls="--"))
     draw(bx, U, lam, H, inset=True, UL=UL, MO=MO)
@@ -183,8 +192,8 @@ def main() -> int:
     bx.set_ylabel(r"$m^2$")
     bx.text(0.02, 0.98, "(b)", transform=bx.transAxes, va="top", fontsize=8)
     bx.text(-1.3, -1.6, "symmetric (moat)", fontsize=7, color="0.3")
-    bx.text(-0.55, -2.4, "uniform", fontsize=7)
-    bx.text(-1.4, -2.6, "lamellar", fontsize=7)
+    bx.text(-0.75, -2.75, "uniform", fontsize=7)
+    bx.text(-1.42, -2.7, "lamellar", fontsize=7)
 
     from matplotlib.lines import Line2D
     h = [Line2D([], [], marker="o", ls="-", color=C_UNI, ms=3, label="sym–uni, continuous"),
