@@ -62,7 +62,7 @@ BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
 SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT,
-             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT,
+             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT, "zeff8": SK_SCRIPT, "ulam4": SK_SCRIPT,
              "zeffL": SK_SCRIPT, "ulamL": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
@@ -425,6 +425,29 @@ def stage_rows(stage: str) -> list[dict]:
                 rows.append(sk_row(stage, Z, 64, m2, seed, samples=4000, skip=25, therm=2000,
                                    init=("slab", n)))
         return rows
+    if stage == "zeff8":
+        # LOCAL: volume dependence of the moat line far from the uniform line: L=64 bracketing
+        # the L=48 crossings at Z=-0.05 (m2=-0.872) and Z=-0.1 (-1.055).
+        grid = [(-0.05, 64, (-0.85, -0.90)), (-0.1, 64, (-1.03, -1.08))]
+        rows, seed = [], 8000
+        for Z, L, ms in grid:
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, L, m2, seed))
+        return rows
+    if stage == "ulam4":
+        # LOCAL: uniform <-> lamellar line where it steepens (ulam3, perpendicular slabs: Z=-1.45
+        # between -4.6 and -4.0, mixed at -4.3; lamellar wins at Z=-1.6 down to -5.0 and at
+        # Z=-2.0 down to -6.0; MF multi-harmonic line -5.09 at Z=-1.6, none at Z=-2).
+        grid = {-1.45: (6, (-4.15, -4.45)), -1.5: (7, (-4.7, -5.1)), -1.6: (7, (-5.5, -6.0, -6.5)),
+                -2.0: (8, (-7.0, -8.0))}
+        rows, seed = [], 8100
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
     if stage == "ulam3":
         # LOCAL: uniform <-> lamellar line deeper in m2 for Z <= -1.45 (ulam/ulam2: lamellar
         # wins at Z=-1.45 down to -4.0, Z=-1.6/-2.0 down to -4.2).  Same slab protocol.
@@ -491,7 +514,7 @@ STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
                        "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
-                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL")
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4")
 
 
 def manifest(stage: str) -> Path:

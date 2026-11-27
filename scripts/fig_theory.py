@@ -106,9 +106,11 @@ def main() -> int:
     mo = pd.read_csv(ROOT / "reports" / "sk_symmetric" / "moat_line.csv")
     cr = mo[mo.kind == "crossing"].sort_values("Z")
     bd = mo[(mo.kind == "below") & (mo.Z >= -1.0) & (mo.Z <= -0.6) & (mo.n >= 8)].sort_values("Z")
-    path = pd.concat([bd, cr]).sort_values("Z")
+    sh = mo[mo.kind == "shift"]
+    path = pd.concat([bd, cr, sh]).sort_values("m2_moat")
     ax.plot(path.Z, path.m2_moat, "-.", lw=0.9, color=C_MOAT, zorder=4)
     ax.plot(cr.Z, cr.m2_moat, "^", ms=3.5, color=C_MOAT, zorder=5)
+    ax.plot(sh.Z, sh.m2_moat, "v", ms=3.0, color=C_MOAT, zorder=5)
     ax.plot(bd.Z, bd.m2_moat, "^", ms=3.5, mfc="white", mec=C_MOAT, mew=0.8, zorder=5)
 
     ax.set_xlim(-3.0, 1.0)

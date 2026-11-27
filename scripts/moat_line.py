@@ -12,6 +12,10 @@ Where Z_eff keeps one sign over the whole scan, the row records a bound:
   kind = "below"      Z_eff < 0 down to the deepest symmetric mass: the moat persists to
                       within (m2_min - m_c) of the transition (m2_moat < m2_min)
   kind = "none"       Z_eff > 0 everywhere scanned: no moat at this Z
+  kind = "shift"      deep in the symmetric phase (Z = 0, m2 >= 0): the momentum-dependent
+                      self-energy shifts the line by dZ = -Z_eff(Z=0, m2) (global fit, which
+                      reproduces the Z = -0.01..-0.1 crossings); row gives Z = -Z_eff, Z_err,
+                      and m2_moat = m2
 
 Output: reports/sk_symmetric/moat_line.csv
 """
@@ -53,6 +57,14 @@ def main() -> int:
         rows.append({"Z": Z, "kind": kind, "m2_moat": m, "m2_moat_global_fit": m2g if kind2 == kind else np.nan,
                      "sys": abs(m - m2g) if kind2 == kind == "crossing" else np.nan,
                      "m2_min": g.m2.min(), "m2_max": g.m2.max(), "n": len(g), "L": int(g.L.max())})
+    raw = pd.read_csv(REP / "summary.csv")
+    raw = raw[(raw.replicas_used > 0) & (raw.Z.round(4) == 0.0) & (raw.m2 >= 0.0)]
+    for m2, g in raw.groupby("m2"):          # inverse-variance mean over repeated runs
+        g = g[g.L == g.L.max()]
+        w = 1.0 / g.Zeff_err**2
+        ze, er = float((w * g.Zeff).sum() / w.sum()), float(w.sum() ** -0.5)
+        rows.append({"Z": -ze, "kind": "shift", "m2_moat": m2, "m2_moat_global_fit": np.nan, "sys": np.nan,
+                     "Z_err": er, "m2_min": m2, "m2_max": m2, "n": len(g), "L": int(g.L.max())})
     out = pd.DataFrame(rows)
     out.to_csv(REP / "moat_line.csv", index=False)
     print(out.round(4).to_string(index=False))

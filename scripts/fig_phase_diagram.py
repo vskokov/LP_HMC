@@ -103,13 +103,16 @@ def moat_points() -> pd.DataFrame:
     if not f.is_file():
         return pd.DataFrame(columns=["Z", "m2_moat", "sys"])
     t = pd.read_csv(f)
-    return t[t.kind == "crossing"].sort_values("Z")
+    return t[t.kind.isin(["crossing", "shift"])].sort_values("m2_moat")
 
 
 def draw(ax, U, lam, H, inset=False, UL=(), MO=None):
     ms = 3.2 if not inset else 3.6
     if MO is not None and len(MO):
-        ax.errorbar(MO.Z, MO.m2_moat, yerr=MO["sys"].fillna(0), fmt="^-.", ms=ms, lw=0.9, color=C_MOAT, zorder=4)
+        cr, sh = MO[MO.kind == "crossing"], MO[MO.kind == "shift"]
+        ax.plot(MO.Z, MO.m2_moat, "-.", lw=0.9, color=C_MOAT, zorder=4)
+        ax.errorbar(cr.Z, cr.m2_moat, yerr=cr["sys"].fillna(0), fmt="^", ms=ms, color=C_MOAT, zorder=4)
+        ax.errorbar(sh.Z, sh.m2_moat, xerr=sh["Z_err"], fmt="v", ms=ms - 0.4, color=C_MOAT, zorder=4)
     mid = []
     for Z, lo, hi in UL:
         if lo is None:
