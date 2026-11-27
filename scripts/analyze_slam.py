@@ -4,10 +4,12 @@
 Each replica starts with x <= L/2 disordered (small noise) and x > L/2 lamellar (A cos kc);
 odd replicas: layers parallel to the interfaces, even: perpendicular.  P_max = largest
 k != 0 shell power sum_shell |phi_k|^2 / V^2 (a full lamella has ~4x the power of the half
-box it starts with).  A replica is classified from P_max averaged over the last 20 % of
-samples against the first 5 %:
-  lamellar   P_end > 1.6 P_start          symmetric  P_end < 0.25 P_start and P_end < 0.05
-  else "slab" (interface not resolved on the run time scale)
+box it starts with).  The interface usually resolves already during the 2000 thermalization
+trajectories (Z=-2 calibration), so P_end (last 20 % of samples) is compared with the
+full-lamella power P_ref = largest P_end at the same (Z, L) (needs one lamellar run per Z):
+  lamellar   P_end > 0.6 P_ref            symmetric  P_end < 0.1 P_ref
+  else "slab" (half-filled box, P ~ 0.25 P_ref: interface not resolved on the run time scale)
+P_start (first 5 %) is reported to show replicas still drifting.
 
 Output: reports/slam/summary.csv (one row per run) and replicas.csv; text table to stdout.
 """
@@ -24,10 +26,10 @@ RUNS = ROOT / "runs" / "cv_umbrella"
 OUT = ROOT / "reports" / "slam"
 
 
-def classify(p0: float, p1: float) -> str:
-    if p1 > 1.6 * p0:
+def classify(p1: float, pref: float) -> str:
+    if p1 > 0.6 * pref:
         return "lamellar"
-    if p1 < 0.25 * p0 and p1 < 0.05:
+    if p1 < 0.1 * pref:
         return "symmetric"
     return "slab"
 
@@ -49,16 +51,19 @@ def main() -> int:
             reps.append({"run": tag, "Z": meta["Z"], "L": meta["L"], "m2": meta["m2"], "replica": r,
                          "layers": "parallel" if r % 2 else "perp", "P_start": early.get(r),
                          "P_end": row.P_max, "M2": row.M2, "q_max": row.q_max,
-                         "state": classify(early.get(r), row.P_max)})
-        st = pd.Series([q["state"] for q in reps if q["run"] == tag])
-        runs.append({"Z": round(meta["Z"], 4), "L": meta["L"], "m2": meta["m2"], "samples": n,
-                     "complete": (run / "complete.json").is_file(),
-                     **{k: int((st == k).sum()) for k in ("lamellar", "symmetric", "slab")}})
-    if not runs:
+                         "samples": n, "complete": (run / "complete.json").is_file()})
+    if not reps:
         print("no slam runs yet")
         return 0
-    pd.DataFrame(reps).to_csv(OUT / "replicas.csv", index=False)
-    S = pd.DataFrame(runs).sort_values(["Z", "L", "m2"])
+    R = pd.DataFrame(reps)
+    R["Z"] = R.Z.round(4)
+    pref = R.groupby(["Z", "L"]).P_end.transform("max")
+    R["state"] = [classify(p, q) for p, q in zip(R.P_end, pref)]
+    R.to_csv(OUT / "replicas.csv", index=False)
+    S = (R.groupby(["Z", "L", "m2", "layers"]).state.value_counts().unstack(fill_value=0)
+         .reindex(columns=["lamellar", "symmetric", "slab"], fill_value=0).unstack("layers", fill_value=0))
+    S.columns = [f"{a}_{b}" for a, b in S.columns]
+    S = S.join(R.groupby(["Z", "L", "m2"])[["samples", "complete"]].first()).reset_index()
     S.to_csv(OUT / "summary.csv", index=False)
     print(S.to_string(index=False))
     return 0
