@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-27 20:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-27 21:05 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -87,8 +87,8 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L28/m2m2p4_s1648 | IDLE | therm | 164698 | 0 | 0.800 / 0.782 | 0.403 | 0 | 0.01989 | 4 |
 | Zm1p1716/L32/m2m2p34_s1662 | PD l40s | therm | 189738 | 0 | 0.800 / 0.774 | 0.401 | 0 | 0.01797 | 7 |
 | Zm1p1716/L32/m2m2p4_s1672 | IDLE | therm | 114000 | 0 | 0.800 / 0.785 | 0.401 | 0 | 0.01797 | 4 |
-| Zm1p3/L28/m2m2p36_s1728 | R h200 | therm | 349000 | 0 | 0.800 / 0.786 | 0.401 | 3 | 0.02029 | 8 |
-| Zm1p3/L32/m2m2p34_s1742 | PD h100 | therm | 190663 | 0 | 0.801 / 0.780 | 0.397 | 0 | 0.01833 | 7 |
+| Zm1p3/L28/m2m2p36_s1728 | R h200 | therm | 376000 | 0 | 0.800 / 0.787 | 0.401 | 3 | 0.02029 | 8 |
+| Zm1p3/L32/m2m2p34_s1742 | R h100 | therm | 195000 | 0 | 0.800 / 0.785 | 0.398 | 0 | 0.01833 | 7 |
 | Zm1p3/L32/m2m2p4_s1752 | PD a100 | therm | 162134 | 0 | 0.801 / 0.709 | 0.398 | 0 | 0.01833 | 6 |
 
 ### `bline2` (0/2 complete)
@@ -249,7 +249,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1/L32/m2m2p6_s1542_disordered | PD l40s | therm | 297440 | 0 | 0.799 / 0.768 | 0.353 | 3 | 0.01761 | 7 |
 | Zm1/L32/m2m2p6_s2542_ordered | PD l40s | therm | 623151 | 0 | 0.800 / 0.662 | 0.353 | 33 | 0.01761 | 14 |
 | Zm1/L32/m2m2p57_s1552_disordered | PD l40s | therm | 547533 | 0 | 0.799 / 0.775 | 0.361 | 39 | 0.01761 | 13 |
-| Zm1/L32/m2m2p57_s2552_ordered | R h100 | therm | 125000 | 0 | 0.800 / 0.787 | 0.361 | 0 | 0.01761 | 2 |
+| Zm1/L32/m2m2p57_s2552_ordered | PD rtx_6000_pro | therm | 138124 | 0 | 0.796 / 0.710 | 0.360 | 0 | 0.01761 | 3 |
 | Zm1p05/L24/m2m2p71_s1624_disordered | PD rtx_6000_pro | therm | 486844 | 0 | 0.800 / 0.780 | 0.327 | 34 | 0.02185 | 2 |
 | Zm1p05/L24/m2m2p71_s2624_ordered | complete | collect | 762000 | 8000 | 0.801 / 0.732 | 0.337 | 0 | 0.02185 | 3 |
 | Zm1p05/L24/m2m2p68_s1634_disordered | complete | collect | 733000 | 8000 | 0.798 / 0.677 | 0.331 | 0 | 0.02229 | 3 |
@@ -260,7 +260,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L32/m2m2p71_s2632_ordered | PD l40s | therm | 668608 | 0 | 0.799 / 0.778 | 0.344 | 5 | 0.01761 | 15 |
 | Zm1p05/L32/m2m2p68_s1642_disordered | PD l40s | therm | 162574 | 0 | 0.800 / 0.772 | 0.349 | 0 | 0.01761 | 4 |
 | Zm1p05/L32/m2m2p68_s2642_ordered | PD l40s | therm | 435512 | 0 | 0.801 / 0.771 | 0.347 | 1 | 0.01797 | 10 |
-| Zm1p05/L32/m2m2p65_s1652_disordered | R h200 | therm | 616000 | 0 | 0.800 / 0.783 | 0.353 | 20 | 0.01797 | 14 |
+| Zm1p05/L32/m2m2p65_s1652_disordered | R h200 | therm | 641000 | 0 | 0.800 / 0.785 | 0.353 | 23 | 0.01761 | 14 |
 | Zm1p05/L32/m2m2p65_s2652_ordered | PD l40s | therm | 229375 | 0 | 0.801 / 0.765 | 0.352 | 0 | 0.01761 | 5 |
 
 ### `validate` (1/1 complete)
@@ -486,9 +486,6 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
 
 ## 2026-11-27 02:20 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/ulamL/Zm1/L64/m2m2p7_s7902
-
-## 2026-11-27 02:20 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/ulamL/Zm1p1/L64/m2m3_s7906
 
 ## 2026-11-27 02:32 UTC
@@ -544,4 +541,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-27 19:34 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeffL/Zm0p6/L128/m2m1p857_s7816
+
+## 2026-11-27 20:39 UTC
+- A100 trial rule (user): if a trial job is still pending past Slurm's original estimate (2119661 21:13, 2119867 03:13, 2119951 05:13 EST), move it back to gpu_partners/short_gpu. Implemented in ops/a100_deadline.sh, called from gpu_fill.sh each heartbeat.
 
