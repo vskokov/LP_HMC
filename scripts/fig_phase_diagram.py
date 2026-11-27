@@ -184,7 +184,7 @@ def main() -> int:
     draw(ax, U, lam, H, UL=UL, MO=MO)
     MB = moat_bounds()
     ax.set_xlim(-2.25, 2.1)
-    ax.set_ylim(-6.6, 0.25)
+    ax.set_ylim(-7.6, 0.25)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
     ax.text(1.2, -0.4, "symmetric", ha="center", fontsize=8)
