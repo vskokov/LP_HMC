@@ -92,7 +92,13 @@ def main() -> int:
         r = s.loc[s.L.idxmax()]
         sp = pd.read_csv(REP / r.run / "spectrum.csv")
         sp = sp[sp.q <= 1.0]
-        bx.errorbar(sp.q, 1 / sp.S, yerr=sp.S_err / sp.S**2, fmt=ls, lw=0.9, color=c, elinewidth=0.5, capsize=0,
+        # momenta along a lattice axis, k = (2 pi n / L, 0, 0): near the meeting region S(k)
+        # depends on the direction of k as well as on khat^2 (axis-locked fluctuations), so
+        # mixing directions gives a sawtooth in khat^2
+        qa = 4 * np.sin(np.pi * np.arange(int(r.L) // 2 + 1) / r.L) ** 2
+        sp = sp[np.isclose(sp.q.values[:, None], qa[None, :], atol=1e-5).any(axis=1)]
+        bx.errorbar(sp.q, 1 / sp.S, yerr=sp.S_err / sp.S**2, fmt=ls, marker="o" if ls == "-" else "s",
+                    ms=2.5, mfc=c if ls == "-" else "white", lw=0.9, color=c, elinewidth=0.5, capsize=0,
                     label=rf"$Z={Z:.4g},\ m^2={m2:g}$")
     bx.set_xlabel(r"$\hat k^2$")
     bx.set_ylabel(r"$1/S(k)$")
