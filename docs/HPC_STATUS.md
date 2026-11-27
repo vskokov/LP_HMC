@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-27 22:05 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-27 23:05 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -87,15 +87,15 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L28/m2m2p4_s1648 | IDLE | therm | 164698 | 0 | 0.800 / 0.782 | 0.403 | 0 | 0.01989 | 4 |
 | Zm1p1716/L32/m2m2p34_s1662 | PD l40s | therm | 189738 | 0 | 0.800 / 0.774 | 0.401 | 0 | 0.01797 | 7 |
 | Zm1p1716/L32/m2m2p4_s1672 | IDLE | therm | 114000 | 0 | 0.800 / 0.785 | 0.401 | 0 | 0.01797 | 4 |
-| Zm1p3/L28/m2m2p36_s1728 | R h100 | therm | 396000 | 0 | 0.800 / 0.784 | 0.401 | 3 | 0.02029 | 9 |
-| Zm1p3/L32/m2m2p34_s1742 | R h100 | therm | 212000 | 0 | 0.800 / 0.785 | 0.399 | 0 | 0.01833 | 7 |
+| Zm1p3/L28/m2m2p36_s1728 | PD h200 | therm | 409886 | 0 | 0.800 / 0.786 | 0.401 | 3 | 0.02029 | 10 |
+| Zm1p3/L32/m2m2p34_s1742 | R h200 | therm | 222000 | 0 | 0.800 / 0.786 | 0.398 | 0 | 0.01833 | 8 |
 | Zm1p3/L32/m2m2p4_s1752 | PD a100 | therm | 162134 | 0 | 0.801 / 0.709 | 0.398 | 0 | 0.01833 | 6 |
 
 ### `bline2` (0/2 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
-| Zm1p1716/L28/m2m2p3_s1828 | R h200 | therm | 228000 | 0 | 0.799 / 0.785 | 0.402 | 4 | 0.02009 | 5 |
+| Zm1p1716/L28/m2m2p3_s1828 | R h200 | therm | 247000 | 0 | 0.800 / 0.785 | 0.402 | 4 | 0.01989 | 6 |
 | Zm1p1716/L32/m2m2p3_s1832 | PD l40s | therm | 105062 | 0 | 0.800 / 0.629 | 0.399 | 0 | 0.01797 | 4 |
 
 ### `p8_mixed` (0/6 complete)
@@ -254,13 +254,13 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L24/m2m2p71_s2624_ordered | complete | collect | 762000 | 8000 | 0.801 / 0.732 | 0.337 | 0 | 0.02185 | 3 |
 | Zm1p05/L24/m2m2p68_s1634_disordered | complete | collect | 733000 | 8000 | 0.798 / 0.677 | 0.331 | 0 | 0.02229 | 3 |
 | Zm1p05/L24/m2m2p68_s2634_ordered | PD rtx_6000_pro | therm | 484299 | 0 | 0.800 / 0.763 | 0.337 | 37 | 0.02229 | 2 |
-| Zm1p05/L24/m2m2p65_s1644_disordered | R h200 | therm | 857000 | 0 | 0.800 / 0.786 | 0.341 | 34 | 0.02185 | 4 |
+| Zm1p05/L24/m2m2p65_s1644_disordered | R h100 | therm | 934000 | 0 | 0.799 / 0.783 | 0.342 | 37 | 0.02185 | 4 |
 | Zm1p05/L24/m2m2p65_s2644_ordered | complete | collect | 1117000 | 8000 | 0.800 / 0.670 | 0.339 | 0 | 0.02185 | 5 |
 | Zm1p05/L32/m2m2p71_s1632_disordered | PD rtx_6000_pro | therm | 105399 | 0 | 0.800 / 0.757 | 0.345 | 0 | 0.01797 | 2 |
 | Zm1p05/L32/m2m2p71_s2632_ordered | PD l40s | therm | 668608 | 0 | 0.799 / 0.778 | 0.344 | 5 | 0.01761 | 15 |
 | Zm1p05/L32/m2m2p68_s1642_disordered | PD l40s | therm | 162574 | 0 | 0.800 / 0.772 | 0.349 | 0 | 0.01761 | 4 |
 | Zm1p05/L32/m2m2p68_s2642_ordered | PD l40s | therm | 435512 | 0 | 0.801 / 0.771 | 0.347 | 1 | 0.01797 | 10 |
-| Zm1p05/L32/m2m2p65_s1652_disordered | PD h100 | therm | 642434 | 0 | 0.802 / 0.763 | 0.353 | 23 | 0.01797 | 15 |
+| Zm1p05/L32/m2m2p65_s1652_disordered | R h100 | therm | 658000 | 0 | 0.800 / 0.787 | 0.353 | 25 | 0.01761 | 15 |
 | Zm1p05/L32/m2m2p65_s2652_ordered | PD l40s | therm | 229375 | 0 | 0.801 / 0.765 | 0.352 | 0 | 0.01761 | 5 |
 
 ### `validate` (1/1 complete)
@@ -485,9 +485,6 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
 
-## 2026-11-27 02:20 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/ulamL/Zm1p1/L64/m2m3_s7906
-
 ## 2026-11-27 02:32 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/ulamL/Zm1p3/L64/m2m3p4_s7907
 
@@ -544,4 +541,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-27 20:39 UTC
 - A100 trial rule (user): if a trial job is still pending past Slurm's original estimate (2119661 21:13, 2119867 03:13, 2119951 05:13 EST), move it back to gpu_partners/short_gpu. Implemented in ops/a100_deadline.sh, called from gpu_fill.sh each heartbeat.
+
+## 2026-11-27 22:34 UTC
+- exit3 rule uline_ext/Zm1p05/L24/m2m2p65_s1644_disordered: rt 29->37 rising at 900000; CVU_MAX_THERM 900000 -> 1350000 (raise 1/2); resubmitted (uline_ext: submit   cvu_uline_ext_Zm1p05_L24_m2m2p65_s1644  gpu=h100)
 
