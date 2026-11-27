@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-27 08:02 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-27 09:02 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -33,7 +33,7 @@ Generated 2026-11-27 08:02 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `p9_pilot` | 2/4 | 0 | 2 |
 | `s2_zm1172_prod` | 4/6 | 0 | 2 |
 | `s2_zm2_ext` | 2/4 | 2 | 0 |
-| `ulamL` | 4/12 | 8 | 0 |
+| `ulamL` | 5/12 | 7 | 0 |
 | `uline` | 45/48 | 3 | 0 |
 | `uline_ext` | 9/24 | 15 | 0 |
 | `validate` | 1/1 | 0 | 0 |
@@ -41,7 +41,7 @@ Generated 2026-11-27 08:02 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `zeff2` | 11/11 | 0 | 0 |
 | `zeffL` | 9/17 | 8 | 0 |
 
-Running GPUs: h100 2, h200 1
+Running GPUs: h100 1, h200 2
 
 During thermalization the HMC columns show the last check interval (ε adapts per window); for completed/collecting rows they show the whole collect phase. Round-trip walkers reset when collection starts.
 
@@ -164,14 +164,14 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm2/L36/m2m1p92_s134 | PD h100 | therm | 422826 | 0 | 0.800 / 0.782 | 0.400 | 10 | 0.01745 | 24 |
 | Zm2/L36/m2m1p96_s135 | PD l40s | therm | 363160 | 0 | 0.800 / 0.700 | 0.400 | 0 | 0.0178 | 16 |
 
-### `ulamL` (4/12 complete)
+### `ulamL` (5/12 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
-| Zm1/L64/m2m2p6_s7901 | R h100 | collect | 19500 | 700 | 0.788 / 0.739 | nan |  | 0.01121 | 0 |
+| Zm1/L64/m2m2p6_s7901 | complete | collect | 102000 | 4000 | 0.788 / 0.740 | nan |  | 0.01121 | 0 |
 | Zm1/L64/m2m2p7_s7902 | complete | collect | 102000 | 4000 | 0.806 / 0.741 | nan |  | 0.01046 | 0 |
-| Zm1/L64/m2m2p85_s7903 | PD h100 | not started | | | | | | | 0 |
-| Zm1p1/L64/m2m2p8_s7904 | PD h200 | not started | | | | | | | 0 |
+| Zm1/L64/m2m2p85_s7903 | R h100 | collect | 29500 | 1100 | 0.791 / 0.741 | nan |  | 0.01088 | 0 |
+| Zm1p1/L64/m2m2p8_s7904 | R h200 | collect | 72000 | 2800 | 0.788 / 0.722 | nan |  | 0.01088 | 0 |
 | Zm1p1/L64/m2m2p9_s7905 | PD h200 | not started | | | | | | | 0 |
 | Zm1p1/L64/m2m3_s7906 | complete | collect | 102000 | 4000 | 0.803 / 0.751 | nan |  | 0.01056 | 0 |
 | Zm1p3/L64/m2m3p4_s7907 | complete | collect | 102000 | 4000 | 0.766 / 0.710 | nan |  | 0.01179 | 0 |
@@ -478,15 +478,12 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p95/L64/m2m2p485_s7811 | complete | collect | 40000 | 4000 | 0.803 / 0.759 | nan |  | 0.01067 | 0 |
 | Zm0p9/L96/m2m2p378_s7812 | PD l40s | collect | 29500 | 1900 | 0.794 / 0.742 | nan |  | 0.007958 | 1 |
 | Zm0p9/L96/m2m2p383_s7813 | PD l40s | collect | 28000 | 1600 | 0.795 / 0.732 | nan |  | 0.00757 | 1 |
-| Zm0p95/L96/m2m2p48_s7814 | R h100 | therm | 18000 | 0 | 0.000 / 0.000 | nan |  | 0.008038 | 0 |
-| Zm0p95/L96/m2m2p485_s7815 | R h200 | not started | | | | | | | 0 |
+| Zm0p95/L96/m2m2p48_s7814 | PD l40s | collect | 29000 | 1800 | 0.804 / 0.753 | nan |  | 0.007646 | 1 |
+| Zm0p95/L96/m2m2p485_s7815 | R h200 | therm | 18000 | 0 | 0.000 / 0.000 | nan |  | 0.00788 | 0 |
 | Zm0p6/L128/m2m1p857_s7816 | PD h200 | collect | 30500 | 2100 | 0.826 / 0.763 | nan |  | 0.005738 | 2 |
 | Zm0p6/L128/m2m1p862_s7817 | PD h200 | therm | 15000 | 0 | 0.000 / 0.000 | nan |  | 0.006804 | 1 |
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
-
-## 2026-11-26 02:46 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/uline/Zm0p9/L32/m2m2p388_s710_disordered
 
 ## 2026-11-26 08:06 UTC
 - Run plan r11 merged (30f67ef -> hazel-ops). scancel bline Z8 L28 -2.40 s1648 (PD) and L32 -2.40 s1672 (R); dirs/checkpoints kept, added to ops/cancelled_rows.txt. prepare + submit bline2 (Z8 -2.30 at L28 s1828, L32 s1832); manifest.orig.csv created. Ops scripts now include bline2. Analysis rule: combined/bline_Z8/Zm1p1716/L{28,32} when both Z8 rows at that L complete.
@@ -544,4 +541,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-27 06:21 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeffL/Zm0p9/L64/m2m2p378_s7807
+
+## 2026-11-27 09:02 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/ulamL/Zm1/L64/m2m2p6_s7901
 
