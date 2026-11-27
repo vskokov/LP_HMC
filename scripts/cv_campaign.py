@@ -62,7 +62,7 @@ BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
 SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT,
-             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT, "zeff8": SK_SCRIPT, "ulam4": SK_SCRIPT, "zeff9": SK_SCRIPT,
+             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT, "zeff8": SK_SCRIPT, "ulam4": SK_SCRIPT, "zeff9": SK_SCRIPT, "ulam5": SK_SCRIPT,
              "zeffL": SK_SCRIPT, "ulamL": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
@@ -446,6 +446,17 @@ def stage_rows(stage: str) -> list[dict]:
                 seed += 1
                 rows.append(sk_row(stage, Z, 48, m2, seed, samples=16000))
         return rows
+    if stage == "ulam5":
+        # LOCAL: follow the plunge of the uniform <-> lamellar line (ulam4: Z=-1.45 (-4.45,-4.15),
+        # Z=-1.5 above -4.7, Z=-1.6 (-6.0,-5.5), Z=-2 below -7.0).  Close Z=-1.5; add Z=-1.7/-1.8.
+        grid = {-1.5: (7, (-4.3, -4.5)), -1.7: (7, (-6.5, -7.5)), -1.8: (8, (-7.0, -8.0))}
+        rows, seed = [], 8300
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
     if stage == "ulam4":
         # LOCAL: uniform <-> lamellar line where it steepens (ulam3, perpendicular slabs: Z=-1.45
         # between -4.6 and -4.0, mixed at -4.3; lamellar wins at Z=-1.6 down to -5.0 and at
@@ -525,7 +536,7 @@ STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
                        "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
-                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9")
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9", "ulam5")
 
 
 def manifest(stage: str) -> Path:

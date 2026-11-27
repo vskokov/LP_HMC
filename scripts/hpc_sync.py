@@ -38,7 +38,7 @@ SHARE_HAZEL = Path(os.environ.get("LP_HMC_SHARE", "/rsstu/users/v/vskokov/gluon"
 SHARE_LOCAL = Path("/hpc")
 SUBDIR = Path("2026") / "lp_hmc_sync"
 LOCAL_STAGES = {"s2_zm2", "s2_zm1172", "lro", "lro2", "pilot", "s2", "ulam", "ulam2", "ulam3",
-                "zeff3", "zeff4", "zeff5", "zeff6", "zeff8", "ulam4", "zeff9"}   # never pulled
+                "zeff3", "zeff4", "zeff5", "zeff6", "zeff8", "ulam4", "zeff9", "ulam5"}   # never pulled
 
 
 def rsync(src: Path, dst: Path, extra: list[str], dry: bool) -> None:
