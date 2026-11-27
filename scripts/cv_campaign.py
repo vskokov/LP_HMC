@@ -62,7 +62,7 @@ BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
 SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT,
-             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT, "zeff8": SK_SCRIPT, "ulam4": SK_SCRIPT, "zeff9": SK_SCRIPT, "ulam5": SK_SCRIPT,
+             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT, "zeff8": SK_SCRIPT, "ulam4": SK_SCRIPT, "zeff9": SK_SCRIPT, "ulam5": SK_SCRIPT, "ulam6": SK_SCRIPT, "zeff10": SK_SCRIPT,
              "zeffL": SK_SCRIPT, "ulamL": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
@@ -457,6 +457,27 @@ def stage_rows(stage: str) -> list[dict]:
                 rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
                                    init=("slab", n)))
         return rows
+    if stage == "ulam6":
+        # LOCAL: second box size where the uniform <-> lamellar line plunges (L=64 at Z=-1.45 and
+        # -1.6, bracketing the L=48 lines (-4.45,-4.15) and (-6.0,-5.5)), and a 3x longer L=48
+        # run at Z=-2, m2=-8 (ulam4: perpendicular slabs drifting toward lamellae, unresolved).
+        rows, seed = [], 8400
+        for Z, n, ms in ((-1.45, 8, (-4.15, -4.45)), (-1.6, 9, (-5.5, -6.0))):
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 64, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        seed += 1
+        rows.append(sk_row(stage, -2.0, 48, -8.0, seed, samples=12000, skip=25, therm=2000,
+                           init=("slab", 8)))
+        return rows
+    if stage == "zeff10":
+        # LOCAL: volume check of the moat zero next to Z=0: L=64 at Z=-0.03 around -0.68(2).
+        rows, seed = [], 8500
+        for m2 in (-0.6, -0.75):
+            seed += 1
+            rows.append(sk_row(stage, -0.03, 64, m2, seed, samples=8000))
+        return rows
     if stage == "ulam4":
         # LOCAL: uniform <-> lamellar line where it steepens (ulam3, perpendicular slabs: Z=-1.45
         # between -4.6 and -4.0, mixed at -4.3; lamellar wins at Z=-1.6 down to -5.0 and at
@@ -536,7 +557,7 @@ STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
                        "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
-                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9", "ulam5")
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9", "ulam5", "ulam6", "zeff10")
 
 
 def manifest(stage: str) -> Path:
