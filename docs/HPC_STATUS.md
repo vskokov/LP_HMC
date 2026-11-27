@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-27 19:06 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-27 20:04 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -39,7 +39,7 @@ Generated 2026-11-27 19:06 UTC by `scripts/hpc_status_report.py` on the cluster 
 | `validate` | 1/1 | 0 | 0 |
 | `zeff` | 171/171 | 0 | 0 |
 | `zeff2` | 11/11 | 0 | 0 |
-| `zeffL` | 11/17 | 6 | 0 |
+| `zeffL` | 12/17 | 5 | 0 |
 
 Running GPUs: h100 1, h200 2
 
@@ -73,7 +73,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
-| Zm1p1716/L20/m2m2p7_s1420 | R h100 | therm | 291000 | 0 | 0.800 / 0.787 | 0.167 | 0 | 0.02556 | 2 |
+| Zm1p1716/L20/m2m2p7_s1420 | PD rtx_6000_pro | therm | 301960 | 0 | 0.800 / 0.781 | 0.168 | 0 | 0.02556 | 3 |
 | Zm1p1716/L20/m2m2p9_s1430 | PD rtx_6000_pro | therm | 149387 | 0 | 0.800 / 0.747 | 0.181 | 0 | 0.0253 | 2 |
 | Zm1p1716/L28/m2m2p7_s1428 | IDLE | not started | | | | | | | 0 |
 | Zm1p1716/L28/m2m2p9_s1438 | IDLE | not started | | | | | | | 0 |
@@ -87,8 +87,8 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L28/m2m2p4_s1648 | IDLE | therm | 164698 | 0 | 0.800 / 0.782 | 0.403 | 0 | 0.01989 | 4 |
 | Zm1p1716/L32/m2m2p34_s1662 | PD l40s | therm | 189738 | 0 | 0.800 / 0.774 | 0.401 | 0 | 0.01797 | 7 |
 | Zm1p1716/L32/m2m2p4_s1672 | IDLE | therm | 114000 | 0 | 0.800 / 0.785 | 0.401 | 0 | 0.01797 | 4 |
-| Zm1p3/L28/m2m2p36_s1728 | PD h200 | therm | 337048 | 0 | 0.801 / 0.625 | 0.401 | 3 | 0.02029 | 8 |
-| Zm1p3/L32/m2m2p34_s1742 | R h200 | therm | 181000 | 0 | 0.800 / 0.786 | 0.398 | 0 | 0.01833 | 6 |
+| Zm1p3/L28/m2m2p36_s1728 | R h200 | therm | 349000 | 0 | 0.800 / 0.786 | 0.401 | 3 | 0.02029 | 8 |
+| Zm1p3/L32/m2m2p34_s1742 | PD h100 | therm | 190663 | 0 | 0.801 / 0.780 | 0.397 | 0 | 0.01833 | 7 |
 | Zm1p3/L32/m2m2p4_s1752 | PD a100 | therm | 162134 | 0 | 0.801 / 0.709 | 0.398 | 0 | 0.01833 | 6 |
 
 ### `bline2` (0/2 complete)
@@ -249,7 +249,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1/L32/m2m2p6_s1542_disordered | PD l40s | therm | 297440 | 0 | 0.799 / 0.768 | 0.353 | 3 | 0.01761 | 7 |
 | Zm1/L32/m2m2p6_s2542_ordered | PD l40s | therm | 623151 | 0 | 0.800 / 0.662 | 0.353 | 33 | 0.01761 | 14 |
 | Zm1/L32/m2m2p57_s1552_disordered | PD l40s | therm | 547533 | 0 | 0.799 / 0.775 | 0.361 | 39 | 0.01761 | 13 |
-| Zm1/L32/m2m2p57_s2552_ordered | PD h100 | therm | 106288 | 0 | 0.799 / 0.750 | 0.361 | 0 | 0.01761 | 2 |
+| Zm1/L32/m2m2p57_s2552_ordered | R h100 | therm | 125000 | 0 | 0.800 / 0.787 | 0.361 | 0 | 0.01761 | 2 |
 | Zm1p05/L24/m2m2p71_s1624_disordered | PD rtx_6000_pro | therm | 486844 | 0 | 0.800 / 0.780 | 0.327 | 34 | 0.02185 | 2 |
 | Zm1p05/L24/m2m2p71_s2624_ordered | complete | collect | 762000 | 8000 | 0.801 / 0.732 | 0.337 | 0 | 0.02185 | 3 |
 | Zm1p05/L24/m2m2p68_s1634_disordered | complete | collect | 733000 | 8000 | 0.798 / 0.677 | 0.331 | 0 | 0.02229 | 3 |
@@ -260,7 +260,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p05/L32/m2m2p71_s2632_ordered | PD l40s | therm | 668608 | 0 | 0.799 / 0.778 | 0.344 | 5 | 0.01761 | 15 |
 | Zm1p05/L32/m2m2p68_s1642_disordered | PD l40s | therm | 162574 | 0 | 0.800 / 0.772 | 0.349 | 0 | 0.01761 | 4 |
 | Zm1p05/L32/m2m2p68_s2642_ordered | PD l40s | therm | 435512 | 0 | 0.801 / 0.771 | 0.347 | 1 | 0.01797 | 10 |
-| Zm1p05/L32/m2m2p65_s1652_disordered | PD h200 | therm | 605518 | 0 | 0.801 / 0.770 | 0.353 | 19 | 0.01761 | 14 |
+| Zm1p05/L32/m2m2p65_s1652_disordered | R h200 | therm | 616000 | 0 | 0.800 / 0.783 | 0.353 | 20 | 0.01797 | 14 |
 | Zm1p05/L32/m2m2p65_s2652_ordered | PD l40s | therm | 229375 | 0 | 0.801 / 0.765 | 0.352 | 0 | 0.01761 | 5 |
 
 ### `validate` (1/1 complete)
@@ -461,7 +461,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm1p1716/L48/m2m2p35_s6510 | complete | collect | 40000 | 4000 | 0.796 / 0.744 | nan |  | 0.01366 | 0 |
 | Zm1p1716/L48/m2m2p45_s6511 | complete | collect | 40000 | 4000 | 0.792 / 0.743 | nan |  | 0.01366 | 0 |
 
-### `zeffL` (11/17 complete)
+### `zeffL` (12/17 complete)
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
@@ -480,13 +480,10 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p9/L96/m2m2p383_s7813 | PD l40s | collect | 28000 | 1600 | 0.795 / 0.732 | nan |  | 0.00757 | 1 |
 | Zm0p95/L96/m2m2p48_s7814 | PD a100 | collect | 29000 | 1800 | 0.804 / 0.753 | nan |  | 0.007646 | 1 |
 | Zm0p95/L96/m2m2p485_s7815 | PD a100 | collect | 27500 | 1500 | 0.788 / 0.715 | nan |  | 0.008039 | 1 |
-| Zm0p6/L128/m2m1p857_s7816 | R h200 | collect | 36000 | 3200 | 0.829 / 0.775 | nan |  | 0.005738 | 2 |
+| Zm0p6/L128/m2m1p857_s7816 | complete | collect | 40000 | 4000 | 0.826 / 0.773 | nan |  | 0.005738 | 2 |
 | Zm0p6/L128/m2m1p862_s7817 | complete | collect | 40000 | 4000 | 0.813 / 0.767 | nan |  | 0.006032 | 2 |
 
 ## Operations journal (last 60 lines of `$LP_HMC_RUNS/OPS_JOURNAL.md`)
-
-## 2026-11-27 00:50 UTC
-- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeffL/Zm0p6/L96/m2m1p867_s7803
 
 ## 2026-11-27 02:20 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/ulamL/Zm1/L64/m2m2p7_s7902
@@ -544,4 +541,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 ## 2026-11-27 19:06 UTC
 - COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeffL/Zm0p6/L128/m2m1p862_s7817
+
+## 2026-11-27 19:34 UTC
+- COMPLETE /share/gluonsaturation/vskokov/lp_hmc_runs/cv_umbrella/zeffL/Zm0p6/L128/m2m1p857_s7816
 
