@@ -1,6 +1,6 @@
 # Hazel campaign status
 
-Generated 2026-11-27 07:03 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
+Generated 2026-11-27 08:02 UTC by `scripts/hpc_status_report.py` on the cluster (branch `hazel-ops`). Run data are not in git; copy completed stages with rsync (docs/HPC.md §4).
 
 ## Operator notes
 
@@ -168,7 +168,7 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 
 | run | state | phase | sweeps | collected | HMC acc (mean / min window) | min swap | round-trip walkers | ε median | cont |
 |---|---|---|---|---|---|---|---|---|---|
-| Zm1/L64/m2m2p6_s7901 | PD h100 | not started | | | | | | | 0 |
+| Zm1/L64/m2m2p6_s7901 | R h100 | collect | 19500 | 700 | 0.788 / 0.739 | nan |  | 0.01121 | 0 |
 | Zm1/L64/m2m2p7_s7902 | complete | collect | 102000 | 4000 | 0.806 / 0.741 | nan |  | 0.01046 | 0 |
 | Zm1/L64/m2m2p85_s7903 | PD h100 | not started | | | | | | | 0 |
 | Zm1p1/L64/m2m2p8_s7904 | PD h200 | not started | | | | | | | 0 |
@@ -476,10 +476,10 @@ During thermalization the HMC columns show the last check interval (ε adapts pe
 | Zm0p95/L64/m2m2p475_s7809 | complete | collect | 40000 | 4000 | 0.799 / 0.766 | nan |  | 0.01067 | 0 |
 | Zm0p95/L64/m2m2p48_s7810 | complete | collect | 40000 | 4000 | 0.808 / 0.762 | nan |  | 0.01046 | 0 |
 | Zm0p95/L64/m2m2p485_s7811 | complete | collect | 40000 | 4000 | 0.803 / 0.759 | nan |  | 0.01067 | 0 |
-| Zm0p9/L96/m2m2p378_s7812 | R h100 | therm | 16000 | 0 | 0.000 / 0.000 | nan |  | 0.00845 | 0 |
-| Zm0p9/L96/m2m2p383_s7813 | R h200 | therm | 19000 | 0 | 0.000 / 0.000 | nan |  | 0.007201 | 0 |
-| Zm0p95/L96/m2m2p48_s7814 | R h100 | not started | | | | | | | 0 |
-| Zm0p95/L96/m2m2p485_s7815 | PD h200 | not started | | | | | | | 0 |
+| Zm0p9/L96/m2m2p378_s7812 | PD l40s | collect | 29500 | 1900 | 0.794 / 0.742 | nan |  | 0.007958 | 1 |
+| Zm0p9/L96/m2m2p383_s7813 | PD l40s | collect | 28000 | 1600 | 0.795 / 0.732 | nan |  | 0.00757 | 1 |
+| Zm0p95/L96/m2m2p48_s7814 | R h100 | therm | 18000 | 0 | 0.000 / 0.000 | nan |  | 0.008038 | 0 |
+| Zm0p95/L96/m2m2p485_s7815 | R h200 | not started | | | | | | | 0 |
 | Zm0p6/L128/m2m1p857_s7816 | PD h200 | collect | 30500 | 2100 | 0.826 / 0.763 | nan |  | 0.005738 | 2 |
 | Zm0p6/L128/m2m1p862_s7817 | PD h200 | therm | 15000 | 0 | 0.000 / 0.000 | nan |  | 0.006804 | 1 |
 
