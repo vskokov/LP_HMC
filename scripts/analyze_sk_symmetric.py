@@ -97,6 +97,7 @@ def main() -> int:
                              ROOT / "runs" / "cv_umbrella" / "zeff6",
                              ROOT / "runs" / "cv_umbrella" / "zeff7",
                              ROOT / "runs" / "cv_umbrella" / "zeff8",
+                             ROOT / "runs" / "cv_umbrella" / "zeff9",
                              ROOT / "runs" / "cv_umbrella" / "zeffL"],
                     help="local scan and the Hazel zeff/zeff2 stages (pulled by hpc_sync.py)")
     ap.add_argument("--kfit", type=float, default=3.0)

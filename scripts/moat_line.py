@@ -6,7 +6,7 @@ maximum of S(k) sits at k != 0, the moat regime).
 Per Z, Z_eff(m2) at the largest L is read from the S(k) fits of analyze_sk_symmetric.py,
 from both the small-k fit (khat^2 <= 0.8, summary_kfit0p8.csv; primary) and the global fit
 (khat^2 <= 3, summary.csv); the difference is quoted as the fit-range systematic.  The zero
-is found by linear interpolation between the two masses that bracket the sign change.
+is found from a weighted straight-line fit of Z_eff(m2) through up to two masses on each\nside of the sign change (column stat: its statistical error).
 Where Z_eff keeps one sign over the whole scan, the row records a bound:
   kind = "crossing"   m2_moat interpolated
   kind = "below"      Z_eff < 0 down to the deepest symmetric mass: the moat persists to
@@ -38,23 +38,33 @@ def load(name: str) -> pd.DataFrame:
     return t.loc[t.groupby(["Z", "m2"]).L.idxmax()]
 
 
-def zero(g: pd.DataFrame) -> tuple[str, float]:
+def zero(g: pd.DataFrame) -> tuple[str, float, float]:
+    """Sign change of Z_eff(m2): weighted straight-line fit through up to two masses on
+    each side of the change (statistical error from the fit); bound otherwise."""
     g = g.sort_values("m2", ascending=False)
-    m, z = g.m2.values, g.Zeff.values
+    m, z, e = g.m2.values, g.Zeff.values, g.Zeff_err.values
     for i in range(len(m) - 1):
         if np.sign(z[i]) != np.sign(z[i + 1]):
-            return "crossing", float(m[i] + (m[i + 1] - m[i]) * z[i] / (z[i] - z[i + 1]))
-    return ("below" if z[-1] < 0 else "none"), float(m[-1])
+            sl = slice(max(i - 1, 0), min(i + 3, len(m)))
+            x, y, w = m[sl], z[sl], 1.0 / e[sl] ** 2
+            A = np.vstack([np.ones_like(x), x]).T
+            cov = np.linalg.inv(A.T @ (A * w[:, None]))
+            a, b = cov @ (A.T @ (w * y))
+            x0 = -a / b
+            J = np.array([-1.0 / b, a / b**2])
+            return "crossing", float(x0), float(np.sqrt(J @ cov @ J))
+    return ("below" if z[-1] < 0 else "none"), float(m[-1]), np.nan
 
 
 def main() -> int:
     small, glob = load("summary_kfit0p8.csv"), load("summary.csv")
     rows = []
     for Z, g in small.groupby("Z"):
-        kind, m = zero(g)
+        kind, m, stat = zero(g)
         gg = glob[glob.Z == Z]
-        kind2, m2g = zero(gg) if len(gg) > 1 else ("", np.nan)
-        rows.append({"Z": Z, "kind": kind, "m2_moat": m, "m2_moat_global_fit": m2g if kind2 == kind else np.nan,
+        kind2, m2g, _ = zero(gg) if len(gg) > 1 else ("", np.nan, np.nan)
+        rows.append({"Z": Z, "kind": kind, "m2_moat": m, "stat": stat,
+                     "m2_moat_global_fit": m2g if kind2 == kind else np.nan,
                      "sys": abs(m - m2g) if kind2 == kind == "crossing" else np.nan,
                      "m2_min": g.m2.min(), "m2_max": g.m2.max(), "n": len(g), "L": int(g.L.max())})
     raw = pd.read_csv(REP / "summary.csv")
