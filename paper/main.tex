@@ -1136,6 +1136,19 @@ is independent of $L$ between $12$ and $36$ to within $0.01$, consistent with
 long-range lamellar order pinned by the lattice.
 
 \subsection{Uniform--lamellar boundary}
+\label{sec:ulam}
+A first map of this boundary comes from direct-coexistence runs.  Each
+$L=48$ box starts half uniform and half lamellar, and we record which phase
+invades the other under plain HMC.  Boxes with the layers parallel to the
+interface stay pinned on our time scales; those with perpendicular layers
+are driven to a single phase, which decides the bracket.  The resulting brackets
+(Fig.~\ref{fig:pd-prelim}) are $-2.9<m^2<-2.8$ at $Z=-1.1$,
+$-3.6<m^2<-3.4$ at $Z=-1.3$ and $-4.6<m^2<-4.0$ at $Z=-1.45$.  At $Z=-1.6$
+and $-2.0$ lamellae still invade at $m^2=-5.0$ and $-6.0$.  The boundary
+therefore steepens quickly, as the lattice mean-field line does, which
+diverges as $Z\to-2^+$, but it lies well below it ($-1.3$ at $Z=-1.1$,
+$-1.0$ at $Z=-1.45$).  $L=64$ boxes at $Z=-1.0$, $-1.1$, $-1.3$ and
+$-1.45$ give the same winners as $L=48$.
 \pending{Thermodynamic integration on commensurate lattices and direct
 validation with the mixed coordinate.}
 
@@ -1145,7 +1158,28 @@ validation with the mixed coordinate.}
 %======================================================================
 \section{Discussion}
 \label{sec:discussion}
-\pending{Phase diagram figure; comparison with mean field and Hartree;
+Figure~\ref{fig:pd-prelim} collects the lattice results available so far.
+\begin{figure}[t]
+ \includegraphics[width=\columnwidth]{figures/phase_diagram_prelim}
+ \caption{Preliminary lattice phase diagram; (b) enlarges the dashed box
+ in (a).  Blue: symmetric--uniform transition (maximum of $\chi$ at the
+ largest $L$ with an interior maximum).  Filled where the transition is
+ continuous; open where its order is still being determined
+ (Sec.~\ref{sec:lp}); square: equal-weight mass of the mixed-coordinate
+ umbrella at $Z_9$, $L=18$.  Orange diamonds: symmetric--lamellar
+ transition (equal-weight mass of the shell and band umbrellas; first
+ order at $Z=-2$, open where only one size is available).  Light orange
+ bars: range in which unbiased $L=48$ chains leave the (metastable)
+ symmetric phase; grey band: range of $Z$ in which the peak of $S(k)$
+ moves to $k\to0$ at the transition.  Dark bars and arrows:
+ uniform--lamellar brackets from direct coexistence
+ (Sec.~\ref{sec:ulam}); arrows mark open ends.  Green: symmetric--moat
+ crossover $Z_\eff=0$ (Sec.~\ref{sec:moat-line}); open triangles: the
+ moat persists to within $0.005$ of the transition.  Open circle: mean-field
+ Lifshitz point.}
+ \label{fig:pd-prelim}
+\end{figure}
+\pending{Final phase diagram figure; comparison with mean field and Hartree;
 implications for the QCD moat regime: $N=1$ retains lamellar order (no
 Goldstone disordering, cf.\ Refs.~\cite{Pisarski2020,Winstel2024}) yet loses the
 Lifshitz point.}
