@@ -103,13 +103,25 @@ def moat_points() -> pd.DataFrame:
     if not f.is_file():
         return pd.DataFrame(columns=["Z", "m2_moat", "sys"])
     t = pd.read_csv(f)
-    return t[t.kind == "crossing"].sort_values("Z")
+    return t[t.kind.isin(["crossing", "shift"])].sort_values("m2_moat")
+
+
+def moat_bounds() -> pd.DataFrame:
+    """Z_eff < 0 down to the deepest symmetric mass next to the transition (L >= 64)."""
+    f = ROOT / "reports" / "sk_symmetric" / "moat_line.csv"
+    if not f.is_file():
+        return pd.DataFrame(columns=["Z", "m2_moat"])
+    t = pd.read_csv(f)
+    return t[(t.kind == "below") & (t.Z >= -0.95) & (t.Z <= -0.6) & (t.L >= 64)].sort_values("Z")
 
 
 def draw(ax, U, lam, H, inset=False, UL=(), MO=None):
     ms = 3.2 if not inset else 3.6
     if MO is not None and len(MO):
-        ax.errorbar(MO.Z, MO.m2_moat, yerr=MO["sys"].fillna(0), fmt="^-.", ms=ms, lw=0.9, color=C_MOAT, zorder=4)
+        cr, sh = MO[MO.kind == "crossing"], MO[MO.kind == "shift"]
+        ax.plot(MO.Z, MO.m2_moat, "-.", lw=0.9, color=C_MOAT, zorder=4)
+        ax.errorbar(cr.Z, cr.m2_moat, yerr=cr["sys"].fillna(0), fmt="^", ms=ms, color=C_MOAT, zorder=4)
+        ax.errorbar(sh.Z, sh.m2_moat, xerr=sh["Z_err"], fmt="v", ms=ms - 0.4, color=C_MOAT, zorder=4)
     mid = []
     for Z, lo, hi in UL:
         if lo is None:
@@ -167,18 +179,19 @@ def main() -> int:
         print(p)
 
     use_prd()
-    fig, (ax, bx) = plt.subplots(2, 1, figsize=figsize("single", 1.6),
-                                 gridspec_kw={"height_ratios": [1.15, 1]})
+    fig, (ax, bx) = plt.subplots(2, 1, figsize=figsize("single", 1.75),
+                                 gridspec_kw={"height_ratios": [1.45, 1]})
     draw(ax, U, lam, H, UL=UL, MO=MO)
+    MB = moat_bounds()
     ax.set_xlim(-2.25, 2.1)
-    ax.set_ylim(-4.6, 0.25)
+    ax.set_ylim(-7.6, 0.25)
     ax.set_xlabel(r"$Z$")
     ax.set_ylabel(r"$m^2$")
     ax.text(1.2, -0.4, "symmetric", ha="center", fontsize=8)
     ax.text(-1.6, -0.6, "symmetric\n(moat)", ha="center", fontsize=7, color="0.3")
     ax.text(0.9, -1.6, "uniform", ha="center", fontsize=8)
     ax.text(-0.75, -3.4, "uniform", ha="center", fontsize=8)
-    ax.text(-1.75, -2.6, "lamellar", ha="center", fontsize=8)
+    ax.text(-1.8, -3.7, "lamellar", ha="center", fontsize=8)
     ax.annotate("MF LP", (0, 0), (0.2, -0.2), fontsize=6.5, arrowprops=dict(arrowstyle="-", lw=0.5))
     ax.text(0.98, 0.98, "PRELIMINARY", transform=ax.transAxes, ha="right", va="top", fontsize=6.5, color="0.5")
     ax.text(0.02, 0.98, "(a)", transform=ax.transAxes, va="top", fontsize=8)
@@ -187,6 +200,11 @@ def main() -> int:
     from matplotlib.patches import Rectangle
     ax.add_patch(Rectangle((zx[0], zy[0]), zx[1] - zx[0], zy[1] - zy[0], fill=False, ec="0.5", lw=0.5, ls="--"))
     draw(bx, U, lam, H, inset=True, UL=UL, MO=MO)
+    for a, ms in ((ax, 3.2), (bx, 3.6)):
+        if len(MB) and len(MO):
+            x0 = MO[MO.kind == "crossing"].sort_values("Z").iloc[0]
+            a.plot([x0.Z, *MB.Z[::-1]], [x0.m2_moat, *MB.m2_moat[::-1]], "-.", lw=0.9, color=C_MOAT, zorder=4)
+            a.plot(MB.Z, MB.m2_moat, "^", ms=ms, mfc="white", mec=C_MOAT, mew=0.8, zorder=5)
     bx.set_xlim(*zx)
     bx.set_ylim(*zy)
     bx.set_xlabel(r"$Z$")
@@ -202,8 +220,9 @@ def main() -> int:
          Line2D([], [], marker="D", ls="--", color=C_MOD, ms=3, label="sym–lam, 1st order"),
          Line2D([], [], marker="s", ls="", color=C_UNI, mfc="white", ms=3, label=r"sym–uni, mixed CV ($Z_9$)"),
          Line2D([], [], lw=2.2, color=C_MOD, alpha=0.35, label="ordering onset ($L=48$)"),
-         Line2D([], [], marker="_", ls="-", lw=1.4, color=C_UM, ms=5, label="uni–lam bracket ($L=48$)"),
-         Line2D([], [], marker="^", ls="-.", color=C_MOAT, ms=3, label=r"moat crossover ($Z_{\rm eff}=0$)")]
+         Line2D([], [], marker="_", ls="-", lw=1.4, color=C_UM, ms=5, label="uni–lam bracket ($L=48$, 64)"),
+         Line2D([], [], marker="^", ls="-.", color=C_MOAT, ms=3, label=r"moat crossover ($Z_{\rm eff}=0$)"),
+         Line2D([], [], marker="^", ls="", color=C_MOAT, mfc="white", ms=3, label=r"moat to within $0.005$ of $m^2_c$")]
     ax.legend(handles=h, loc="lower right", fontsize=5.5, frameon=False, handlelength=1.6)
     fig.tight_layout(pad=0.3)
     save(fig, ROOT / "paper" / "figures" / "phase_diagram_prelim")

@@ -1,0 +1,4 @@
+Z,L,m2,lamellar_parallel,lamellar_perp,symmetric_parallel,symmetric_perp,slab_parallel,slab_perp,samples,complete
+-2.0,48,-1.97,4,4,0,0,0,0,4000,True
+-2.0,48,-1.86,4,1,0,3,0,0,4000,True
+-2.0,48,-1.75,0,0,4,4,0,0,4000,True

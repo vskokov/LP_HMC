@@ -62,7 +62,7 @@ BASE = Path(os.environ.get("LP_HMC_RUNS", ROOT / "runs")) / "cv_umbrella"
 SCRIPT = ROOT / "scripts" / "cv_umbrella.jl"
 SK_SCRIPT = ROOT / "scripts" / "sk_symmetric.jl"
 SCRIPT_OF = {"zeff": SK_SCRIPT, "zeff2": SK_SCRIPT, "ulam": SK_SCRIPT, "ulam2": SK_SCRIPT, "zeff3": SK_SCRIPT, "zeff4": SK_SCRIPT,
-             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT,
+             "zeff5": SK_SCRIPT, "zeff6": SK_SCRIPT, "ulam3": SK_SCRIPT, "zeff8": SK_SCRIPT, "ulam4": SK_SCRIPT, "zeff9": SK_SCRIPT, "ulam5": SK_SCRIPT, "ulam6": SK_SCRIPT, "zeff10": SK_SCRIPT, "slam": SK_SCRIPT,
              "zeffL": SK_SCRIPT, "ulamL": SK_SCRIPT}          # stages not driven by cv_umbrella.jl
 Z_P8 = -8 * math.sin(math.pi / 8) ** 2           # -1.171573
 Q_P8 = 4 * math.sin(math.pi / 8) ** 2            # 0.585786
@@ -425,6 +425,87 @@ def stage_rows(stage: str) -> list[dict]:
                 rows.append(sk_row(stage, Z, 64, m2, seed, samples=4000, skip=25, therm=2000,
                                    init=("slab", n)))
         return rows
+    if stage == "zeff8":
+        # LOCAL: volume dependence of the moat line far from the uniform line: L=64 bracketing
+        # the L=48 crossings at Z=-0.05 (m2=-0.872) and Z=-0.1 (-1.055).
+        grid = [(-0.05, 64, (-0.85, -0.90)), (-0.1, 64, (-1.03, -1.08))]
+        rows, seed = [], 8000
+        for Z, L, ms in grid:
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, L, m2, seed))
+        return rows
+    if stage == "zeff9":
+        # LOCAL: statistics for the moat zeros next to Z=0 (zeff5: Z_eff within +-0.003 of zero
+        # over a wide m2 range, zero sensitive to the fit weights).  New masses interleaved
+        # with zeff5, 16000 samples each.
+        grid = [(-0.03, (-0.5, -0.65, -0.8)), (-0.02, (-0.45, -0.55, -0.75)), (-0.01, (0.05, -0.2, -0.45))]
+        rows, seed = [], 8200
+        for Z, ms in grid:
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=16000))
+        return rows
+    if stage == "ulam5":
+        # LOCAL: follow the plunge of the uniform <-> lamellar line (ulam4: Z=-1.45 (-4.45,-4.15),
+        # Z=-1.5 above -4.7, Z=-1.6 (-6.0,-5.5), Z=-2 below -7.0).  Close Z=-1.5; add Z=-1.7/-1.8.
+        grid = {-1.5: (7, (-4.3, -4.5)), -1.7: (7, (-6.5, -7.5)), -1.8: (8, (-7.0, -8.0))}
+        rows, seed = [], 8300
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
+    if stage == "ulam6":
+        # LOCAL: second box size where the uniform <-> lamellar line plunges (L=64 at Z=-1.45 and
+        # -1.6, bracketing the L=48 lines (-4.45,-4.15) and (-6.0,-5.5)), and a 3x longer L=48
+        # run at Z=-2, m2=-8 (ulam4: perpendicular slabs drifting toward lamellae, unresolved).
+        rows, seed = [], 8400
+        for Z, n, ms in ((-1.45, 8, (-4.15, -4.45)), (-1.6, 9, (-5.5, -6.0))):
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 64, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        seed += 1
+        rows.append(sk_row(stage, -2.0, 48, -8.0, seed, samples=12000, skip=25, therm=2000,
+                           init=("slab", 8)))
+        return rows
+    if stage == "zeff10":
+        # LOCAL: volume check of the moat zero next to Z=0: L=64 at Z=-0.03 around -0.68(2).
+        rows, seed = [], 8500
+        for m2 in (-0.6, -0.75):
+            seed += 1
+            rows.append(sk_row(stage, -0.03, 64, m2, seed, samples=8000))
+        return rows
+    if stage == "slam":
+        # LOCAL: direct coexistence for the symmetric <-> lamellar line (half disordered, half
+        # lamellar; scripts/analyze_slam.py).  Calibration at Z=-2 (umbrella m_eq -1.861, L=30);
+        # new Z in the gaps, masses from Hartree shifted by the measured offset (-0.5 at Z=-2,
+        # -0.7 at Z=-1.3).  n: commensurate wave number nearest the bare moat at L=48.
+        grid = {-2.0: (8, (-1.75, -1.86, -1.97)), -3.0: (10, (-0.8, -1.0, -1.2)),
+                -2.5: (9, (-1.3, -1.45, -1.6)), -1.75: (7, (-1.9, -2.05, -2.2)),
+                -1.5: (7, (-2.1, -2.25, -2.4))}
+        rows, seed = [], 8600
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("symslab", n)))
+        return rows
+    if stage == "ulam4":
+        # LOCAL: uniform <-> lamellar line where it steepens (ulam3, perpendicular slabs: Z=-1.45
+        # between -4.6 and -4.0, mixed at -4.3; lamellar wins at Z=-1.6 down to -5.0 and at
+        # Z=-2.0 down to -6.0; MF multi-harmonic line -5.09 at Z=-1.6, none at Z=-2).
+        grid = {-1.45: (6, (-4.15, -4.45)), -1.5: (7, (-4.7, -5.1)), -1.6: (7, (-5.5, -6.0, -6.5)),
+                -2.0: (8, (-7.0, -8.0))}
+        rows, seed = [], 8100
+        for Z, (n, ms) in grid.items():
+            for m2 in ms:
+                seed += 1
+                rows.append(sk_row(stage, Z, 48, m2, seed, samples=4000, skip=25, therm=2000,
+                                   init=("slab", n)))
+        return rows
     if stage == "ulam3":
         # LOCAL: uniform <-> lamellar line deeper in m2 for Z <= -1.45 (ulam/ulam2: lamellar
         # wins at Z=-1.45 down to -4.0, Z=-1.6/-2.0 down to -4.2).  Same slab protocol.
@@ -491,7 +572,7 @@ STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
                        "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
-                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL")
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9", "ulam5", "ulam6", "zeff10", "slam")
 
 
 def manifest(stage: str) -> Path:

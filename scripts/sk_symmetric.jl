@@ -12,7 +12,8 @@
 #   SK_BLOCK                     samples per written block (default 100)
 #   SK_KMAX                      largest k̂² recorded (default 3.0)
 #   SK_SEED, SK_OUT, SK_GPU, SK_RUNTIME (s, then checkpoint and exit 75)
-#   SK_INIT                      random (default, small noise) | uniform | lamellar | slab
+#   SK_INIT                      random (default, small noise) | uniform | lamellar | slab |
+#                                symslab (x <= L/2 disordered noise, x > L/2 lamellar)
 #   SK_INIT_N                    lamellar start: n wavelengths across L, k = 2πn/L
 #                                (default: nearest to the bare peak k̂² = -Z/2)
 #     uniform  φ = +sqrt(-m²/λ);  lamellar  φ = A cos(kx), A² = 4|m² + Zk̂² + k̂⁴|/(3λ)
@@ -65,7 +66,7 @@ const EPS_MIN, EPS_MAX = Float64(ε) / 50, 1.5 * Float64(ε)
 const TAU = Float64(ε) * n_lf
 const INIT = env("SK_INIT", "random")
 const INIT_N = parse(Int, env("SK_INIT_N", "0"))
-INIT in ("random", "uniform", "lamellar", "slab") || error("SK_INIT must be random|uniform|lamellar|slab")
+INIT in ("random", "uniform", "lamellar", "slab", "symslab") || error("SK_INIT must be random|uniform|lamellar|slab|symslab")
 SAMPLES % BLOCK == 0 || error("SK_SAMPLES must be a multiple of SK_BLOCK")
 
 mkpath(OUT)
@@ -116,10 +117,12 @@ function initial_fields(rng)
     u = sqrt(max(-m2 / Float64(λ), 0.09))
     @printf("init %s: u=%.4f  lamellar n=%d khat2=%.4f A=%.4f\n", INIT, u, n, q, A)
     for r in 1:NR, x in 1:L, y in 1:L
-        if INIT == "uniform" || (INIT == "slab" && x <= L ÷ 2)
+        if INIT == "symslab" && x <= L ÷ 2
+            continue                                   # disordered half: noise only
+        elseif INIT == "uniform" || (INIT == "slab" && x <= L ÷ 2)
             host[x, y, :, r] .+= u
         else
-            c = (INIT == "slab" && iseven(r)) ? y : x
+            c = (INIT in ("slab", "symslab") && iseven(r)) ? y : x
             host[x, y, :, r] .+= A * cos(k * (c - 1))
         end
     end
