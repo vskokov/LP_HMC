@@ -1,6 +1,6 @@
 # Hazel run plan — which stages to run
 
-**Revision:** 12 (2026-11-26). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
+**Revision:** 13 (2026-11-28). Maintained from the workstation. Hazel agent: read this after every `git pull`. It is the only authority on *what* to run. `docs/HPC_AGENT.md` says *how*.
 
 **GPU budget:** unlimited. Throughput is limited only by the queue, so keep every ACTIVE stage fully submitted. Escalation for failures, wrong-looking data, or a run hitting its caps still applies.
 
@@ -18,7 +18,8 @@ Submit ACTIVE stages in the order listed. When the queue is congested, earlier r
 | # | stage | status | rows | what it decides | notes |
 |---|---|---|---|---|---|
 | 1 | `validate` | DONE | 1 | cluster reproduces the workstation | passed 2026-11-19 |
-| 2 | `uline` | **ACTIVE** | 48 | whether the symmetric→uniform line turns first order near its end (gate G1) | M² coordinate; Z = −0.80, −0.85, −0.90, −0.95; L = 24, 32; 3 masses × ordered/disordered starts. L=24 complete; L=32 rows are the long pole. |
+| 2 | `uline` | DONE (r13) | 48 | whether the symmetric→uniform line turns first order near its end (gate G1) | M² coordinate; Z = −0.80, −0.85, −0.90, −0.95; L = 24, 32; 3 masses × ordered/disordered starts. L=24 complete; L=32 rows are the long pole. |
+| 2b | `uline48` | **ACTIVE (new, r13)** | 16 | G1 at larger L: does the symmetric→uniform barrier start growing (first order) at Z ≤ −0.9? | M² CV, profile exactly as `uline` (smax 0.55, windows ×1.1, 8000 samples, therm 20000, min_rt 0.3); ordered/disordered starts. Z = −0.95: L40 (m² −2.481, −2.491), L48 (−2.482, −2.492); Z = −1.0: L40 (−2.590, −2.600); Z = −0.9: L48 (−2.382, −2.390). Caps 1.0M (L40) / 1.4M (L48); the usual exit-3 cap-raise rule applies. Long jobs with continuations (exit 75). **First priority** (takes `uline`'s place). |
 | 3 | `s2_zm2_ext` | **ACTIVE** | 4 | barrier ∝ L² test at Z = −2 | L=36 (two masses) and second seeds at L=24/30. These complement, not duplicate, the LOCAL `s2_zm2` runs; seeds differ. |
 | 5a | `zeff` | DONE (r9) | 171 | renormalized Z: G⁻¹(k) = 1/S(k) in the symmetric phase on a (Z, m²) grid | Plain HMC, 8 independent replicas per row, **no umbrella, no swaps, no transport gate**; script `scripts/sk_symmetric.jl` (env `SK_*`), selected by `cv_campaign.py` automatically. L=48 (115 rows), L=64 (42), L=32 (14). One job per row (L=64 may need one continuation, exit 75 as usual). Output `sk.csv`, `obs.csv` (no `statistics.csv`). Expected: some rows close to m²_c order from the disordered start; that is a result, not a failure. |
 | 5b | `zeff2` | DONE (r9) | 11 | follow the S(k) peak down to the ordering onset at Z = −1.5, −1.3, −1.1716 | Same as `zeff` (plain HMC, `sk_symmetric.jl`, L=48). Rows that order from the disordered start are a result. |
@@ -49,9 +50,10 @@ python3 scripts/cv_campaign.py prepare --stage zeff2 b8 b13 uline_ext b8_mixed  
 python3 scripts/cv_campaign.py prepare --stage bline                                 # once (r10)
 python3 scripts/cv_campaign.py prepare --stage bline2                                # once (r11)
 python3 scripts/cv_campaign.py prepare --stage zeffL ulamL                           # once (r12)
-python3 scripts/cv_campaign.py submit  --stage uline bline bline2 zeffL ulamL s2_zm2_ext b8 b13 uline_ext
+python3 scripts/cv_campaign.py prepare --stage uline48                               # once (r13)
+python3 scripts/cv_campaign.py submit  --stage uline48 bline bline2 zeffL ulamL s2_zm2_ext b8 b13 uline_ext
 python3 scripts/cv_campaign.py --lmax 20 submit --stage b8_mixed          # r9: L=20 rows only
-python3 scripts/cv_campaign.py status  --stage uline bline bline2 zeffL ulamL s2_zm2_ext b8 b13 uline_ext b8_mixed
+python3 scripts/cv_campaign.py status  --stage uline48 uline bline bline2 zeffL ulamL s2_zm2_ext b8 b13 uline_ext b8_mixed
 ```
 
 `prepare` must not be rerun for a stage that already has runs (HPC_AGENT.md §3). When a later revision adds rows to an existing stage, the revision says explicitly how to add them.
@@ -66,6 +68,11 @@ Report in `$LP_HMC_RUNS/OPS_JOURNAL.md`, and to the user when asked, in these ca
 - (done) for `p9_pilot` and `p9_mixed`, also run `python3 scripts/analyze_cv_umbrella.py --dir $LP_HMC_RUNS/cv_umbrella/p9_pilot/Zm0p9358/L18 --bootstrap 20 --span 0.3` and report the `summary` block. Do not interpret it beyond reporting.
 
 ## Revision log
+
+- **r13 (2026-11-28):** approved by the user. `uline` is complete (48/48) and analysed on the workstation. At L ≤ 32 the equal-weight barrier between the disordered and ordered peaks of P(|M|) shrinks with L at Z = −0.6 (1.67 → 0.21 kT from L12 to L32) but levels off at Z = −0.9 (3.7, 3.7, 3.6 kT at L20/24/32) and Z = −0.95 (4.3, 4.2, 4.1 kT), with the ordered peak fixed at |M| ≈ 0.66–0.68 and χ_max ∝ L^2.9. L ≤ 32 cannot tell a weak first-order transition (ξ > 32) from a crossover; L40/L48 can.
+  - **New stage `uline48` (16 rows), ACTIVE, first priority:** `prepare --stage uline48` once, then submit it ahead of everything else.
+  - Report each completed row as usual and "stage uline48 complete" at the end; analysis on the workstation (do not run `analyze_transition_order.py` on the cluster).
+  - Nothing else changes.
 
 - **r12 (2026-11-26):** approved by the user (the Hazel queue had only 23 jobs). Two new ACTIVE stages of short unbiased runs, analysed on the workstation (not on the cluster):
   - `zeffL` (17 rows): the symmetric→moat crossover runs alongside the uniform line, 0.012 above it at Z = −0.6 and < 0.005 at Z = −0.8 (workstation L=64 runs), where ξ ≈ 25. L=96/128 test whether this survives larger volume; L=64/96 at Z = −0.9/−0.95 follow it toward the end of the uniform line.

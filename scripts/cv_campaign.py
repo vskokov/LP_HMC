@@ -540,6 +540,27 @@ def stage_rows(stage: str) -> list[dict]:
                 seed += 1
                 rows.append(sk_row(stage, Z, 48, m2, seed))
         return rows
+    if stage == "uline48":
+        # Run plan r13 (user-approved 2026-11-28): G1 at larger L.  At L <= 32 the equal-weight
+        # barrier stops shrinking for Z <= -0.9 (3.6-4.1 kT) with the ordered peak fixed at
+        # |M| ~ 0.68, chi_max ~ L^2.9: weak first order with xi > 32, or crossover.  Profile as
+        # uline (M^2 CV, smax 0.55, windows x1.1); masses bracket chi_max / equal weight
+        # extrapolated from L=24/32 (Z=-0.95) and L=20/24 (Z=-1.0).
+        grid = [(-0.95, 40, (-2.481, -2.491)), (-0.95, 48, (-2.482, -2.492)),
+                (-1.0, 40, (-2.590, -2.600)), (-0.9, 48, (-2.382, -2.390))]
+        cap = {40: 1000000, 48: 1400000}
+        rows = []
+        for Z, L, ms in grid:
+            for k, m2 in enumerate(ms):
+                for init in ("disordered", "ordered"):
+                    seed = 2000 + L + 10 * k + 1000 * (init == "ordered") + 100 * (Z < -0.97) + 200 * (Z > -0.92)
+                    r = umbrella_row(stage, Z, 0.0, L, m2, seed, smax=0.55, min_rt=0.3,
+                                     max_therm=cap[L], samples=8000, kind="M2", init=init,
+                                     therm=20000)
+                    r.pop("CVU_SHELL_Q")
+                    r["CVU_WINDOWS"] = str(int(round(int(r["CVU_WINDOWS"]) * 1.1 / 4) * 4))
+                    rows.append(r)
+        return rows
     if stage == "uline":
         # Uniform-line gap fill (G1): M^2 umbrella, 3 masses around the extrapolated
         # chi_max location x 2 starts (ordered/disordered), L=24 and 32.  Profile from
@@ -572,7 +593,7 @@ STAGES = ("s2_zm2", "s2_zm1172", "lro", "lro2")
 ALL_STAGES = STAGES + ("validate", "uline", "s2_zm1172_prod", "s2_zm2_ext", "p9_pilot", "p9_mixed",
                        "p8_shift", "p8_mixed", "p9_L27", "zeff",
                        "b8", "b13", "b8_mixed", "uline_ext", "zeff2", "bline", "bline2", "ulam", "ulam2", "zeff3", "zeff4",
-                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9", "ulam5", "ulam6", "zeff10", "slam")
+                       "zeff5", "zeff6", "ulam3", "zeffL", "ulamL", "zeff8", "ulam4", "zeff9", "ulam5", "ulam6", "zeff10", "slam", "uline48")
 
 
 def manifest(stage: str) -> Path:
